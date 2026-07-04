@@ -1,0 +1,6 @@
+{
+  "noun": ["banana", "robot", "castle", "wizard", "sandwich", "dragon", "pickle", "unicorn", "volcano", "penguin", "spaceship", "wallet", "cactus", "mustache", "pancake", "trophy", "kazoo", "gremlin", "noodle", "asteroid"],
+  "verb": ["jump", "sparkle", "wiggle", "explode", "juggle", "whisper", "sprint", "giggle", "collide", "vanish", "tumble", "float", "sizzle", "screech", "wobble", "pounce", "dazzle", "shuffle", "erupt", "snore"],
+  "adjective": ["squishy", "enormous", "sneaky", "glittery", "soggy", "ancient", "wobbly", "spicy", "invisible", "gigantic", "fluffy", "cranky", "mysterious", "slimy", "radiant", "clumsy", "prickly", "majestic", "grumpy", "sparkly"],
+  "pronoun": ["she", "he", "they", "it", "we", "you", "I", "who", "this", "that", "these", "those", "everyone", "someone", "nobody", "anything"]
+}
