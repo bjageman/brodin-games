@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "simulate": "node scripts/simulate-players.js"
   },
   "dependencies": {
     "an-array-of-english-words": "^2.0.0",

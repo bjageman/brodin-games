@@ -79,7 +79,7 @@ export default function Round1Typing({ endTimestamp, words, onAddWord }: Round1T
       </div>
 
       <p className="text-center text-xs text-gray-500">
-        Only nouns, verbs, adjectives, and pronouns make it into round 2 — other words may not survive.
+        Only nouns, verbs, adjectives, and pronouns make it into round 2. Other words may not survive.
       </p>
     </div>
   );

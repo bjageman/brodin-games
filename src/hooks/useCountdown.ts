@@ -13,7 +13,19 @@ export function useCountdown(endTimestamp: number | null): { msRemaining: number
   useEffect(() => {
     if (!endTimestamp) return;
     const interval = setInterval(() => setNow(Date.now()), 200);
-    return () => clearInterval(interval);
+    // Backgrounded tabs get their setInterval throttled by the browser (Chrome
+    // clamps to ~1/sec, and further after minutes hidden), which can delay
+    // expiry detection well past the real deadline. Force an immediate
+    // recompute on refocus so round-end logic (e.g. autosubmit) still fires
+    // promptly for a player who tabbed away during the countdown.
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') setNow(Date.now());
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, [endTimestamp]);
 
   if (!endTimestamp) return { msRemaining: 0, expired: false };

@@ -6,7 +6,7 @@ import GameSession from './components/game/GameSession';
 export default function HostPage() {
   const [name, setName] = useState(() => localStorage.getItem('brodin-name') || '');
   const [started, setStarted] = useState(false);
-  const [code] = useState(() => generateGameCode());
+  const [code, setCode] = useState(() => generateGameCode());
   const [playerId] = useState(() => {
     const saved = sessionStorage.getItem('brodin-player-id');
     if (saved) return saved;
@@ -50,11 +50,13 @@ export default function HostPage() {
   return (
     <PageLayout title="Ad-libs Race">
       <GameSession
+        key={code}
         code={code}
         playerId={playerId}
         name={name}
         isHost={true}
         onLeaveGame={() => setStarted(false)}
+        onPlayAgain={() => setCode(generateGameCode())}
       />
     </PageLayout>
   );
