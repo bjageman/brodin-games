@@ -73,7 +73,9 @@ test('host + 2 players play a full round of Ad-libs Race', async ({ browser }: {
   }
   expect(reachedRound2.length).toBeGreaterThan(0);
 
-  // Fill every dropdown with its first real option on each client that made it to round 2.
+  // Fill every dropdown with its first real option, then submit, on each
+  // client that made it to round 2 — this should advance to results as soon
+  // as everyone has submitted, without waiting out the full round-2 timer.
   for (const page of reachedRound2) {
     const selects = page.locator('select');
     const count = await selects.count();
@@ -84,20 +86,41 @@ test('host + 2 players play a full round of Ad-libs Race', async ({ browser }: {
       const firstReal = values.find((v) => v);
       if (firstReal) await select.selectOption(firstReal);
     }
+    await page.getByRole('button', { name: 'Submit' }).click();
   }
 
-  // Wait out the round-2 timer (60s) for auto-submit, then check results.
   for (const page of [host, p1, p2]) {
-    await expect(page.getByText("Everyone's Ad-libs")).toBeVisible({ timeout: 70_000 });
+    await expect(page.getByText('Select Your Favorite')).toBeVisible({ timeout: 20_000 });
   }
 
-  // Every client's results screen should list every player who reached round 2.
+  // Every client's voting screen should list every player who reached round 2.
   const namesByPage = new Map([[host, 'Hosty'], [p1, 'Alice'], [p2, 'Bob']]);
   const expectedNames = reachedRound2.map((page) => namesByPage.get(page)!);
   for (const page of [host, p1, p2]) {
     for (const expectedName of expectedNames) {
       await expect(page.getByText(expectedName)).toBeVisible();
     }
+  }
+
+  // Everyone votes for the same entry and hits Submit, so there's a single
+  // deterministic winner as soon as the last vote comes in — well before
+  // the 30s voting timer would otherwise force it.
+  const votedFor = expectedNames[0];
+  for (const page of [host, p1, p2]) {
+    await page.getByRole('button', { name: new RegExp(votedFor) }).click();
+    await page.getByRole('button', { name: 'Submit' }).click();
+  }
+
+  for (const page of [host, p1, p2]) {
+    await expect(page.getByText('Winner!')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(votedFor)).toBeVisible();
+  }
+
+  // Host gets game-management controls; everyone else can only disconnect.
+  await expect(host.getByRole('button', { name: 'Play Again' })).toBeVisible();
+  await expect(host.getByRole('button', { name: 'End Session' })).toBeVisible();
+  for (const page of [p1, p2]) {
+    await expect(page.getByRole('button', { name: 'Disconnect' })).toBeVisible();
   }
 
   await hostCtx.close();

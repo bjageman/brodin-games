@@ -7,24 +7,35 @@ const NTFY_USERNAME = import.meta.env.VITE_NTFY_ADMIN_USERNAME || '';
 const NTFY_PASSWORD = import.meta.env.VITE_NTFY_ADMIN_PASSWORD || '';
 
 /**
- * Build the ?auth= query parameter string for ntfy.
+ * Build the auth= query parameter value for ntfy.
  *
- * ntfy expects the ?auth= value to be the *base64url-encoded* form of the
+ * ntfy expects the auth= value to be the *base64url-encoded* form of the
  * entire Authorization header value (e.g. base64url("Basic <base64(u:p)>")).
  * Standard URL-encoding ("Basic%20...") is NOT accepted and returns a 500.
- * Using ?auth= for both the WebSocket URL and the POST URL avoids sending an
+ * Using auth= for both the WebSocket URL and the POST URL avoids sending an
  * Authorization header, which would otherwise trigger a CORS preflight that
  * ntfy cannot satisfy when Access-Control-Allow-Origin is set to '*'.
  */
-function buildAuthParam(): string {
+function buildAuthValue(): string {
   if (!NTFY_USERNAME || !NTFY_PASSWORD) return '';
   const headerValue = `Basic ${btoa(`${NTFY_USERNAME}:${NTFY_PASSWORD}`)}`;
   // base64url-encode the full header value (no padding, url-safe chars)
-  const encoded = btoa(headerValue)
+  return btoa(headerValue)
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=+$/, '');
-  return `?auth=${encoded}`;
+}
+
+// sinceId lets a reconnect ask ntfy to replay anything published while the
+// WebSocket was down (ntfy caches recent messages per topic) instead of
+// silently losing it — a real gap otherwise, since ws.onclose reconnects
+// after a fixed 3s delay with no memory of where the stream left off.
+function buildQueryParams(sinceId: string | null): string {
+  const params: string[] = [];
+  const auth = buildAuthValue();
+  if (auth) params.push(`auth=${auth}`);
+  if (sinceId) params.push(`since=${sinceId}`);
+  return params.length > 0 ? `?${params.join('&')}` : '';
 }
 
 export function useGameSocket(gameCode: string, onMessage: (data: unknown) => void) {
@@ -42,6 +53,7 @@ export function useGameSocket(gameCode: string, onMessage: (data: unknown) => vo
     const topic = `brodin-games-${gameCode.toLowerCase()}`;
     let isMounted = true;
     let reconnectTimeout: ReturnType<typeof setTimeout> | undefined;
+    let lastMessageId: string | null = null;
 
     function connect() {
       // Determine WebSocket protocol (ws: or wss:) based on secure/unsecure context
@@ -49,8 +61,8 @@ export function useGameSocket(gameCode: string, onMessage: (data: unknown) => vo
       // Clean domain name string (strip protocol prefix if provided in env)
       const domain = NTFY_SERVER_URL.replace(/^(https?:\/\/|wss?:\/\/)/, '');
 
-      const wsUrl = `${protocol}://${domain}/${topic}/ws${buildAuthParam()}`;
-      console.log(`[ntfy] Connecting to: ${protocol}://${domain}/${topic}/ws`);
+      const wsUrl = `${protocol}://${domain}/${topic}/ws${buildQueryParams(lastMessageId)}`;
+      console.log(`[ntfy] Connecting to: ${protocol}://${domain}/${topic}/ws${lastMessageId ? ` (since=${lastMessageId})` : ''}`);
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
@@ -64,6 +76,7 @@ export function useGameSocket(gameCode: string, onMessage: (data: unknown) => vo
       ws.onmessage = (event) => {
         try {
           const eventData = JSON.parse(event.data);
+          if (eventData.id) lastMessageId = eventData.id;
           if (eventData.message) {
             const payload = JSON.parse(eventData.message) as unknown;
             console.log(`[ntfy] Message received on topic ${topic}:`, payload);
@@ -106,7 +119,7 @@ export function useGameSocket(gameCode: string, onMessage: (data: unknown) => vo
     const cleanDomain = NTFY_SERVER_URL.replace(/^(https?:\/\/|wss?:\/\/)/, '');
     const protocol = cleanDomain.startsWith('localhost') || cleanDomain.startsWith('127.0.0.1') ? 'http' : 'https';
     // Use ?auth= query param instead of Authorization header to avoid CORS preflight.
-    const publishUrl = `${protocol}://${cleanDomain}/${topic}${buildAuthParam()}`;
+    const publishUrl = `${protocol}://${cleanDomain}/${topic}${buildQueryParams(null)}`;
 
     console.log(`[ntfy] Publishing message to: ${protocol}://${cleanDomain}/${topic}`, payload);
     try {

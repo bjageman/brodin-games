@@ -44,9 +44,13 @@ export type MessageType =
   | 'roster-update'
   | 'round1-start'
   | 'word-library-submit'
+  | 'word-library-ack'
   | 'round2-assignments'
   | 'sheet-submit'
-  | 'results';
+  | 'sheet-submit-ack'
+  | 'results'
+  | 'vote-submit'
+  | 'winner-announced';
 
 export interface Envelope<T = unknown> {
   type: MessageType;
@@ -88,6 +92,17 @@ export interface SheetSubmitPayload {
 
 export interface ResultsPayload {
   sheets: Record<string, PlayerSheetResult>;
+  votingEndTimestamp: number;
+}
+
+export interface VoteSubmitPayload {
+  targetPlayerId: string | null;
+  final: boolean;
+}
+
+export interface WinnerPayload {
+  winnerPlayerIds: string[];
+  votes: Record<string, number>;
 }
 
 export type GamePhase =
@@ -99,4 +114,5 @@ export type GamePhase =
   | 'round2'
   | 'round2-waiting'
   | 'round2-dropped'
-  | 'results';
+  | 'voting'
+  | 'winner';
