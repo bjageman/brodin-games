@@ -10,13 +10,26 @@ export default {
         display: ['Poppins', 'system-ui', 'sans-serif'],
       },
       colors: {
+        // Shared app palette, aligned with the bento homepage: navy surfaces,
+        // pink primary actions, teal accents, gold highlights.
         brodin: {
-          bg: '#14121f',
-          panel: '#1e1b2e',
-          primary: '#7c3aed',
-          primaryDark: '#5b21b6',
-          accent: '#22d3ee',
+          bg: '#004b84',
+          panel: '#003a68',
+          field: '#00243f',
+          primary: '#f9749f',
+          primaryDark: '#e0537f',
+          accent: '#03d1b9',
           gold: '#facc15',
+        },
+        bento: {
+          navy: '#004b84',
+          teal: '#03d1b9',
+          pink: '#f9749f',
+          pinkLight: '#ffa5c6',
+          blue: '#79c9fa',
+          text: '#df608f',
+          cream: '#feefc8',
+          pin: '#ed6c72',
         },
       },
       keyframes: {

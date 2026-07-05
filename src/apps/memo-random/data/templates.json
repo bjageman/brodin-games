@@ -1,0 +1,158 @@
+[
+  {
+    "id": "epic-quest",
+    "title": "The Epic Quest",
+    "text": "Once upon a time, a {{adjective_1}} {{noun_1}} decided to {{verb_1}} across the kingdom. {{pronoun_1}} packed only a {{noun_2}} and a {{adjective_2}} attitude, ready for anything.",
+    "blanks": [
+      { "id": "adjective_1", "category": "adjective" },
+      { "id": "noun_1", "category": "noun" },
+      { "id": "verb_1", "category": "verb" },
+      { "id": "pronoun_1", "category": "pronoun" },
+      { "id": "noun_2", "category": "noun" },
+      { "id": "adjective_2", "category": "adjective" }
+    ]
+  },
+  {
+    "id": "office-disaster",
+    "title": "Office Disaster",
+    "text": "Dear team, this morning a {{adjective_1}} {{noun_1}} decided to {{verb_1}} right in the middle of the meeting. {{pronoun_1}} tried to fix it with a {{noun_2}}, but it just got more {{adjective_2}}.",
+    "blanks": [
+      { "id": "adjective_1", "category": "adjective" },
+      { "id": "noun_1", "category": "noun" },
+      { "id": "verb_1", "category": "verb" },
+      { "id": "pronoun_1", "category": "pronoun" },
+      { "id": "noun_2", "category": "noun" },
+      { "id": "adjective_2", "category": "adjective" }
+    ]
+  },
+  {
+    "id": "vacation-gone-wrong",
+    "title": "Vacation Gone Wrong",
+    "text": "Our trip started when a {{adjective_1}} {{noun_1}} tried to {{verb_1}} onto our flight. {{pronoun_1}} sat next to a {{noun_2}} who wouldn't stop talking. Somehow it was still the most {{adjective_2}} vacation ever.",
+    "blanks": [
+      { "id": "adjective_1", "category": "adjective" },
+      { "id": "noun_1", "category": "noun" },
+      { "id": "verb_1", "category": "verb" },
+      { "id": "pronoun_1", "category": "pronoun" },
+      { "id": "noun_2", "category": "noun" },
+      { "id": "adjective_2", "category": "adjective" }
+    ]
+  },
+  {
+    "id": "product-launch",
+    "title": "The Product Launch",
+    "text": "Today we unveiled the {{adjective_1}} {{noun_1}}, and the crowd couldn't stop trying to {{verb_1}} it. {{pronoun_1}} nearly knocked over a {{noun_2}} during the demo, but the reviews called it {{adjective_2}}.",
+    "blanks": [
+      { "id": "adjective_1", "category": "adjective" },
+      { "id": "noun_1", "category": "noun" },
+      { "id": "verb_1", "category": "verb" },
+      { "id": "pronoun_1", "category": "pronoun" },
+      { "id": "noun_2", "category": "noun" },
+      { "id": "adjective_2", "category": "adjective" }
+    ]
+  },
+  {
+    "id": "team-retreat",
+    "title": "Team Building Retreat",
+    "text": "Our retreat began with a {{adjective_1}} trust fall onto a {{noun_1}}. {{pronoun_1}} tried to {{verb_1}} through the ropes course while everyone else attempted to {{verb_2}} the canoe. By the campfire, we all agreed it was {{adjective_2}}.",
+    "blanks": [
+      { "id": "adjective_1", "category": "adjective" },
+      { "id": "noun_1", "category": "noun" },
+      { "id": "pronoun_1", "category": "pronoun" },
+      { "id": "verb_1", "category": "verb" },
+      { "id": "verb_2", "category": "verb" },
+      { "id": "adjective_2", "category": "adjective" }
+    ]
+  },
+  {
+    "id": "job-interview",
+    "title": "The Job Interview",
+    "text": "I walked into the interview holding a {{adjective_1}} {{noun_1}} instead of my resume. {{pronoun_1}} decided to {{verb_1}} instead of shaking hands, then tried to {{verb_2}} my way out of it. Somehow they said I was the most {{adjective_2}} candidate yet.",
+    "blanks": [
+      { "id": "adjective_1", "category": "adjective" },
+      { "id": "noun_1", "category": "noun" },
+      { "id": "pronoun_1", "category": "pronoun" },
+      { "id": "verb_1", "category": "verb" },
+      { "id": "verb_2", "category": "verb" },
+      { "id": "adjective_2", "category": "adjective" }
+    ]
+  },
+  {
+    "id": "grocery-meltdown",
+    "title": "Grocery Store Meltdown",
+    "text": "The cart had one {{adjective_1}} wheel and a {{noun_1}} rolling around in it. {{pronoun_1}} tried to {{verb_1}} down the cereal aisle but knocked over a {{noun_2}} instead. The manager just called it a {{adjective_2}} Tuesday.",
+    "blanks": [
+      { "id": "adjective_1", "category": "adjective" },
+      { "id": "noun_1", "category": "noun" },
+      { "id": "pronoun_1", "category": "pronoun" },
+      { "id": "verb_1", "category": "verb" },
+      { "id": "noun_2", "category": "noun" },
+      { "id": "adjective_2", "category": "adjective" }
+    ]
+  },
+  {
+    "id": "first-day",
+    "title": "First Day on the Job",
+    "text": "My new badge photo made me look {{adjective_1}}, and my desk came with a mystery {{noun_1}}. {{pronoun_1}} tried to {{verb_1}} the coffee machine and ended up needing to {{verb_2}} the whole break room. Everyone said it was a {{adjective_2}} first day.",
+    "blanks": [
+      { "id": "adjective_1", "category": "adjective" },
+      { "id": "noun_1", "category": "noun" },
+      { "id": "pronoun_1", "category": "pronoun" },
+      { "id": "verb_1", "category": "verb" },
+      { "id": "verb_2", "category": "verb" },
+      { "id": "adjective_2", "category": "adjective" }
+    ]
+  },
+  {
+    "id": "holiday-party",
+    "title": "The Company Holiday Party",
+    "text": "The office party had a {{adjective_1}} ice sculpture shaped like a {{noun_1}}. {{pronoun_1}} tried to {{verb_1}} on the dance floor and instead had to {{verb_2}} into the punch bowl. HR called it the most {{adjective_2}} party yet.",
+    "blanks": [
+      { "id": "adjective_1", "category": "adjective" },
+      { "id": "noun_1", "category": "noun" },
+      { "id": "pronoun_1", "category": "pronoun" },
+      { "id": "verb_1", "category": "verb" },
+      { "id": "verb_2", "category": "verb" },
+      { "id": "adjective_2", "category": "adjective" }
+    ]
+  },
+  {
+    "id": "zoom-call",
+    "title": "Zoom Call Gone Wrong",
+    "text": "Halfway through the meeting, a {{adjective_1}} {{noun_1}} wandered into frame. {{pronoun_1}} tried to {{verb_1}} the mute button but instead began to {{verb_2}} at the camera. The whole team agreed it was {{adjective_2}}.",
+    "blanks": [
+      { "id": "adjective_1", "category": "adjective" },
+      { "id": "noun_1", "category": "noun" },
+      { "id": "pronoun_1", "category": "pronoun" },
+      { "id": "verb_1", "category": "verb" },
+      { "id": "verb_2", "category": "verb" },
+      { "id": "adjective_2", "category": "adjective" }
+    ]
+  },
+  {
+    "id": "great-diet",
+    "title": "The Great Diet",
+    "text": "Day one of the diet, I replaced breakfast with a {{adjective_1}} {{noun_1}}. {{pronoun_1}} tried to {{verb_1}} past the vending machine but stopped to {{verb_2}} a {{noun_2}} instead.",
+    "blanks": [
+      { "id": "adjective_1", "category": "adjective" },
+      { "id": "noun_1", "category": "noun" },
+      { "id": "pronoun_1", "category": "pronoun" },
+      { "id": "verb_1", "category": "verb" },
+      { "id": "verb_2", "category": "verb" },
+      { "id": "noun_2", "category": "noun" }
+    ]
+  },
+  {
+    "id": "haunted-house",
+    "title": "Haunted House Tour",
+    "text": "The tour guide warned us about a {{adjective_1}} {{noun_1}} haunting the attic. {{pronoun_1}} tried to {{verb_1}} up the stairs but had to {{verb_2}} back down screaming. Everyone agreed the attic was {{adjective_2}}.",
+    "blanks": [
+      { "id": "adjective_1", "category": "adjective" },
+      { "id": "noun_1", "category": "noun" },
+      { "id": "pronoun_1", "category": "pronoun" },
+      { "id": "verb_1", "category": "verb" },
+      { "id": "verb_2", "category": "verb" },
+      { "id": "adjective_2", "category": "adjective" }
+    ]
+  }
+]

@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { useScrollLock } from '../../hooks/useScrollLock';
+import { useScrollLock } from '../hooks/useScrollLock';
 import { createPortal } from 'react-dom';
 import QRCode from 'react-qr-code';
-import { cn } from '../../utils/cn';
+import { cn } from '../utils/cn';
 
 interface RoomCodeModalProps {
   gameCode: string;
