@@ -42,10 +42,7 @@ import MatchResultScreen from './components/MatchResultScreen';
 import WinnerScreen from './components/WinnerScreen';
 import QuitConfirmModal from '../../shared/components/QuitConfirmModal';
 
-// Host-only bookkeeping that isn't reactive state, but still needs to
-// survive a refresh so the host doesn't lose track of everyone's
-// submissions/votes mid-game. Maps/Sets are stored as plain arrays since
-// sessionStorage only holds JSON.
+// Host-only bookkeeping, persisted across refresh. Maps/Sets as arrays since sessionStorage only holds JSON.
 interface HostSnapshot {
   wordLibraries: [string, WordLibrary][];
   sheets: [string, PlayerSheetResult][];
@@ -63,11 +60,7 @@ interface HostSnapshot {
   expectedVoters: number;
 }
 
-// Everything needed to redraw the current screen (and, for the host, keep
-// running the game) after a page refresh, without waiting on any broadcast
-// that already fired in the past and won't fire again. Stored under the
-// `gamePhase` key (not `phase`) so it doesn't collide with GameShell's own
-// `phase` field, which is merged into the same sessionStorage entry.
+// Field is `gamePhase`, not `phase`, so it doesn't collide with GameShell's own `phase` in the same entry.
 interface MemoRandomSnapshot {
   gamePhase: MemoRandomPhase;
   round1EndTimestamp: number | null;
@@ -112,9 +105,7 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
   const [round1Progress, setRound1Progress] = useState(restored?.round1Progress ?? 0);
   const [round2Progress, setRound2Progress] = useState(restored?.round2Progress ?? 0);
 
-  // Refs mirroring reactive state so the ntfy message handler (recreated each
-  // render, but re-registered with GameShell after every render) always
-  // reacts to the latest committed values, not a stale one.
+  // Refs mirror state so handleMessage always reads the latest committed values.
   const phaseRef = useRef(phase);
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   const rosterRef = useRef(roster);
@@ -128,10 +119,7 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
   const assignedLibraryRef = useRef(assignedLibrary);
   useEffect(() => { assignedLibraryRef.current = assignedLibrary; }, [assignedLibrary]);
 
-  // Host-only bookkeeping. Not reactive state (except the progress counters
-  // above) since only the host needs to read/write these when deciding phase
-  // transitions and composing broadcasts. Rehydrated from the persisted
-  // snapshot when present.
+  // Host-only bookkeeping; not reactive state since only the host reads/writes it.
   const wordLibrariesRef = useRef(new Map<string, WordLibrary>(restored?.host?.wordLibraries ?? []));
   const sheetsRef = useRef(new Map<string, PlayerSheetResult>(restored?.host?.sheets ?? []));
   const assignmentsRef = useRef<Record<string, PlayerAssignment>>(restored?.host?.assignments ?? {});
@@ -150,25 +138,18 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
   const round2SubmittedRef = useRef(restored?.round2Submitted ?? false);
   const matchVoteSubmittedRef = useRef(restored?.matchVoteSubmitted ?? false);
 
-  // Retry bookkeeping for round 1/2 submissions: the payload to keep
-  // resending, and whether the host has acked it yet. The acked flags are
-  // deliberately NOT restored (always resume as "not yet acked") — retrying
-  // an already-acked submission is harmless (the host dedupes by id), but
-  // wrongly skipping a needed retry after a refresh could strand a player.
+  // Acked flags deliberately NOT restored — resending an already-acked submission is harmless, skipping a needed one isn't.
   const round1LibraryRef = useRef<WordLibrary | null>(restored?.round1Library ?? null);
   const round1AckedRef = useRef(false);
   const round2AnswersRef = useRef<Record<string, string> | null>(restored?.round2Answers ?? null);
   const round2AckedRef = useRef(false);
 
-  // Prefetch the dictionary and POS tagger — normally already warm from
-  // GameShell's onIdlePrefetch during the lobby wait, but harmless (and a
-  // useful fallback) to kick off again here too.
+  // Fallback in case GameShell's onIdlePrefetch didn't already warm this up.
   useEffect(() => {
     loadDictionary();
   }, []);
 
-  // Persists this game's slice, merged into whatever GameShell has already
-  // saved under the same key (see GameShell's matching merge-write).
+  // Merges into whatever GameShell has already saved under the same key.
   useEffect(() => {
     const snapshot: MemoRandomSnapshot = {
       gamePhase: phase,
@@ -218,15 +199,8 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
     winnerInfo, round1Progress, round2Progress,
   ]);
 
-  // If the host refreshes mid-game, every setTimeout fallback that would
-  // eventually force the next phase transition (in case not everyone
-  // submits/votes in time) dies with the old page — re-arm whichever one
-  // applies to the phase we resumed into, based on the persisted absolute
-  // end-timestamp rather than the original duration, so it fires at the
-  // same real-world moment it originally would have. Guarded by the usual
-  // *StartedRef/*AdvancedRef idempotency checks, so this is harmless even if
-  // the normal fast path also fires independently. Only relevant on a real
-  // resume (freshStart false) — a fresh start arms its own timers itself.
+  // A host refresh kills every pending setTimeout fallback — re-arm whichever one applies, timed off the
+  // persisted absolute end-timestamp so it still fires at the original real-world moment.
   useEffect(() => {
     if (!isHost || freshStart || !restored) return;
     const now = Date.now();
@@ -320,27 +294,16 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
     }
   };
 
-  // Re-register after every render (not just on mount) so GameShell always
-  // calls the freshest closure — mirrors useGameSocket's own onMessageRef
-  // pattern for the same reason.
+  // Re-register every render (not just on mount) so GameShell always calls the freshest closure.
   useEffect(() => {
     onRegisterMessageHandler(handleMessage);
   });
 
-  // These host-authority reactions are called both from handleMessage (for
-  // real network messages from other players) and directly/locally for the
-  // host's own actions, since the host's own published message is not
-  // guaranteed to echo back to itself over its own ntfy subscription — it
-  // shouldn't have to wait on a flaky round trip to react to its own intents.
-  // Keyed Map.set()s make calling a function twice for the same player
-  // (e.g. a direct call plus a later echoed duplicate) harmless.
+  // Called both from handleMessage and directly for the host's own actions (its own broadcasts
+  // aren't guaranteed to echo back). Map.set() makes a duplicate call for the same player harmless.
   function hostReceiveWordLibrary(fromId: string, library: WordLibrary) {
-    // Gate on the host-authority ref, not phaseRef: the host's own personal
-    // phase flips to 'round1-waiting' the instant ITS OWN timer fires (zero
-    // network latency), which happens well before other players' submissions
-    // — sent over the network — arrive. Gating on phaseRef would silently
-    // reject every other player's submission (and every retry of it) the
-    // moment the host's own local clock hit zero.
+    // Gate on this ref, not phaseRef — the host's own phase flips to 'round1-waiting' as soon as its
+    // own timer fires, well before other players' submissions arrive over the network.
     if (round2StartedRef.current) return;
     wordLibrariesRef.current.set(fromId, library);
     setRound1Progress(wordLibrariesRef.current.size);
@@ -372,10 +335,7 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
     }
   }
 
-  // Votes are scoped to the currently-active matchup: a vote tagged with a
-  // stale matchIndex (a straggling retry from a match we've already scored
-  // and moved past) is a no-op, same for anything arriving after this
-  // match's tally has already been computed.
+  // A vote for a stale matchIndex (already scored and moved past) is a no-op.
   function hostReceiveVote(fromId: string, matchIndex: number, side: MatchupSide | null, final: boolean) {
     if (matchIndex !== currentMatchIndexRef.current || matchAdvancedRef.current) return;
     if (side) {
@@ -391,12 +351,8 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
     }
   }
 
-  // Two things are decided up front, before anyone sees round 2: which two
-  // OTHER players' words get combined into each player's dropdown (never
-  // their own), and which pairs of players will later be voted on
-  // head-to-head — each such pair shares the same template (so their sheets
-  // are actually comparable), while different pairs get different
-  // templates.
+  // Decides up front which other players' words feed each dropdown, and which pairs (sharing a
+  // template, so they're comparable) will later be voted on head-to-head.
   function advanceToRound2() {
     if (round2StartedRef.current) return;
     round2StartedRef.current = true;
@@ -424,11 +380,7 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
     setTimeout(() => advanceToMatchups(), ROUND2_DURATION_MS + GRACE_PERIOD_MS);
   }
 
-  // Turns the pre-decided pairings into head-to-head matchups now that
-  // round 2 submissions are in (a pairing whose partner never submitted
-  // gets a bot opponent instead) and kicks off the first one. Each player's
-  // cumulative score starts at 0 and only ever grows from votes received /
-  // match wins across the whole sequence of matchups.
+  // A pairing whose partner never submitted round 2 gets a bot opponent instead.
   function advanceToMatchups() {
     if (matchupsStartedRef.current) return;
     matchupsStartedRef.current = true;
@@ -448,9 +400,7 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
     matchVotesRef.current = new Map();
     matchVotedPlayersRef.current = new Set();
     const { left, right } = matchupsRef.current[index];
-    // The author(s) of the two sheets being judged can't vote in their own
-    // matchup (not even for the other side), so the "everyone's voted" fast
-    // path only waits on roster members who aren't one of those authors.
+    // The authors of the two sheets being judged can't vote in their own matchup.
     expectedVotersRef.current = rosterRef.current.filter(
       (p) => p.id !== left.playerId && p.id !== right.playerId
     ).length;
@@ -460,11 +410,7 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
       timestamp: Date.now(),
       payload: { matchIndex: index, totalMatches: matchupsRef.current.length, left, right, endTimestamp },
     });
-    // If literally nobody else can vote (e.g. only the two matched players
-    // are in the game at all), there's no point waiting out the clock for a
-    // foregone 0-0 tie — resolve almost immediately instead (a short delay,
-    // not synchronous, so the matchup-start broadcast has a moment to land
-    // before match-result follows it).
+    // Nobody else can vote — resolve the foregone 0-0 tie almost immediately instead of waiting out the clock.
     if (expectedVotersRef.current === 0) {
       setTimeout(() => finishMatch(index), 300);
       return;
@@ -472,11 +418,7 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
     setTimeout(() => finishMatch(index), VOTE_DURATION_MS + GRACE_PERIOD_MS);
   }
 
-  // Called both by the vote-timer grace-period fallback and, early, as soon
-  // as every roster member has hit their own "Submit" button for this
-  // matchup — mirrors the everyone-submitted fast path used elsewhere.
-  // Guarded by matchAdvancedRef + the matchIndex check so whichever trigger
-  // fires first wins and a later duplicate call is a no-op.
+  // Called by the grace-period fallback or, early, once everyone's voted — whichever fires first wins.
   function finishMatch(index: number) {
     if (matchAdvancedRef.current || index !== currentMatchIndexRef.current) return;
     matchAdvancedRef.current = true;
@@ -512,10 +454,7 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
         resultsEndTimestamp,
       },
     });
-    // Unlike the other phase transitions, this one has no competing
-    // "everyone's ready" fast path to guard against — it's a plain fixed
-    // 10s results display — so it advances after RESULTS_DURATION_MS with
-    // no added grace period.
+    // Plain fixed-length results display — no "everyone's ready" fast path, no added grace period.
     setTimeout(() => startMatch(index + 1), RESULTS_DURATION_MS);
   }
 
@@ -528,10 +467,8 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
     sendMessage({ type: 'winner-announced', timestamp: Date.now(), payload: { winnerPlayerIds, scores } });
   }
 
-  // Kicks off this game once GameShell hands off control fresh (host only —
-  // relies on ntfy echoing this broadcast back to the host's own
-  // subscription, same as every other player, rather than setting local
-  // state directly, matching how this already worked pre-split).
+  // Host-only, on a fresh start. Relies on this broadcast echoing back to
+  // itself like every other player's, rather than setting local state directly.
   function beginRound1() {
     wordLibrariesRef.current = new Map();
     sheetsRef.current = new Map();
@@ -550,10 +487,7 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
   }
 
   useEffect(() => {
-    // Kicking off the game is a one-time reaction to how this component was
-    // just mounted (freshly started vs. resumed), not a value being synced
-    // from React state to an external system — an effect is still the right
-    // place for it since it must run once after mount, not during render.
+    // One-time reaction to how this component just mounted, not a synced value — an effect is still correct here.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (isHost && freshStart) beginRound1();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -573,10 +507,7 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
     }
   }, [phase, round1Countdown.expired, playerId, sendMessage, isHost]);
 
-  // Every client's round-1 timer expires at the exact same synced instant,
-  // so all their word-library-submit messages burst over ntfy at once — a
-  // stress case for best-effort delivery. Keep resending (the host's
-  // Map.set() dedupes duplicates harmlessly) until acked or we give up.
+  // Every client's timer expires at once, bursting submissions over ntfy — keep resending until acked or we give up.
   useEffect(() => {
     if (isHost || phase !== 'round1-waiting') return;
     let attempts = 0;
@@ -646,10 +577,7 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
     setMySheetAnswers((prev) => ({ ...prev, [blankId]: value }));
   const submitMySheet = () => submitRound2Sheet(mySheetAnswers);
 
-  // Tapping a side you've already picked deselects it; tapping the other
-  // side moves your pick there — only ever one active pick per player. This
-  // is provisional (final: false) — it counts toward the timer-expiry tally
-  // either way, but doesn't count toward the everyone-submitted fast path.
+  // Tapping the same side again deselects it. Provisional (final: false) — counts toward the timer tally only.
   const castMatchVote = (side: MatchupSide) => {
     if (matchVoteSubmittedRef.current || !currentMatchup) return;
     const nextVote = myMatchVote === side ? null : side;
