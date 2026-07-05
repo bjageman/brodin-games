@@ -1,3 +1,5 @@
+import type { PlayerInfo } from '../../shared/types';
+
 export type Category = 'noun' | 'verb' | 'adjective' | 'pronoun';
 
 export const CATEGORIES: Category[] = ['noun', 'verb', 'adjective', 'pronoun'];
@@ -6,11 +8,6 @@ export type WordLibrary = Record<Category, string[]>;
 
 export function emptyLibrary(): WordLibrary {
   return { noun: [], verb: [], adjective: [], pronoun: [] };
-}
-
-export interface PlayerInfo {
-  id: string;
-  name: string;
 }
 
 export interface TemplateBlank {
@@ -25,9 +22,14 @@ export interface MadLibTemplate {
   blanks: TemplateBlank[];
 }
 
-export interface PlayerAssignment {
+export interface WordSourceAssignment {
   library: WordLibrary;
-  ownerPlayerId: string;
+  contributorPlayerIds: string[];
+  contributorNames: string[];
+}
+
+export interface PlayerAssignment extends WordSourceAssignment {
+  template: MadLibTemplate;
 }
 
 export interface PlayerSheetResult {
@@ -35,42 +37,23 @@ export interface PlayerSheetResult {
   playerName: string;
   templateId: string;
   answers: Record<string, string>;
-  renderedText: string;
+  contributors: string[];
+  isBot?: boolean;
 }
 
-export type MessageType =
-  | 'join-request'
-  | 'join-ack'
-  | 'roster-update'
+// This game's own private protocol, carried inside the shared Envelope
+// alongside (never overlapping with) SharedMessageType.
+export type MemoRandomMessageType =
   | 'round1-start'
   | 'word-library-submit'
   | 'word-library-ack'
   | 'round2-assignments'
   | 'sheet-submit'
   | 'sheet-submit-ack'
-  | 'results'
+  | 'matchup-start'
   | 'vote-submit'
+  | 'match-result'
   | 'winner-announced';
-
-export interface Envelope<T = unknown> {
-  type: MessageType;
-  playerId?: string;
-  timestamp: number;
-  payload: T;
-}
-
-export interface JoinRequestPayload {
-  name: string;
-}
-
-export interface JoinAckPayload {
-  accepted: boolean;
-  reason?: string;
-}
-
-export interface RosterUpdatePayload {
-  players: PlayerInfo[];
-}
 
 export interface Round1StartPayload {
   endTimestamp: number;
@@ -82,7 +65,6 @@ export interface WordLibrarySubmitPayload {
 
 export interface Round2AssignmentsPayload {
   assignments: Record<string, PlayerAssignment>;
-  template: MadLibTemplate;
   endTimestamp: number;
 }
 
@@ -90,29 +72,49 @@ export interface SheetSubmitPayload {
   answers: Record<string, string>;
 }
 
-export interface ResultsPayload {
-  sheets: Record<string, PlayerSheetResult>;
-  votingEndTimestamp: number;
+export type MatchupSide = 'left' | 'right';
+
+export interface MatchupStartPayload {
+  matchIndex: number;
+  totalMatches: number;
+  left: PlayerSheetResult;
+  right: PlayerSheetResult;
+  endTimestamp: number;
 }
 
 export interface VoteSubmitPayload {
-  targetPlayerId: string | null;
+  matchIndex: number;
+  side: MatchupSide | null;
   final: boolean;
+}
+
+export interface MatchResultPayload {
+  matchIndex: number;
+  totalMatches: number;
+  left: PlayerSheetResult;
+  right: PlayerSheetResult;
+  leftVotes: number;
+  rightVotes: number;
+  scores: Record<string, number>;
+  resultsEndTimestamp: number;
 }
 
 export interface WinnerPayload {
   winnerPlayerIds: string[];
-  votes: Record<string, number>;
+  scores: Record<string, number>;
 }
 
-export type GamePhase =
-  | 'join'
-  | 'joining'
-  | 'lobby'
+// Rendered only while GameShell has handed off to this game (its own phase
+// is 'in-game'); doesn't need a 'join'/'joining'/'lobby' state of its own.
+export type MemoRandomPhase =
+  | 'starting'
   | 'round1'
   | 'round1-waiting'
   | 'round2'
   | 'round2-waiting'
   | 'round2-dropped'
-  | 'voting'
+  | 'matchup'
+  | 'matchup-results'
   | 'winner';
+
+export type { PlayerInfo };

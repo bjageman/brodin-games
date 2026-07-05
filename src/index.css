@@ -12,16 +12,22 @@
   to { opacity: 1; transform: scale(1); }
 }
 
+@keyframes notePop {
+  0% { opacity: 0; transform: scale(0.3) rotate(var(--note-rot, 0deg)); }
+  70% { opacity: 1; transform: scale(1.08) rotate(var(--note-rot, 0deg)); }
+  100% { opacity: 1; transform: scale(1) rotate(var(--note-rot, 0deg)); }
+}
+
 :root {
-  background-color: #14121f;
-  color: #ede9fe;
+  background-color: #004b84;
+  color: #eaf4ff;
   color-scheme: dark;
 }
 
 body {
   margin: 0;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background-image: radial-gradient(ellipse 90% 45% at 50% 0%, rgba(124, 58, 237, 0.18) 0%, transparent 68%);
+  background-image: radial-gradient(ellipse 90% 45% at 50% 0%, rgba(3, 209, 185, 0.12) 0%, transparent 68%);
 }
 
 .animate-fadeIn {
@@ -30,4 +36,8 @@ body {
 
 .animate-scaleIn {
   animation: scaleIn 0.3s ease-out;
+}
+
+.animate-notePop {
+  animation: notePop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
