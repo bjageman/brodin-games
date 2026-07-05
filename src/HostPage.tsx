@@ -5,7 +5,7 @@ import GameShell from './shared/GameShell';
 import { saveSnapshot, loadSnapshot, HOST_ROUTE_KEY } from './shared/utils/sessionSnapshot';
 import MemoRandomGame from './apps/memo-random/MemoRandomGame';
 import { loadDictionary } from './apps/memo-random/utils/dictionary';
-import { MIN_PLAYERS } from './apps/memo-random/constants';
+import { MIN_PLAYERS, MAX_PLAYERS } from './apps/memo-random/constants';
 
 interface HostRouteSnapshot {
   code: string;
@@ -72,6 +72,7 @@ export default function HostPage() {
         isHost={true}
         title="Memo-Random"
         minPlayers={MIN_PLAYERS}
+        maxPlayers={MAX_PLAYERS}
         onLeaveGame={() => setStarted(false)}
         gamePlay={MemoRandomGame}
         onIdlePrefetch={loadDictionary}

@@ -1,18 +1,20 @@
 // Round/timer lengths can be shortened via .env for faster manual testing
-// (e.g. VITE_ROUND1_DURATION_MS=10000) without touching this file — see
-// .env.example. Anything missing, non-numeric, or <= 0 falls back to the
-// default below.
-function envDurationMs(key: string, fallback: number): number {
+// (e.g. VITE_MEMORANDOM_ROUND1_DURATION_MS=10000) without touching this file
+// — see .env.example. Namespaced per-app (rather than a bare
+// VITE_ROUND1_DURATION_MS) so a future second game can define its own round
+// durations without colliding with this one. Anything missing, non-numeric,
+// or <= 0 falls back to the default below.
+function envPositiveInt(key: string, fallback: number): number {
   const raw = import.meta.env[key];
   const parsed = raw ? parseInt(raw, 10) : NaN;
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-export const ROUND1_DURATION_MS = envDurationMs('VITE_ROUND1_DURATION_MS', 60_000);
-export const ROUND2_DURATION_MS = envDurationMs('VITE_ROUND2_DURATION_MS', 60_000);
-export const VOTE_DURATION_MS = envDurationMs('VITE_VOTE_DURATION_MS', 20_000);
-export const RESULTS_DURATION_MS = envDurationMs('VITE_RESULTS_DURATION_MS', 10_000);
-export const GRACE_PERIOD_MS = envDurationMs('VITE_GRACE_PERIOD_MS', 15_000);
+export const ROUND1_DURATION_MS = envPositiveInt('VITE_MEMORANDOM_ROUND1_DURATION_MS', 60_000);
+export const ROUND2_DURATION_MS = envPositiveInt('VITE_MEMORANDOM_ROUND2_DURATION_MS', 60_000);
+export const VOTE_DURATION_MS = envPositiveInt('VITE_MEMORANDOM_VOTE_DURATION_MS', 20_000);
+export const RESULTS_DURATION_MS = envPositiveInt('VITE_MEMORANDOM_RESULTS_DURATION_MS', 10_000);
+export const GRACE_PERIOD_MS = envPositiveInt('VITE_MEMORANDOM_GRACE_PERIOD_MS', 15_000);
 
 // Bonus points (on top of 1 point per vote received) awarded to the sheet
 // that wins a head-to-head matchup outright. Ties award no bonus.
@@ -35,3 +37,9 @@ export const SUBMIT_MAX_ATTEMPTS = 8;
 // Needs enough players that round 2's "combine two other players' words"
 // and the head-to-head voting matchups both have someone to work with.
 export const MIN_PLAYERS = 4;
+
+// Caps how many players can be in this game's roster at once. Configurable
+// via VITE_MEMORANDOM_MAX_PLAYERS since host hardware/screen real estate for
+// a big lobby varies; anything missing, non-numeric, or <= 0 falls back to
+// 12. Each game sets its own cap rather than sharing one across all apps.
+export const MAX_PLAYERS = envPositiveInt('VITE_MEMORANDOM_MAX_PLAYERS', 12);

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type ComponentType } from 'react';
 import { useGameSocket } from './hooks/useGameSocket';
-import { assignPlayerEmoji } from './utils/playerEmoji';
 import {
   saveSnapshot,
   loadSnapshot,
@@ -9,7 +8,7 @@ import {
   HOST_ROUTE_KEY,
   JOIN_ROUTE_KEY,
 } from './utils/sessionSnapshot';
-import { JOIN_MAX_ATTEMPTS, JOIN_RETRY_INTERVAL_MS, MAX_PLAYERS } from './constants';
+import { JOIN_MAX_ATTEMPTS, JOIN_RETRY_INTERVAL_MS } from './constants';
 import type { Envelope, JoinAckPayload, JoinRequestPayload, PlayerInfo, RosterUpdatePayload } from './types';
 import Lobby from './components/Lobby';
 
@@ -45,6 +44,7 @@ interface GameShellProps {
   isHost: boolean;
   title: string;
   minPlayers: number;
+  maxPlayers: number;
   onLeaveGame: () => void;
   gamePlay: ComponentType<GamePlayProps>;
   // Called once while still in the lobby, so a game can warm up anything
@@ -57,7 +57,7 @@ interface GameShellSnapshot {
   roster: PlayerInfo[];
 }
 
-export default function GameShell({ code, playerId, name, isHost, title, minPlayers, onLeaveGame, gamePlay: GamePlay, onIdlePrefetch }: GameShellProps) {
+export default function GameShell({ code, playerId, name, isHost, title, minPlayers, maxPlayers, onLeaveGame, gamePlay: GamePlay, onIdlePrefetch }: GameShellProps) {
   const restored = loadSnapshot<GameShellSnapshot>(gameSnapshotKey(code));
 
   // The host doesn't need a network round trip to join its own game — it is
@@ -68,7 +68,7 @@ export default function GameShell({ code, playerId, name, isHost, title, minPlay
   const [phase, setPhase] = useState<ShellPhase>(restored?.phase ?? (isHost ? 'lobby' : 'joining'));
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [roster, setRoster] = useState<PlayerInfo[]>(
-    () => restored?.roster ?? (isHost ? [{ id: playerId, name, emoji: assignPlayerEmoji([]) }] : [])
+    () => restored?.roster ?? (isHost ? [{ id: playerId, name }] : [])
   );
   // Only ever set true by a live 'lobby' -> 'in-game' transition during this
   // page load — see the GamePlayProps.freshStart doc comment above.
@@ -179,12 +179,12 @@ export default function GameShell({ code, playerId, name, isHost, title, minPlay
       return;
     }
 
-    if (!existingMatch && rosterRef.current.length >= MAX_PLAYERS) {
+    if (!existingMatch && rosterRef.current.length >= maxPlayers) {
       sendMessage({
         type: 'join-ack',
         playerId: fromId,
         timestamp: Date.now(),
-        payload: { accepted: false, reason: `Room is full (max ${MAX_PLAYERS} players).` },
+        payload: { accepted: false, reason: `Room is full (max ${maxPlayers} players).` },
       });
       return;
     }
@@ -210,13 +210,10 @@ export default function GameShell({ code, playerId, name, isHost, title, minPlay
     const nextRoster = existingMatch
       ? rosterRef.current.map((p) =>
           p === existingMatch
-            ? { id: fromId, name: fromName, emoji: existingMatch.emoji }
+            ? { id: fromId, name: fromName }
             : p
         )
-      : [
-          ...rosterRef.current,
-          { id: fromId, name: fromName, emoji: assignPlayerEmoji(rosterRef.current.map((p) => p.emoji)) },
-        ];
+      : [...rosterRef.current, { id: fromId, name: fromName }];
     rosterRef.current = nextRoster;
     setRoster(nextRoster);
 
