@@ -2,9 +2,6 @@ import { useEffect, useState } from 'react';
 import PageLayout from './shared/components/PageLayout';
 import GameShell from './shared/GameShell';
 import { saveSnapshot, loadSnapshot, clearSnapshot, gameSnapshotKey, JOIN_ROUTE_KEY } from './shared/utils/sessionSnapshot';
-import MemoRandomGame from './apps/memo-random/MemoRandomGame';
-import { loadDictionary } from './apps/memo-random/utils/dictionary';
-import { MIN_PLAYERS, MAX_PLAYERS } from './apps/memo-random/constants';
 
 interface JoinRouteSnapshot {
   code: string;
@@ -81,22 +78,15 @@ export default function JoinPage() {
   }
 
   return (
-    <PageLayout title="Memo-Random">
-      <GameShell
-        code={code}
-        playerId={playerId}
-        name={name}
-        isHost={false}
-        title="Memo-Random"
-        minPlayers={MIN_PLAYERS}
-        maxPlayers={MAX_PLAYERS}
-        onLeaveGame={() => {
-          setJoined(false);
-          clearSnapshot(gameSnapshotKey(code));
-        }}
-        gamePlay={MemoRandomGame}
-        onIdlePrefetch={loadDictionary}
-      />
-    </PageLayout>
+    <GameShell
+      code={code}
+      playerId={playerId}
+      name={name}
+      isHost={false}
+      onLeaveGame={() => {
+        setJoined(false);
+        clearSnapshot(gameSnapshotKey(code));
+      }}
+    />
   );
 }

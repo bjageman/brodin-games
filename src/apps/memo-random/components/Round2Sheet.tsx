@@ -9,7 +9,7 @@ import type { PlayerInfo } from '../../../shared/types';
 import { cn } from '../../../shared/utils/cn';
 
 interface Round2SheetProps {
-  endTimestamp: number;
+  endTimestamp: number | null;
   template: MadLibTemplate;
   assignedLibrary: WordLibrary;
   roster: PlayerInfo[];
@@ -20,7 +20,7 @@ interface Round2SheetProps {
 
 export default function Round2Sheet({ endTimestamp, template, assignedLibrary, roster, answers, onAnswerChange, onSubmit }: Round2SheetProps) {
   const { msRemaining } = useCountdown(endTimestamp);
-  const secondsLeft = Math.ceil(msRemaining / 1000);
+  const secondsLeft = endTimestamp === null ? 'Paused' : Math.ceil(msRemaining / 1000);
   // Pronoun options are always the roster of players in the game, never
   // typed/collected words — see buildDropdownOptions.
   const dropdownOptions = useMemo(
@@ -41,8 +41,8 @@ export default function Round2Sheet({ endTimestamp, template, assignedLibrary, r
     <div className="w-full max-w-md sm:max-w-lg md:max-w-xl mx-auto space-y-4">
       <div className="text-center">
         <p className="text-xs uppercase tracking-widest text-gray-400">Fill out your memo</p>
-        <p className={cn("text-4xl font-display font-bold", secondsLeft <= 10 ? "text-red-400" : "text-brodin-accent")}>
-          {secondsLeft}s
+        <p className={cn("text-4xl font-display font-bold", typeof secondsLeft === 'number' && secondsLeft <= 10 ? "text-red-400" : "text-brodin-accent")}>
+          {typeof secondsLeft === 'number' ? `${secondsLeft}s` : 'Paused'}
         </p>
         {DEBUG_MODE && (
           <button

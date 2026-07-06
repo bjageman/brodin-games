@@ -5,6 +5,7 @@ interface PageLayoutProps {
   title?: string;
   titleContent?: ReactNode;
   backHref?: string;
+  onQuit?: () => void;
   contentClassName?: string;
   bgClassName?: string;
   headerClassName?: string;
@@ -17,6 +18,7 @@ export default function PageLayout({
   title,
   titleContent,
   backHref,
+  onQuit,
   contentClassName,
   bgClassName,
   headerClassName,
@@ -37,6 +39,15 @@ export default function PageLayout({
             <a href={backHref} className="absolute left-4 text-sm text-gray-400 hover:text-gray-100">
               ← Back
             </a>
+          )}
+          {onQuit && (
+            <button
+              type="button"
+              onClick={onQuit}
+              className="absolute left-4 text-sm font-semibold text-gray-400 hover:text-red-400 transition-colors"
+            >
+              Quit
+            </button>
           )}
           {titleContent ?? (
             <h1

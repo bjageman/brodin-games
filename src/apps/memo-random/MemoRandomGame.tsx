@@ -42,7 +42,8 @@ import Round2Sheet from './components/Round2Sheet';
 import MatchupScreen from './components/MatchupScreen';
 import MatchResultScreen from './components/MatchResultScreen';
 import WinnerScreen from './components/WinnerScreen';
-import QuitConfirmModal from '../../shared/components/QuitConfirmModal';
+import { DEBUG_MODE } from '../../shared/constants';
+import { type DebugAction } from '../../shared/components/DebugWidget';
 
 // Host-only bookkeeping, persisted across refresh. Maps/Sets as arrays since sessionStorage only holds JSON.
 interface HostSnapshot {
@@ -87,11 +88,11 @@ interface MemoRandomSnapshot {
   host?: HostSnapshot;
 }
 
-export default function MemoRandomGame({ code, playerId, isHost, roster, isConnected, sendMessage, isDisplay, freshStart, onRegisterMessageHandler, onQuit }: GamePlayProps) {
+export default function MemoRandomGame({ code, playerId, isHost, roster, isConnected, sendMessage, isDisplay, freshStart, onRegisterMessageHandler, onQuit, onRegisterDebugActions }: GamePlayProps) {
   const restored = freshStart ? null : loadSnapshot<MemoRandomSnapshot>(gameSnapshotKey(code));
 
   const [phase, setPhase] = useState<MemoRandomPhase>(restored?.gamePhase ?? 'starting');
-  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+
   const [round1EndTimestamp, setRound1EndTimestamp] = useState<number | null>(restored?.round1EndTimestamp ?? null);
   const [myLibrary, setMyLibrary] = useState<WordLibrary>(restored?.myLibrary ?? emptyLibrary());
   const [round2EndTimestamp, setRound2EndTimestamp] = useState<number | null>(restored?.round2EndTimestamp ?? null);
@@ -146,6 +147,314 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
   const round2AnswersRef = useRef<Record<string, string> | null>(restored?.round2Answers ?? null);
   const round2AckedRef = useRef(false);
   const matchVoteAckedRef = useRef(false);
+
+  // Debug controls
+  const activeTimeoutRef = useRef<{ id: ReturnType<typeof setTimeout>; callback: () => void; scheduledAt: number; delay: number } | null>(null);
+  const remainingTimeRef = useRef<number | null>(null);
+  const [isTimerPaused, setIsTimerPaused] = useState(false);
+
+  const setGameTimeout = (callback: () => void, delayMs: number) => {
+    if (activeTimeoutRef.current) {
+      clearTimeout(activeTimeoutRef.current.id);
+    }
+    if (isTimerPaused) {
+      remainingTimeRef.current = delayMs;
+      activeTimeoutRef.current = { id: setTimeout(() => {}, 0), callback, scheduledAt: Date.now(), delay: delayMs };
+      clearTimeout(activeTimeoutRef.current.id);
+      return;
+    }
+    const id = setTimeout(() => {
+      activeTimeoutRef.current = null;
+      callback();
+    }, delayMs);
+    activeTimeoutRef.current = { id, callback, scheduledAt: Date.now(), delay: delayMs };
+  };
+
+  const pauseTimer = () => {
+    if (!isHost) {
+      sendMessage({ type: 'debug-host-action', playerId, timestamp: Date.now(), payload: { action: 'pause-timer' } });
+      return;
+    }
+    if (isTimerPaused || !activeTimeoutRef.current) return;
+    
+    clearTimeout(activeTimeoutRef.current.id);
+    const elapsed = Date.now() - activeTimeoutRef.current.scheduledAt;
+    const remaining = Math.max(0, activeTimeoutRef.current.delay - elapsed);
+    remainingTimeRef.current = remaining;
+    setIsTimerPaused(true);
+
+    sendMessage({
+      type: 'debug-timer-update',
+      timestamp: Date.now(),
+      payload: { endTimestamp: null, phase }
+    });
+  };
+
+  const resumeTimer = () => {
+    if (!isHost) {
+      sendMessage({ type: 'debug-host-action', playerId, timestamp: Date.now(), payload: { action: 'resume-timer' } });
+      return;
+    }
+    if (!isTimerPaused || !activeTimeoutRef.current) return;
+
+    const remaining = remainingTimeRef.current ?? 10000;
+    const newEndTimestamp = Date.now() + remaining;
+    
+    const callback = activeTimeoutRef.current.callback;
+    const id = setTimeout(() => {
+      activeTimeoutRef.current = null;
+      callback();
+    }, remaining);
+    
+    activeTimeoutRef.current = {
+      id,
+      callback,
+      scheduledAt: Date.now(),
+      delay: remaining
+    };
+    
+    setIsTimerPaused(false);
+    remainingTimeRef.current = null;
+
+    sendMessage({
+      type: 'debug-timer-update',
+      timestamp: Date.now(),
+      payload: { endTimestamp: newEndTimestamp, phase }
+    });
+    
+    if (phase === 'round1') setRound1EndTimestamp(newEndTimestamp);
+    else if (phase === 'round2') setRound2EndTimestamp(newEndTimestamp);
+    else if (phase === 'matchup' && currentMatchup) {
+      setCurrentMatchup(prev => prev ? { ...prev, endTimestamp: newEndTimestamp } : null);
+    }
+  };
+
+  const adjustTimer = (seconds: number) => {
+    if (!isHost) {
+      sendMessage({ type: 'debug-host-action', playerId, timestamp: Date.now(), payload: { action: 'adjust-timer', seconds } });
+      return;
+    }
+    if (!activeTimeoutRef.current) return;
+
+    if (isTimerPaused) {
+      const currentRemaining = remainingTimeRef.current ?? 0;
+      remainingTimeRef.current = Math.max(0, currentRemaining + seconds * 1000);
+      sendMessage({
+        type: 'debug-timer-update',
+        timestamp: Date.now(),
+        payload: { endTimestamp: null, phase }
+      });
+      return;
+    }
+
+    const elapsed = Date.now() - activeTimeoutRef.current.scheduledAt;
+    const currentRemaining = Math.max(0, activeTimeoutRef.current.delay - elapsed);
+    const newRemaining = Math.max(0, currentRemaining + seconds * 1000);
+    const newEndTimestamp = Date.now() + newRemaining;
+
+    clearTimeout(activeTimeoutRef.current.id);
+    const callback = activeTimeoutRef.current.callback;
+    const id = setTimeout(() => {
+      activeTimeoutRef.current = null;
+      callback();
+    }, newRemaining);
+
+    activeTimeoutRef.current = {
+      id,
+      callback,
+      scheduledAt: Date.now() - (activeTimeoutRef.current.delay - newRemaining),
+      delay: newRemaining
+    };
+
+    sendMessage({
+      type: 'debug-timer-update',
+      timestamp: Date.now(),
+      payload: { endTimestamp: newEndTimestamp, phase }
+    });
+
+    if (phase === 'round1') setRound1EndTimestamp(newEndTimestamp);
+    else if (phase === 'round2') setRound2EndTimestamp(newEndTimestamp);
+    else if (phase === 'matchup' && currentMatchup) {
+      setCurrentMatchup(prev => prev ? { ...prev, endTimestamp: newEndTimestamp } : null);
+    }
+  };
+
+  const simulateOtherPlayersWords = () => {
+    const FALLBACK_WORDS = {
+      noun: ['dog', 'cat', 'fox', 'house', 'tree', 'car', 'book', 'chair', 'apple', 'river', 'mountain', 'robot', 'pizza', 'guitar', 'bicycle'],
+      verb: ['run', 'jump', 'walk', 'sing', 'dance', 'laugh', 'swim', 'climb', 'cook', 'paint', 'sleep', 'shout'],
+      adjective: ['happy', 'blue', 'big', 'tiny', 'loud', 'quiet', 'shiny', 'fast', 'slow', 'brave', 'silly', 'ancient'],
+      pronoun: []
+    };
+    rosterRef.current.forEach((player) => {
+      if (player.id === playerId) return;
+      if (wordLibrariesRef.current.has(player.id)) return;
+
+      const library: WordLibrary = {
+        noun: shuffled(FALLBACK_WORDS.noun).slice(0, 5),
+        verb: shuffled(FALLBACK_WORDS.verb).slice(0, 5),
+        adjective: shuffled(FALLBACK_WORDS.adjective).slice(0, 5),
+        pronoun: []
+      };
+      hostReceiveWordLibrary(player.id, library);
+    });
+  };
+
+  const simulateOtherPlayersSheets = () => {
+    const expectedPlayers = Object.keys(assignmentsRef.current);
+    expectedPlayers.forEach((pid) => {
+      if (pid === playerId) return;
+      if (sheetsRef.current.has(pid)) return;
+
+      const assignment = assignmentsRef.current[pid];
+      if (!assignment) return;
+
+      const answers: Record<string, string> = {};
+      const dropdownOptions = buildDropdownOptions(assignment.library, assignment.template, rosterRef.current.map(p => p.name));
+      assignment.template.blanks.forEach((blank) => {
+        const options = dropdownOptions[blank.id] || [];
+        answers[blank.id] = options[Math.floor(Math.random() * options.length)] ?? '';
+      });
+
+      hostReceiveSheetSubmit(pid, answers);
+    });
+  };
+
+  const simulateOtherPlayersVotes = () => {
+    const matchup = matchupsRef.current[currentMatchIndexRef.current];
+    if (!matchup) return;
+    
+    rosterRef.current.forEach((player) => {
+      if (player.id === playerId) return;
+      const isAuthor = player.id === matchup.left.playerId || player.id === matchup.right.playerId;
+      if (isAuthor) return;
+      if (matchVotedPlayersRef.current.has(player.id)) return;
+
+      const side = Math.random() < 0.5 ? 'left' : 'right';
+      hostReceiveVote(player.id, currentMatchIndexRef.current, side, true);
+    });
+  };
+
+  function shuffled<T>(arr: T[]): T[] {
+    const copy = [...arr];
+    for (let i = copy.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy;
+  }
+
+  const handleDebugHostAction = (action: string, payload?: Record<string, unknown>) => {
+    if (!isHost) return;
+    if (action === 'skip-round1') {
+      advanceToRound2();
+    } else if (action === 'skip-round2') {
+      advanceToMatchups();
+    } else if (action === 'skip-matchup') {
+      finishMatch(currentMatchIndexRef.current);
+    } else if (action === 'skip-results') {
+      startMatch(currentMatchIndexRef.current + 1);
+    } else if (action === 'pause-timer') {
+      pauseTimer();
+    } else if (action === 'resume-timer') {
+      resumeTimer();
+    } else if (action === 'adjust-timer') {
+      adjustTimer((payload as { seconds?: number })?.seconds ?? 0);
+    } else if (action === 'simulate-words') {
+      simulateOtherPlayersWords();
+    } else if (action === 'simulate-sheets') {
+      simulateOtherPlayersSheets();
+    } else if (action === 'simulate-votes') {
+      simulateOtherPlayersVotes();
+    }
+  };
+
+  const triggerAction = (action: string, extraPayload?: Record<string, unknown>) => {
+    if (isHost) {
+      handleDebugHostAction(action, extraPayload);
+    } else {
+      sendMessage({
+        type: 'debug-host-action',
+        playerId,
+        timestamp: Date.now(),
+        payload: { action, ...extraPayload }
+      });
+    }
+  };
+
+  const getDebugActions = () => {
+    const actionsList: DebugAction[] = [];
+    const hasTimer = ['round1', 'round2', 'matchup'].includes(phase);
+
+    if (hasTimer) {
+      if (isTimerPaused) {
+        actionsList.push({
+          label: '▶️ Resume Timer',
+          onClick: () => triggerAction('resume-timer'),
+          variant: 'success',
+        });
+      } else {
+        actionsList.push({
+          label: '⏸️ Pause Timer',
+          onClick: () => triggerAction('pause-timer'),
+          variant: 'warning',
+        });
+      }
+      actionsList.push({
+        label: '➕ Add 30s',
+        onClick: () => triggerAction('adjust-timer', { seconds: 30 }),
+        variant: 'secondary',
+      });
+      actionsList.push({
+        label: '➖ Subtract 10s',
+        onClick: () => triggerAction('adjust-timer', { seconds: -10 }),
+        variant: 'secondary',
+      });
+    }
+
+    if (phase === 'round1') {
+      actionsList.push({
+        label: '🤖 Simulate Words for Others',
+        onClick: () => triggerAction('simulate-words'),
+        variant: 'primary',
+      });
+      actionsList.push({
+        label: '⏭️ Skip to Round 2',
+        onClick: () => triggerAction('skip-round1'),
+        variant: 'danger',
+      });
+    } else if (phase === 'round2') {
+      actionsList.push({
+        label: '🤖 Simulate Sheets for Others',
+        onClick: () => triggerAction('simulate-sheets'),
+        variant: 'primary',
+      });
+      actionsList.push({
+        label: '⏭️ Skip to Matchups',
+        onClick: () => triggerAction('skip-round2'),
+        variant: 'danger',
+      });
+    } else if (phase === 'matchup') {
+      actionsList.push({
+        label: '🤖 Simulate Votes for Others',
+        onClick: () => triggerAction('simulate-votes'),
+        variant: 'primary',
+      });
+      actionsList.push({
+        label: '⏭️ Skip Matchup',
+        onClick: () => triggerAction('skip-matchup'),
+        variant: 'danger',
+      });
+    } else if (phase === 'matchup-results') {
+      actionsList.push({
+        label: '⏭️ Skip Results Display',
+        onClick: () => triggerAction('skip-results'),
+        variant: 'danger',
+      });
+    }
+
+    return actionsList;
+  };
 
   // Fallback in case GameShell's onIdlePrefetch didn't already warm this up.
   useEffect(() => {
@@ -202,6 +511,14 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
     winnerInfo, round1Progress, round2Progress,
   ]);
 
+  // Register debug actions with GameShell
+  useEffect(() => {
+    if (DEBUG_MODE && onRegisterDebugActions) {
+      onRegisterDebugActions(getDebugActions(), phase);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, isTimerPaused, round1Progress, round2Progress, currentMatchIndexRef.current]);
+
   // A host refresh kills every pending setTimeout fallback — re-arm whichever one applies, timed off the
   // persisted absolute end-timestamp so it still fires at the original real-world moment.
   useEffect(() => {
@@ -209,16 +526,16 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
     const now = Date.now();
     if (phase === 'round1' || phase === 'round1-waiting') {
       const delay = Math.max(0, (restored.round1EndTimestamp ?? now) + GRACE_PERIOD_MS - now);
-      setTimeout(() => advanceToRound2(), delay);
+      setGameTimeout(() => advanceToRound2(), delay);
     } else if (phase === 'round2' || phase === 'round2-waiting') {
       const delay = Math.max(0, (restored.round2EndTimestamp ?? now) + GRACE_PERIOD_MS - now);
-      setTimeout(() => advanceToMatchups(), delay);
+      setGameTimeout(() => advanceToMatchups(), delay);
     } else if (phase === 'matchup') {
       const delay = Math.max(0, (restored.currentMatchup?.endTimestamp ?? now) + GRACE_PERIOD_MS - now);
-      setTimeout(() => finishMatch(restored.host?.currentMatchIndex ?? 0), delay);
+      setGameTimeout(() => finishMatch(restored.host?.currentMatchIndex ?? 0), delay);
     } else if (phase === 'matchup-results') {
       const delay = Math.max(0, (restored.matchResult?.resultsEndTimestamp ?? now) - now);
-      setTimeout(() => startMatch((restored.host?.currentMatchIndex ?? 0) + 1), delay);
+      setGameTimeout(() => startMatch((restored.host?.currentMatchIndex ?? 0) + 1), delay);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -228,7 +545,10 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
 
     // --- Host-only reactions: react to player intents, own the canonical state ---
     if (isHost) {
-      if (envelope.type === 'word-library-submit') {
+      if (envelope.type === 'debug-host-action') {
+        const payload = envelope.payload as { action: string; [key: string]: unknown };
+        handleDebugHostAction(payload.action, payload);
+      } else if (envelope.type === 'word-library-submit') {
         const fromId = envelope.playerId;
         if (!fromId) return;
         const payload = envelope.payload as WordLibrarySubmitPayload;
@@ -247,7 +567,24 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
     }
 
     // --- Player-facing reactions: everyone (including host-as-player) follows the broadcasts ---
-    if (envelope.type === 'round1-start') {
+    if (envelope.type === 'debug-timer-update') {
+      const payload = envelope.payload as { endTimestamp: number | null; phase: MemoRandomPhase };
+      if (payload.endTimestamp === null) {
+        setIsTimerPaused(true);
+        if (payload.phase === 'round1') setRound1EndTimestamp(null);
+        else if (payload.phase === 'round2') setRound2EndTimestamp(null);
+        else if (payload.phase === 'matchup' && currentMatchup) {
+          setCurrentMatchup(prev => prev ? { ...prev, endTimestamp: null } : null);
+        }
+      } else {
+        setIsTimerPaused(false);
+        if (payload.phase === 'round1') setRound1EndTimestamp(payload.endTimestamp);
+        else if (payload.phase === 'round2') setRound2EndTimestamp(payload.endTimestamp);
+        else if (payload.phase === 'matchup' && currentMatchup) {
+          setCurrentMatchup(prev => prev ? { ...prev, endTimestamp: payload.endTimestamp } : null);
+        }
+      }
+    } else if (envelope.type === 'round1-start') {
       const payload = envelope.payload as Round1StartPayload;
       round1SubmittedRef.current = false;
       round1AckedRef.current = false;
@@ -391,7 +728,7 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
       timestamp: Date.now(),
       payload: { assignments, endTimestamp },
     });
-    setTimeout(() => advanceToMatchups(), ROUND2_DURATION_MS + GRACE_PERIOD_MS);
+    setGameTimeout(() => advanceToMatchups(), ROUND2_DURATION_MS + GRACE_PERIOD_MS);
   }
 
   // A pairing whose partner never submitted round 2 gets a bot opponent instead.
@@ -426,10 +763,10 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
     });
     // Nobody else can vote — resolve the foregone 0-0 tie almost immediately instead of waiting out the clock.
     if (expectedVotersRef.current === 0) {
-      setTimeout(() => finishMatch(index), 300);
+      setGameTimeout(() => finishMatch(index), 300);
       return;
     }
-    setTimeout(() => finishMatch(index), VOTE_DURATION_MS + GRACE_PERIOD_MS);
+    setGameTimeout(() => finishMatch(index), VOTE_DURATION_MS + GRACE_PERIOD_MS);
   }
 
   // Called by the grace-period fallback or, early, once everyone's voted — whichever fires first wins.
@@ -469,7 +806,7 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
       },
     });
     // Plain fixed-length results display — no "everyone's ready" fast path, no added grace period.
-    setTimeout(() => startMatch(index + 1), RESULTS_DURATION_MS);
+    setGameTimeout(() => startMatch(index + 1), RESULTS_DURATION_MS);
   }
 
   function advanceToWinner() {
@@ -497,7 +834,7 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
     setRound2Progress(0);
     const endTimestamp = Date.now() + ROUND1_DURATION_MS;
     sendMessage({ type: 'round1-start', timestamp: Date.now(), payload: { endTimestamp } });
-    setTimeout(() => advanceToRound2(), ROUND1_DURATION_MS + GRACE_PERIOD_MS);
+    setGameTimeout(() => advanceToRound2(), ROUND1_DURATION_MS + GRACE_PERIOD_MS);
   }
 
   useEffect(() => {
@@ -687,9 +1024,6 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
           <p className="text-sm text-gray-400">
             Waiting for other players...{isHost && ` (${round1Progress}/${roster.length} submitted)`}
           </p>
-          <button onClick={() => setShowLeaveConfirm(true)} className="text-sm text-gray-500 hover:text-red-400 underline">
-            Leave game
-          </button>
         </div>
       )}
 
@@ -710,9 +1044,6 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
           <p className="text-sm text-gray-400">
             Waiting for other players...{isHost && ` (${round2Progress}/${Object.keys(assignmentsRef.current).length} submitted)`}
           </p>
-          <button onClick={() => setShowLeaveConfirm(true)} className="text-sm text-gray-500 hover:text-red-400 underline">
-            Leave game
-          </button>
         </div>
       )}
 
@@ -723,9 +1054,6 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
               ? `Round 2 in progress... (${round2Progress}/${Object.keys(assignmentsRef.current).length} submitted)`
               : 'Your round 1 submission arrived too late, so you sat out round 2. Waiting for results...'}
           </p>
-          <button onClick={() => setShowLeaveConfirm(true)} className="text-sm text-gray-500 hover:text-red-400 underline">
-            Leave game
-          </button>
         </div>
       )}
 
@@ -755,17 +1083,6 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
           onPlayAgain={playAgain}
           onEndSession={onQuit}
           onDisconnect={onQuit}
-        />
-      )}
-
-      {showLeaveConfirm && (
-        <QuitConfirmModal
-          playerCount={Math.max(0, roster.length - 1)}
-          onConfirm={() => {
-            setShowLeaveConfirm(false);
-            onQuit();
-          }}
-          onCancel={() => setShowLeaveConfirm(false)}
         />
       )}
     </>

@@ -3,9 +3,7 @@ import { generateGameCode } from './shared/utils/gameCode';
 import PageLayout from './shared/components/PageLayout';
 import GameShell from './shared/GameShell';
 import { saveSnapshot, loadSnapshot, HOST_ROUTE_KEY } from './shared/utils/sessionSnapshot';
-import MemoRandomGame from './apps/memo-random/MemoRandomGame';
-import { loadDictionary } from './apps/memo-random/utils/dictionary';
-import { MIN_PLAYERS, MAX_PLAYERS } from './apps/memo-random/constants';
+import { GAMES_REGISTRY } from './shared/games';
 
 interface HostRouteSnapshot {
   code: string;
@@ -27,6 +25,11 @@ export default function HostPage() {
     return id;
   });
 
+  // Read game ID from the URL hash parameters (e.g. #/host?game=fake-it)
+  const params = new URLSearchParams(window.location.hash.includes('?') ? window.location.hash.split('?')[1] : '');
+  const gameId = params.get('game') || 'memo-random';
+  const gameConfig = GAMES_REGISTRY[gameId] || GAMES_REGISTRY['memo-random'];
+
   // Lets a refresh resume directly into the game (same room code) instead
   // of dropping back to the name-entry form.
   useEffect(() => {
@@ -42,7 +45,7 @@ export default function HostPage() {
 
   if (!started) {
     return (
-      <PageLayout title="Host a Game" backHref="#/">
+      <PageLayout title={`Host ${gameConfig.title}`} backHref="#/">
         <form onSubmit={handleStart} className="w-full max-w-md sm:max-w-lg mx-auto border border-brodin-primary/30 rounded-lg p-6 space-y-4 bg-brodin-panel">
           <h2 className="text-center font-display text-base font-bold uppercase tracking-wide">Enter Your Name</h2>
           <input
@@ -75,20 +78,14 @@ export default function HostPage() {
   }
 
   return (
-    <PageLayout title="Memo-Random">
-      <GameShell
-        code={code}
-        playerId={playerId}
-        name={name}
-        isHost={true}
-        title="Memo-Random"
-        minPlayers={MIN_PLAYERS}
-        maxPlayers={MAX_PLAYERS}
-        isDisplay={isDisplay}
-        onLeaveGame={() => setStarted(false)}
-        gamePlay={MemoRandomGame}
-        onIdlePrefetch={loadDictionary}
-      />
-    </PageLayout>
+    <GameShell
+      code={code}
+      playerId={playerId}
+      name={name}
+      isHost={true}
+      isDisplay={isDisplay}
+      onLeaveGame={() => setStarted(false)}
+      initialGameId={gameId}
+    />
   );
 }

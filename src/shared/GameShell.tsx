@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ComponentType } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useGameSocket } from './hooks/useGameSocket';
 import {
   saveSnapshot,
@@ -8,9 +8,13 @@ import {
   HOST_ROUTE_KEY,
   JOIN_ROUTE_KEY,
 } from './utils/sessionSnapshot';
-import { JOIN_MAX_ATTEMPTS, JOIN_RETRY_INTERVAL_MS } from './constants';
+import { JOIN_MAX_ATTEMPTS, JOIN_RETRY_INTERVAL_MS, DEBUG_MODE } from './constants';
 import type { Envelope, JoinAckPayload, JoinRequestPayload, PlayerInfo, RosterUpdatePayload } from './types';
 import Lobby from './components/Lobby';
+import { GAMES_REGISTRY } from './games';
+import DebugWidget, { type DebugAction } from './components/DebugWidget';
+import PageLayout from './components/PageLayout';
+import QuitConfirmModal from './components/QuitConfirmModal';
 
 export type ShellPhase = 'joining' | 'join' | 'lobby' | 'in-game';
 
@@ -34,6 +38,7 @@ export interface GamePlayProps {
   freshStart: boolean;
   onRegisterMessageHandler: (handler: (envelope: Envelope) => void) => void;
   onQuit: () => void;
+  onRegisterDebugActions?: (actions: DebugAction[], currentPhaseName: string) => void;
 }
 
 interface GameShellProps {
@@ -41,24 +46,41 @@ interface GameShellProps {
   playerId: string;
   name: string;
   isHost: boolean;
-  title: string;
-  minPlayers: number;
-  maxPlayers: number;
   isDisplay?: boolean;
   onLeaveGame: () => void;
-  gamePlay: ComponentType<GamePlayProps>;
-  // Called once while still in the lobby, so a game can warm up anything
-  // slow-loading (e.g. a dictionary) during idle time before it's needed.
-  onIdlePrefetch?: () => void;
+  initialGameId?: string; // e.g. 'memo-random' or 'fake-it'
 }
 
 interface GameShellSnapshot {
   phase: ShellPhase;
   roster: PlayerInfo[];
+  gameId: string | null;
 }
 
-export default function GameShell({ code, playerId, name, isHost, title, minPlayers, maxPlayers, isDisplay = false, onLeaveGame, gamePlay: GamePlay, onIdlePrefetch }: GameShellProps) {
+export default function GameShell({
+  code,
+  playerId,
+  name,
+  isHost,
+  isDisplay = false,
+  onLeaveGame,
+  initialGameId,
+}: GameShellProps) {
   const restored = loadSnapshot<GameShellSnapshot>(gameSnapshotKey(code));
+
+  // We track the game ID. The host gets it from initialGameId, while the client
+  // gets it from the join-ack message or session restore.
+  const [gameId, setGameId] = useState<string | null>(
+    () => restored?.gameId ?? (isHost ? initialGameId ?? 'memo-random' : null)
+  );
+
+  // Resolve config from registry
+  const gameConfig = gameId ? GAMES_REGISTRY[gameId] : null;
+  const title = gameConfig?.title ?? 'Loading...';
+  const minPlayers = gameConfig?.minPlayers ?? 3;
+  const maxPlayers = gameConfig?.maxPlayers ?? 12;
+  const GamePlay = gameConfig?.gamePlay;
+  const onIdlePrefetch = gameConfig?.onIdlePrefetch;
 
   // Host is the roster authority, so it seeds itself directly rather than
   // waiting on its own join-request to echo back over ntfy. A display host
@@ -70,6 +92,13 @@ export default function GameShell({ code, playerId, name, isHost, title, minPlay
   );
   // See GamePlayProps.freshStart above.
   const [freshStart, setFreshStart] = useState(false);
+
+  // Active game debug state
+  const [activeGameDebugActions, setActiveGameDebugActions] = useState<DebugAction[]>([]);
+  const [activeGameDebugPhase, setActiveGameDebugPhase] = useState<string>('');
+
+  // Quit confirm state
+  const [showQuitConfirm, setShowQuitConfirm] = useState(false);
 
   const phaseRef = useRef(phase);
   useEffect(() => { phaseRef.current = phase; }, [phase]);
@@ -84,13 +113,13 @@ export default function GameShell({ code, playerId, name, isHost, title, minPlay
   useEffect(() => {
     if (phase === 'lobby') onIdlePrefetch?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase]);
+  }, [phase, gameId]);
 
-  // Merges into whatever the active game module saved under the same key (see its matching merge-write).
+  // Merges into whatever the active game module saved under the same key.
   useEffect(() => {
     const current = loadSnapshot<Record<string, unknown>>(gameSnapshotKey(code)) ?? {};
-    saveSnapshot(gameSnapshotKey(code), { ...current, phase, roster });
-  }, [code, phase, roster]);
+    saveSnapshot(gameSnapshotKey(code), { ...current, phase, roster, gameId });
+  }, [code, phase, roster, gameId]);
 
   const handleMessage = (data: unknown) => {
     const envelope = data as Envelope;
@@ -107,6 +136,9 @@ export default function GameShell({ code, playerId, name, isHost, title, minPlay
       if (envelope.playerId === playerId && phaseRef.current === 'joining') {
         const payload = envelope.payload as JoinAckPayload;
         if (payload.accepted) {
+          if (payload.gameId) {
+            setGameId(payload.gameId);
+          }
           setPhase('lobby');
         } else {
           setPhase('join');
@@ -141,6 +173,23 @@ export default function GameShell({ code, playerId, name, isHost, title, minPlay
   };
 
   const { sendMessage, isConnected } = useGameSocket(code, handleMessage);
+
+  const addDebugBots = async (count: number) => {
+    const BOT_NAMES = ['Bilbo', 'Frodo', 'Gandalf', 'Aragorn', 'Legolas', 'Gimli', 'Boromir', 'Samwise', 'Merry', 'Pippin', 'Galadriel', 'Elrond'];
+    const takenNames = new Set(roster.map(p => p.name.replace(/ \(Bot\)$/, '').trim().toLowerCase()));
+    const availableNames = BOT_NAMES.filter(name => !takenNames.has(name.toLowerCase()));
+    
+    for (let i = 0; i < count; i++) {
+      const name = (availableNames[i % availableNames.length] || `Bot${i + 1}`) + ' (Bot)';
+      const botId = 'p-bot-' + Math.random().toString(36).substring(2, 9);
+      await sendMessage({
+        type: 'join-request',
+        playerId: botId,
+        timestamp: Date.now(),
+        payload: { name }
+      });
+    }
+  };
 
   function hostReceiveJoinRequest(fromId: string, fromName: string) {
     // Match by id only — two players can share a name, and matching by name would steal the wrong roster slot.
@@ -195,7 +244,7 @@ export default function GameShell({ code, playerId, name, isHost, title, minPlay
       type: 'join-ack',
       playerId: fromId,
       timestamp: Date.now(),
-      payload: { accepted: true },
+      payload: { accepted: true, gameId },
     });
     sendMessage({
       type: 'roster-update',
@@ -245,62 +294,131 @@ export default function GameShell({ code, playerId, name, isHost, title, minPlay
     window.location.hash = '#/';
   };
 
-  // A non-host player leaving the lobby tells the host to drop them from the
-  // roster first (best-effort — they're leaving either way) so they don't
-  // linger as a ghost entry. The host quitting just ends its own session,
-  // same as always.
-  const leaveLobby = () => {
-    if (!isHost) {
-      sendMessage({ type: 'leave-lobby', playerId, timestamp: Date.now(), payload: {} });
+
+
+  const getLayoutProps = () => {
+    if (phase === 'lobby') {
+      return {
+        title: undefined, // Lobby has its own custom Room Code header layout
+        bgClassName: 'bg-[#6d97ee] text-[#2b2f74]',
+        dividerClassName: 'text-[#2b2f74] bg-current opacity-30 h-0', // Hide page layout divider in lobby
+      };
     }
-    goToMainMenu();
+    if (phase === 'joining' || phase === 'join') {
+      return {
+        title: phase === 'joining' ? 'Connecting...' : 'Join Game',
+        bgClassName: 'bg-brodin-bg',
+        dividerClassName: 'text-brodin-primary',
+      };
+    }
+    return {
+      title: isHost ? title : 'Playing...',
+      bgClassName: 'bg-brodin-bg',
+      dividerClassName: 'text-brodin-primary',
+    };
   };
 
+  const layoutProps = getLayoutProps();
+
   return (
-    <div className="w-full flex-1 flex flex-col items-center pt-2">
-      {phase === 'joining' && (
-        <div className="text-center space-y-3">
-          <div className="w-10 h-10 border-4 border-brodin-primary border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-sm text-gray-400">Connecting to room {code}...</p>
-        </div>
-      )}
+    <PageLayout
+      title={layoutProps.title}
+      bgClassName={layoutProps.bgClassName}
+      dividerClassName={layoutProps.dividerClassName}
+      onQuit={phase === 'joining' || phase === 'join' ? undefined : () => setShowQuitConfirm(true)}
+    >
+      <div className="w-full flex-grow flex flex-col items-center pt-2">
+        {phase === 'joining' && (
+          <div className="text-center space-y-3">
+            <div className="w-10 h-10 border-4 border-brodin-primary border-t-transparent rounded-full animate-spin mx-auto" />
+            <p className="text-sm text-gray-400">Connecting to room {code}...</p>
+          </div>
+        )}
 
-      {phase === 'join' && errorMsg && (
-        <div className="max-w-md text-center space-y-3">
-          <p className="text-red-400 text-sm font-semibold">{errorMsg}</p>
-          <button onClick={onLeaveGame} className="text-sm text-gray-400 underline">Try again</button>
-        </div>
-      )}
+        {phase === 'join' && errorMsg && (
+          <div className="max-w-md text-center space-y-3">
+            <p className="text-red-400 text-sm font-semibold">{errorMsg}</p>
+            <button onClick={onLeaveGame} className="text-sm text-gray-400 underline">Try again</button>
+          </div>
+        )}
 
-      {phase === 'lobby' && (
-        <Lobby
-          code={code}
-          title={title}
-          minPlayers={minPlayers}
-          roster={roster}
-          isHost={isHost}
-          isDisplay={isDisplay}
-          isConnected={isConnected}
-          onStartGame={startGame}
-          onQuit={leaveLobby}
+        {phase === 'lobby' && (
+          <Lobby
+            code={code}
+            title={title}
+            minPlayers={minPlayers}
+            roster={roster}
+            isHost={isHost}
+            isConnected={isConnected}
+            onStartGame={startGame}
+          />
+        )}
+
+        {phase === 'in-game' && GamePlay && (
+          <GamePlay
+            code={code}
+            playerId={playerId}
+            name={name}
+            isHost={isHost}
+            roster={roster}
+            isConnected={isConnected}
+            sendMessage={sendMessage}
+            isDisplay={isDisplay}
+            freshStart={freshStart}
+            onRegisterMessageHandler={(handler) => { gameMessageHandlerRef.current = handler; }}
+            onQuit={goToMainMenu}
+            onRegisterDebugActions={(actions, gamePhase) => {
+              setActiveGameDebugActions(actions);
+              setActiveGameDebugPhase(gamePhase);
+            }}
+          />
+        )}
+
+        {DEBUG_MODE && (
+          <DebugWidget
+            code={code}
+            phase={phase === 'lobby' ? 'Lobby' : activeGameDebugPhase || 'In-Game'}
+            isHost={isHost}
+            rosterCount={roster.length}
+            isConnected={isConnected}
+            actions={
+              phase === 'lobby'
+                ? [
+                    {
+                      label: '👥 Add 1 Bot Player',
+                      onClick: () => addDebugBots(1),
+                      variant: 'primary',
+                    },
+                    {
+                      label: '👥 Add 3 Bot Players',
+                      onClick: () => addDebugBots(3),
+                      variant: 'success',
+                    },
+                    {
+                      label: '👥 Add 5 Bot Players',
+                      onClick: () => addDebugBots(5),
+                      variant: 'warning',
+                    },
+                  ]
+                : activeGameDebugActions
+            }
+          />
+        )}
+      </div>
+
+      {showQuitConfirm && (
+        <QuitConfirmModal
+          playerCount={Math.max(0, roster.length - (isHost && isDisplay ? 0 : 1))}
+          onConfirm={() => {
+            setShowQuitConfirm(false);
+            if (!isHost) {
+              sendMessage({ type: 'leave-lobby', playerId, timestamp: Date.now(), payload: {} });
+            }
+            goToMainMenu();
+          }}
+          onCancel={() => setShowQuitConfirm(false)}
         />
       )}
-
-      {phase === 'in-game' && (
-        <GamePlay
-          code={code}
-          playerId={playerId}
-          name={name}
-          isHost={isHost}
-          roster={roster}
-          isConnected={isConnected}
-          sendMessage={sendMessage}
-          isDisplay={isDisplay}
-          freshStart={freshStart}
-          onRegisterMessageHandler={(handler) => { gameMessageHandlerRef.current = handler; }}
-          onQuit={goToMainMenu}
-        />
-      )}
-    </div>
+    </PageLayout>
   );
 }

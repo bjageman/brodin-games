@@ -30,6 +30,7 @@ export interface JoinRequestPayload {
 export interface JoinAckPayload {
   accepted: boolean;
   reason?: string;
+  gameId?: string;
 }
 
 export interface RosterUpdatePayload {

@@ -57,7 +57,7 @@ export type MemoRandomMessageType =
   | 'winner-announced';
 
 export interface Round1StartPayload {
-  endTimestamp: number;
+  endTimestamp: number | null;
 }
 
 export interface WordLibrarySubmitPayload {
@@ -66,7 +66,7 @@ export interface WordLibrarySubmitPayload {
 
 export interface Round2AssignmentsPayload {
   assignments: Record<string, PlayerAssignment>;
-  endTimestamp: number;
+  endTimestamp: number | null;
 }
 
 export interface SheetSubmitPayload {
@@ -80,7 +80,7 @@ export interface MatchupStartPayload {
   totalMatches: number;
   left: PlayerSheetResult;
   right: PlayerSheetResult;
-  endTimestamp: number;
+  endTimestamp: number | null;
 }
 
 export interface VoteSubmitPayload {

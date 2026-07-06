@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import type { PlayerInfo } from '../types';
 import RoomCodeModal from './RoomCodeModal';
-import QuitConfirmModal from './QuitConfirmModal';
 import PlayerNote from './PlayerNote';
 
 interface LobbyProps {
@@ -13,63 +12,63 @@ interface LobbyProps {
   isDisplay?: boolean;
   isConnected: boolean;
   onStartGame?: () => void;
-  onQuit?: () => void;
 }
 
-const BOARD_BLUE = '#6d97ee';
 const INK = '#2b2f74';
 
-export default function Lobby({ code, title, minPlayers, roster, isHost, isDisplay = false, isConnected, onStartGame, onQuit }: LobbyProps) {
+export default function Lobby({ code, title, minPlayers, roster, isHost, isConnected, onStartGame }: LobbyProps) {
   const [showModal, setShowModal] = useState(false);
-  const [showQuitConfirm, setShowQuitConfirm] = useState(false);
   const joinUrl = `${window.location.origin}${window.location.pathname}#/join?code=${code}`;
-  // Every viewer occupies one roster slot to subtract as "self" — except a
-  // display host, which is never added to the roster at all.
-  const otherPlayerCount = Math.max(0, roster.length - (isHost && isDisplay ? 0 : 1));
-
-  const handleQuitClick = () => {
-    if (otherPlayerCount > 0) {
-      setShowQuitConfirm(true);
-    } else {
-      onQuit?.();
-    }
-  };
 
   return (
     <div
-      className="fixed inset-0 z-40 flex flex-col overflow-y-auto"
-      style={{ backgroundColor: BOARD_BLUE, color: INK }}
+      className="w-full flex-grow flex flex-col"
+      style={{ color: INK }}
     >
       {/* Header: title centered, room code top-right (stacks above on mobile) */}
       <header className="relative px-4 pt-5 pb-2 sm:pt-8">
         <button
           onClick={() => setShowModal(true)}
-          className="mx-auto mb-3 block text-center leading-tight text-white transition-transform hover:scale-105 sm:absolute sm:right-8 sm:top-7 sm:mx-0 sm:mb-0 sm:text-right lg:right-16 xl:right-24"
+          className="mx-auto mb-3 block text-center leading-tight transition-transform hover:scale-105 sm:absolute sm:right-8 sm:top-7 sm:mx-0 sm:mb-0 sm:text-right lg:right-16 xl:right-24"
         >
-          <span className="block font-display text-sm font-bold uppercase tracking-widest sm:text-base">Room Code</span>
+          <span className="block font-display text-sm font-bold uppercase tracking-widest">Room Code</span>
           <span className="block font-display text-2xl font-extrabold tracking-[0.2em] sm:text-3xl">{code}</span>
         </button>
         <h1
-          className="text-center font-display text-3xl font-extrabold uppercase tracking-wide text-white sm:text-4xl"
+          className="text-center font-display text-3xl font-extrabold uppercase tracking-wide sm:text-4xl"
           style={{ textShadow: `0 3px 0 rgba(43,47,116,0.25)` }}
         >
           {title}
         </h1>
       </header>
 
-      {/* Notes board */}
-      <div className="flex flex-1 items-center justify-center px-4 py-6">
-        {roster.length === 0 ? (
-          <p className="text-center font-display text-lg font-bold text-white/90">
-            Waiting for players to join…
-          </p>
-        ) : (
-          <div className="flex max-w-3xl flex-wrap items-center justify-center gap-x-8 gap-y-10">
-            {roster.map((p, i) => (
-              <PlayerNote key={p.id} name={p.name} index={i} />
-            ))}
+      {/* Main content: players board */}
+      <div className="flex-1 px-4 py-6 md:px-8 max-w-4xl w-full mx-auto">
+        <div
+          className="min-h-[300px] rounded-2xl border-4 p-6 shadow-inner flex flex-col"
+          style={{ borderColor: INK, backgroundColor: 'rgba(255,255,255,0.1)' }}
+        >
+          <div className="flex items-center justify-between border-b-2 pb-3 mb-6" style={{ borderColor: INK }}>
+            <h2 className="font-display text-lg font-extrabold uppercase tracking-wider">Players in Lobby</h2>
+            <span className="font-display text-sm font-extrabold uppercase tracking-wider">
+              {roster.length} Joined
+            </span>
           </div>
-        )}
+
+          {roster.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center text-center">
+              <p className="font-display font-bold text-sm uppercase tracking-wide animate-pulse opacity-75">
+                Waiting for players to connect...
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
+              {roster.map((player, index) => (
+                <PlayerNote key={player.id} name={player.name} index={index} />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Footer controls */}
@@ -85,42 +84,18 @@ export default function Lobby({ code, title, minPlayers, roster, isHost, isDispl
               {isConnected ? 'Start Game' : 'Reconnecting…'}
             </button>
             {isConnected && roster.length < minPlayers && (
-              <p className="font-display text-sm font-bold text-white/90">
+              <p className="font-display text-sm font-bold opacity-90">
                 Need {minPlayers - roster.length} more{' '}
                 {minPlayers - roster.length === 1 ? 'player' : 'players'} to start
               </p>
             )}
-            <button
-              onClick={handleQuitClick}
-              className="text-sm font-semibold text-white/70 underline underline-offset-2 hover:text-white"
-            >
-              Quit
-            </button>
           </>
         ) : (
-          <>
-            <p className="font-display text-base font-bold text-white/90">Waiting for the host to start the game…</p>
-            <button
-              onClick={() => onQuit?.()}
-              className="text-sm font-semibold text-white/70 underline underline-offset-2 hover:text-white"
-            >
-              Leave
-            </button>
-          </>
+          <p className="font-display text-base font-bold opacity-90">Waiting for the host to start the game…</p>
         )}
       </footer>
 
       {showModal && <RoomCodeModal gameCode={code} joinUrl={joinUrl} onClose={() => setShowModal(false)} />}
-      {showQuitConfirm && (
-        <QuitConfirmModal
-          playerCount={otherPlayerCount}
-          onConfirm={() => {
-            setShowQuitConfirm(false);
-            onQuit?.();
-          }}
-          onCancel={() => setShowQuitConfirm(false)}
-        />
-      )}
     </div>
   );
 }
