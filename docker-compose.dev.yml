@@ -8,6 +8,7 @@ services:
       dockerfile: Dockerfile
       args:
         - VITE_NTFY_SERVER_URL=ntfydev.${DOMAIN}
+        - VITE_DEBUG=true
     ports:
       - "8092:80"
     environment:
