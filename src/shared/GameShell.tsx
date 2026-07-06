@@ -8,10 +8,11 @@ import {
   HOST_ROUTE_KEY,
   JOIN_ROUTE_KEY,
 } from './utils/sessionSnapshot';
-import { JOIN_MAX_ATTEMPTS, JOIN_RETRY_INTERVAL_MS } from './constants';
+import { JOIN_MAX_ATTEMPTS, JOIN_RETRY_INTERVAL_MS, DEBUG_MODE } from './constants';
 import type { Envelope, JoinAckPayload, JoinRequestPayload, PlayerInfo, RosterUpdatePayload } from './types';
 import Lobby from './components/Lobby';
 import { GAMES_REGISTRY } from './games';
+import DebugWidget from './components/DebugWidget';
 
 export type ShellPhase = 'joining' | 'join' | 'lobby' | 'in-game';
 
@@ -162,6 +163,23 @@ export default function GameShell({
   };
 
   const { sendMessage, isConnected } = useGameSocket(code, handleMessage);
+
+  const addDebugBots = async (count: number) => {
+    const BOT_NAMES = ['Bilbo', 'Frodo', 'Gandalf', 'Aragorn', 'Legolas', 'Gimli', 'Boromir', 'Samwise', 'Merry', 'Pippin', 'Galadriel', 'Elrond'];
+    const takenNames = new Set(roster.map(p => p.name.replace(/ \(Bot\)$/, '').trim().toLowerCase()));
+    const availableNames = BOT_NAMES.filter(name => !takenNames.has(name.toLowerCase()));
+    
+    for (let i = 0; i < count; i++) {
+      const name = (availableNames[i % availableNames.length] || `Bot${i + 1}`) + ' (Bot)';
+      const botId = 'p-bot-' + Math.random().toString(36).substring(2, 9);
+      await sendMessage({
+        type: 'join-request',
+        playerId: botId,
+        timestamp: Date.now(),
+        payload: { name }
+      });
+    }
+  };
 
   function hostReceiveJoinRequest(fromId: string, fromName: string) {
     // Match by id only — two players can share a name, and matching by name would steal the wrong roster slot.
@@ -320,6 +338,33 @@ export default function GameShell({
           freshStart={freshStart}
           onRegisterMessageHandler={(handler) => { gameMessageHandlerRef.current = handler; }}
           onQuit={goToMainMenu}
+        />
+      )}
+
+      {DEBUG_MODE && phase === 'lobby' && (
+        <DebugWidget
+          code={code}
+          phase="Lobby"
+          isHost={isHost}
+          rosterCount={roster.length}
+          isConnected={isConnected}
+          actions={[
+            {
+              label: '👥 Add 1 Bot Player',
+              onClick: () => addDebugBots(1),
+              variant: 'primary',
+            },
+            {
+              label: '👥 Add 3 Bot Players',
+              onClick: () => addDebugBots(3),
+              variant: 'success',
+            },
+            {
+              label: '👥 Add 5 Bot Players',
+              onClick: () => addDebugBots(5),
+              variant: 'warning',
+            },
+          ]}
         />
       )}
     </div>

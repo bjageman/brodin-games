@@ -13,7 +13,7 @@ import fallbackWordsData from '../data/fallbackWords.json';
 const FALLBACK_WORDS = fallbackWordsData as WordLibrary;
 
 interface Round1TypingProps {
-  endTimestamp: number;
+  endTimestamp: number | null;
   library: WordLibrary;
   onAddWord: (category: Category, word: string) => void;
 }
@@ -23,7 +23,7 @@ export default function Round1Typing({ endTimestamp, library, onAddWord }: Round
   const [input, setInput] = useState('');
   const [shake, setShake] = useState(false);
 
-  const secondsLeft = Math.ceil(msRemaining / 1000);
+  const secondsLeft = endTimestamp === null ? 'Paused' : Math.ceil(msRemaining / 1000);
   const seen = new Set(CATEGORIES.flatMap((c) => library[c]).map((w) => w.toLowerCase()));
 
   const triggerShake = () => {
@@ -80,8 +80,8 @@ export default function Round1Typing({ endTimestamp, library, onAddWord }: Round
     <div className="w-full max-w-md sm:max-w-lg md:max-w-xl mx-auto space-y-4">
       <div className="text-center">
         <p className="text-xs uppercase tracking-widest text-gray-400">Type as many words as you can</p>
-        <p className={cn("text-4xl font-display font-bold", secondsLeft <= 10 ? "text-red-400" : "text-brodin-accent")}>
-          {secondsLeft}s
+        <p className={cn("text-4xl font-display font-bold", typeof secondsLeft === 'number' && secondsLeft <= 10 ? "text-red-400" : "text-brodin-accent")}>
+          {typeof secondsLeft === 'number' ? `${secondsLeft}s` : 'Paused'}
         </p>
       </div>
 

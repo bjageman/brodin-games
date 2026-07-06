@@ -15,7 +15,7 @@ interface MatchupScreenProps {
 
 export default function MatchupScreen({ matchup, myPlayerId, myVote, locked, readOnly = false, onVote, onSubmit }: MatchupScreenProps) {
   const { msRemaining } = useCountdown(matchup.endTimestamp);
-  const secondsLeft = Math.ceil(msRemaining / 1000);
+  const secondsLeft = matchup.endTimestamp === null ? 'Paused' : Math.ceil(msRemaining / 1000);
   const isOwnMemo = matchup.left.playerId === myPlayerId || matchup.right.playerId === myPlayerId;
 
   const renderSide = (side: MatchupSide, sheet: PlayerSheetResult) => {
@@ -53,8 +53,8 @@ export default function MatchupScreen({ matchup, myPlayerId, myVote, locked, rea
         <p className="text-xs uppercase tracking-widest text-gray-400">
           Memo {matchup.matchIndex + 1} of {matchup.totalMatches} — {readOnly ? 'Voting in Progress' : isOwnMemo ? 'Wait for Others to Vote' : 'Pick the Better One'}
         </p>
-        <p className={cn("text-4xl font-display font-bold", secondsLeft <= 10 ? "text-red-400" : "text-brodin-accent")}>
-          {secondsLeft}s
+        <p className={cn("text-4xl font-display font-bold", typeof secondsLeft === 'number' && secondsLeft <= 10 ? "text-red-400" : "text-brodin-accent")}>
+          {typeof secondsLeft === 'number' ? `${secondsLeft}s` : 'Paused'}
         </p>
       </div>
 
