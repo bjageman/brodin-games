@@ -344,7 +344,7 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
     return copy;
   }
 
-  const handleDebugHostAction = (action: string, payload?: any) => {
+  const handleDebugHostAction = (action: string, payload?: Record<string, unknown>) => {
     if (!isHost) return;
     if (action === 'skip-round1') {
       advanceToRound2();
@@ -369,7 +369,7 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
     }
   };
 
-  const triggerAction = (action: string, extraPayload?: any) => {
+  const triggerAction = (action: string, extraPayload?: Record<string, unknown>) => {
     if (isHost) {
       handleDebugHostAction(action, extraPayload);
     } else {
@@ -546,7 +546,7 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
     // --- Host-only reactions: react to player intents, own the canonical state ---
     if (isHost) {
       if (envelope.type === 'debug-host-action') {
-        const payload = envelope.payload as { action: string; [key: string]: any };
+        const payload = envelope.payload as { action: string; [key: string]: unknown };
         handleDebugHostAction(payload.action, payload);
       } else if (envelope.type === 'word-library-submit') {
         const fromId = envelope.playerId;

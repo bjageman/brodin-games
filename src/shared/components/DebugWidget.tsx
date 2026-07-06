@@ -38,7 +38,9 @@ export default function DebugWidget({
     setIsExpanded((prev) => {
       try {
         localStorage.setItem('brodin_debug_expanded', String(!prev));
-      } catch {}
+      } catch {
+        // Ignore storage errors in private browsing modes
+      }
       return !prev;
     });
   };

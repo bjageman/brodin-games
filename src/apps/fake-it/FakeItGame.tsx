@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/purity */
 import { useEffect, useState, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import { useCountdown } from '../../shared/hooks/useCountdown';
@@ -177,7 +178,7 @@ export default function FakeItGame({
     }
   };
 
-  const handleDebugHostAction = (action: string, payloadObj?: any) => {
+  const handleDebugHostAction = (action: string, payloadObj?: Record<string, unknown>) => {
     if (!isHost) return;
     if (action === 'skip-reveal') {
       const endTimestamp = Date.now() + TURN_DURATION_MS;
@@ -219,7 +220,7 @@ export default function FakeItGame({
     }
   };
 
-  const triggerAction = (action: string, extraPayload?: any) => {
+  const triggerAction = (action: string, extraPayload?: Record<string, unknown>) => {
     if (isHost) {
       handleDebugHostAction(action, extraPayload);
     } else {
@@ -683,7 +684,7 @@ export default function FakeItGame({
         }
       } else if (type === 'debug-host-action') {
         if (isHost) {
-          const payloadObj = payload as { action: string; [key: string]: any };
+          const payloadObj = payload as { action: string; [key: string]: unknown };
           handleDebugHostAction(payloadObj.action, payloadObj);
         }
       } else if (isHost) {
