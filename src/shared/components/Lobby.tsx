@@ -98,7 +98,15 @@ export default function Lobby({ code, title, minPlayers, roster, isHost, isDispl
             </button>
           </>
         ) : (
-          <p className="font-display text-base font-bold text-white/90">Waiting for the host to start the game…</p>
+          <>
+            <p className="font-display text-base font-bold text-white/90">Waiting for the host to start the game…</p>
+            <button
+              onClick={() => onQuit?.()}
+              className="text-sm font-semibold text-white/70 underline underline-offset-2 hover:text-white"
+            >
+              Leave
+            </button>
+          </>
         )}
       </footer>
 
