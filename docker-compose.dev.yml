@@ -1,0 +1,22 @@
+name: games-brodin-dev
+
+services:
+  games-brodin:
+    container_name: games-brodin-dev
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - VITE_NTFY_SERVER_URL=ntfydev.${DOMAIN}
+    ports:
+      - "8091:80"
+    environment:
+      - VIRTUAL_HOST=gamesdev.${DOMAIN}
+      - LETSENCRYPT_HOST=gamesdev.${DOMAIN}
+      - LETSENCRYPT_EMAIL=${EMAIL}
+    restart: unless-stopped
+
+networks:
+  default:
+    name: nginx-proxy
+    external: true
