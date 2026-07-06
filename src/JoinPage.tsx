@@ -39,14 +39,6 @@ export default function JoinPage() {
     setJoined(true);
   };
 
-  const handleQuit = () => {
-    if (window.confirm("Are you sure you want to leave the game?")) {
-      clearSnapshot(gameSnapshotKey(code));
-      clearSnapshot(JOIN_ROUTE_KEY);
-      window.location.hash = '#/';
-    }
-  };
-
   if (!joined) {
     return (
       <PageLayout title="Join Game" backHref="#/">
@@ -86,17 +78,15 @@ export default function JoinPage() {
   }
 
   return (
-    <PageLayout title="Playing..." onQuit={handleQuit}>
-      <GameShell
-        code={code}
-        playerId={playerId}
-        name={name}
-        isHost={false}
-        onLeaveGame={() => {
-          setJoined(false);
-          clearSnapshot(gameSnapshotKey(code));
-        }}
-      />
-    </PageLayout>
+    <GameShell
+      code={code}
+      playerId={playerId}
+      name={name}
+      isHost={false}
+      onLeaveGame={() => {
+        setJoined(false);
+        clearSnapshot(gameSnapshotKey(code));
+      }}
+    />
   );
 }

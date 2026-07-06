@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { generateGameCode } from './shared/utils/gameCode';
 import PageLayout from './shared/components/PageLayout';
 import GameShell from './shared/GameShell';
-import { saveSnapshot, loadSnapshot, HOST_ROUTE_KEY, clearSnapshot, gameSnapshotKey, JOIN_ROUTE_KEY } from './shared/utils/sessionSnapshot';
+import { saveSnapshot, loadSnapshot, HOST_ROUTE_KEY } from './shared/utils/sessionSnapshot';
 import { GAMES_REGISTRY } from './shared/games';
 
 interface HostRouteSnapshot {
@@ -43,15 +43,6 @@ export default function HostPage() {
     setStarted(true);
   };
 
-  const handleQuit = () => {
-    if (window.confirm("Are you sure you want to end the session? This will disconnect all players.")) {
-      clearSnapshot(gameSnapshotKey(code));
-      clearSnapshot(HOST_ROUTE_KEY);
-      clearSnapshot(JOIN_ROUTE_KEY);
-      window.location.hash = '#/';
-    }
-  };
-
   if (!started) {
     return (
       <PageLayout title={`Host ${gameConfig.title}`} backHref="#/">
@@ -87,16 +78,14 @@ export default function HostPage() {
   }
 
   return (
-    <PageLayout title={gameConfig.title} onQuit={handleQuit}>
-      <GameShell
-        code={code}
-        playerId={playerId}
-        name={name}
-        isHost={true}
-        isDisplay={isDisplay}
-        onLeaveGame={() => setStarted(false)}
-        initialGameId={gameId}
-      />
-    </PageLayout>
+    <GameShell
+      code={code}
+      playerId={playerId}
+      name={name}
+      isHost={true}
+      isDisplay={isDisplay}
+      onLeaveGame={() => setStarted(false)}
+      initialGameId={gameId}
+    />
   );
 }

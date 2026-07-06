@@ -13,6 +13,8 @@ import type { Envelope, JoinAckPayload, JoinRequestPayload, PlayerInfo, RosterUp
 import Lobby from './components/Lobby';
 import { GAMES_REGISTRY } from './games';
 import DebugWidget, { type DebugAction } from './components/DebugWidget';
+import PageLayout from './components/PageLayout';
+import QuitConfirmModal from './components/QuitConfirmModal';
 
 export type ShellPhase = 'joining' | 'join' | 'lobby' | 'in-game';
 
@@ -94,6 +96,9 @@ export default function GameShell({
   // Active game debug state
   const [activeGameDebugActions, setActiveGameDebugActions] = useState<DebugAction[]>([]);
   const [activeGameDebugPhase, setActiveGameDebugPhase] = useState<string>('');
+
+  // Quit confirm state
+  const [showQuitConfirm, setShowQuitConfirm] = useState(false);
 
   const phaseRef = useRef(phase);
   useEffect(() => { phaseRef.current = phase; }, [phase]);
@@ -289,97 +294,131 @@ export default function GameShell({
     window.location.hash = '#/';
   };
 
-  // A non-host player leaving the lobby tells the host to drop them from the
-  // roster first (best-effort — they're leaving either way) so they don't
-  // linger as a ghost entry. The host quitting just ends its own session,
-  // same as always.
-  const leaveLobby = () => {
-    if (!isHost) {
-      sendMessage({ type: 'leave-lobby', playerId, timestamp: Date.now(), payload: {} });
+
+
+  const getLayoutProps = () => {
+    if (phase === 'lobby') {
+      return {
+        title: undefined, // Lobby has its own custom Room Code header layout
+        bgClassName: 'bg-[#6d97ee] text-[#2b2f74]',
+        dividerClassName: 'text-[#2b2f74] bg-current opacity-30 h-0', // Hide page layout divider in lobby
+      };
     }
-    goToMainMenu();
+    if (phase === 'joining' || phase === 'join') {
+      return {
+        title: phase === 'joining' ? 'Connecting...' : 'Join Game',
+        bgClassName: 'bg-brodin-bg',
+        dividerClassName: 'text-brodin-primary',
+      };
+    }
+    return {
+      title: isHost ? title : 'Playing...',
+      bgClassName: 'bg-brodin-bg',
+      dividerClassName: 'text-brodin-primary',
+    };
   };
 
+  const layoutProps = getLayoutProps();
+
   return (
-    <div className="w-full flex-1 flex flex-col items-center pt-2">
-      {phase === 'joining' && (
-        <div className="text-center space-y-3">
-          <div className="w-10 h-10 border-4 border-brodin-primary border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-sm text-gray-400">Connecting to room {code}...</p>
-        </div>
-      )}
+    <PageLayout
+      title={layoutProps.title}
+      bgClassName={layoutProps.bgClassName}
+      dividerClassName={layoutProps.dividerClassName}
+      onQuit={phase === 'joining' || phase === 'join' ? undefined : () => setShowQuitConfirm(true)}
+    >
+      <div className="w-full flex-grow flex flex-col items-center pt-2">
+        {phase === 'joining' && (
+          <div className="text-center space-y-3">
+            <div className="w-10 h-10 border-4 border-brodin-primary border-t-transparent rounded-full animate-spin mx-auto" />
+            <p className="text-sm text-gray-400">Connecting to room {code}...</p>
+          </div>
+        )}
 
-      {phase === 'join' && errorMsg && (
-        <div className="max-w-md text-center space-y-3">
-          <p className="text-red-400 text-sm font-semibold">{errorMsg}</p>
-          <button onClick={onLeaveGame} className="text-sm text-gray-400 underline">Try again</button>
-        </div>
-      )}
+        {phase === 'join' && errorMsg && (
+          <div className="max-w-md text-center space-y-3">
+            <p className="text-red-400 text-sm font-semibold">{errorMsg}</p>
+            <button onClick={onLeaveGame} className="text-sm text-gray-400 underline">Try again</button>
+          </div>
+        )}
 
-      {phase === 'lobby' && (
-        <Lobby
-          code={code}
-          title={title}
-          minPlayers={minPlayers}
-          roster={roster}
-          isHost={isHost}
-          isDisplay={isDisplay}
-          isConnected={isConnected}
-          onStartGame={startGame}
-          onQuit={leaveLobby}
-        />
-      )}
+        {phase === 'lobby' && (
+          <Lobby
+            code={code}
+            title={title}
+            minPlayers={minPlayers}
+            roster={roster}
+            isHost={isHost}
+            isConnected={isConnected}
+            onStartGame={startGame}
+          />
+        )}
 
-      {phase === 'in-game' && GamePlay && (
-        <GamePlay
-          code={code}
-          playerId={playerId}
-          name={name}
-          isHost={isHost}
-          roster={roster}
-          isConnected={isConnected}
-          sendMessage={sendMessage}
-          isDisplay={isDisplay}
-          freshStart={freshStart}
-          onRegisterMessageHandler={(handler) => { gameMessageHandlerRef.current = handler; }}
-          onQuit={goToMainMenu}
-          onRegisterDebugActions={(actions, gamePhase) => {
-            setActiveGameDebugActions(actions);
-            setActiveGameDebugPhase(gamePhase);
+        {phase === 'in-game' && GamePlay && (
+          <GamePlay
+            code={code}
+            playerId={playerId}
+            name={name}
+            isHost={isHost}
+            roster={roster}
+            isConnected={isConnected}
+            sendMessage={sendMessage}
+            isDisplay={isDisplay}
+            freshStart={freshStart}
+            onRegisterMessageHandler={(handler) => { gameMessageHandlerRef.current = handler; }}
+            onQuit={goToMainMenu}
+            onRegisterDebugActions={(actions, gamePhase) => {
+              setActiveGameDebugActions(actions);
+              setActiveGameDebugPhase(gamePhase);
+            }}
+          />
+        )}
+
+        {DEBUG_MODE && (
+          <DebugWidget
+            code={code}
+            phase={phase === 'lobby' ? 'Lobby' : activeGameDebugPhase || 'In-Game'}
+            isHost={isHost}
+            rosterCount={roster.length}
+            isConnected={isConnected}
+            actions={
+              phase === 'lobby'
+                ? [
+                    {
+                      label: '👥 Add 1 Bot Player',
+                      onClick: () => addDebugBots(1),
+                      variant: 'primary',
+                    },
+                    {
+                      label: '👥 Add 3 Bot Players',
+                      onClick: () => addDebugBots(3),
+                      variant: 'success',
+                    },
+                    {
+                      label: '👥 Add 5 Bot Players',
+                      onClick: () => addDebugBots(5),
+                      variant: 'warning',
+                    },
+                  ]
+                : activeGameDebugActions
+            }
+          />
+        )}
+      </div>
+
+      {showQuitConfirm && (
+        <QuitConfirmModal
+          playerCount={Math.max(0, roster.length - (isHost && isDisplay ? 0 : 1))}
+          onConfirm={() => {
+            setShowQuitConfirm(false);
+            if (!isHost) {
+              sendMessage({ type: 'leave-lobby', playerId, timestamp: Date.now(), payload: {} });
+            }
+            goToMainMenu();
           }}
+          onCancel={() => setShowQuitConfirm(false)}
         />
       )}
-
-      {DEBUG_MODE && (
-        <DebugWidget
-          code={code}
-          phase={phase === 'lobby' ? 'Lobby' : activeGameDebugPhase || 'In-Game'}
-          isHost={isHost}
-          rosterCount={roster.length}
-          isConnected={isConnected}
-          actions={
-            phase === 'lobby'
-              ? [
-                  {
-                    label: '👥 Add 1 Bot Player',
-                    onClick: () => addDebugBots(1),
-                    variant: 'primary',
-                  },
-                  {
-                    label: '👥 Add 3 Bot Players',
-                    onClick: () => addDebugBots(3),
-                    variant: 'success',
-                  },
-                  {
-                    label: '👥 Add 5 Bot Players',
-                    onClick: () => addDebugBots(5),
-                    variant: 'warning',
-                  },
-                ]
-              : activeGameDebugActions
-          }
-        />
-      )}
-    </div>
+    </PageLayout>
   );
 }

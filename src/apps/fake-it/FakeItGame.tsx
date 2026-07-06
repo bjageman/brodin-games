@@ -15,7 +15,7 @@ import {
   TOPICS,
 } from './constants';
 import DrawingCanvas from './components/DrawingCanvas';
-import QuitConfirmModal from '../../shared/components/QuitConfirmModal';
+
 
 interface FakeItSnapshot {
   gamePhase: FakeItPhase;
@@ -40,7 +40,6 @@ export default function FakeItGame({
   isHost,
   roster,
   sendMessage,
-  isDisplay,
   freshStart,
   onRegisterMessageHandler,
   onQuit,
@@ -63,7 +62,7 @@ export default function FakeItGame({
   const [turnEndTimestamp, setTurnEndTimestamp] = useState<number | null>(restored?.turnEndTimestamp ?? null);
   const [voteEndTimestamp, setVoteEndTimestamp] = useState<number | null>(restored?.voteEndTimestamp ?? null);
 
-  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+
   const [myVote, setMyVote] = useState<string | null>(null);
 
   // Debug controls
@@ -1109,23 +1108,6 @@ export default function FakeItGame({
         </div>
       )}
 
-      {/* Floating Leave Button (For Players during gameplay) */}
-      {phase !== 'leaderboard' && !isDisplay && (
-        <button
-          onClick={() => setShowLeaveConfirm(true)}
-          className="fixed bottom-4 right-4 bg-gray-950/40 backdrop-blur-sm border border-white/10 hover:bg-gray-900/60 text-white rounded-full p-2.5 text-xs font-semibold flex items-center justify-center gap-1 shadow-lg"
-        >
-          <span>🚪</span> Leave Game
-        </button>
-      )}
-
-      {showLeaveConfirm && (
-        <QuitConfirmModal
-          playerCount={roster.length - 1}
-          onConfirm={onQuit}
-          onCancel={() => setShowLeaveConfirm(false)}
-        />
-      )}
     </div>
   );
 }

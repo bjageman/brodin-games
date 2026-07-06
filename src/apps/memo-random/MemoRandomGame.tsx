@@ -42,7 +42,6 @@ import Round2Sheet from './components/Round2Sheet';
 import MatchupScreen from './components/MatchupScreen';
 import MatchResultScreen from './components/MatchResultScreen';
 import WinnerScreen from './components/WinnerScreen';
-import QuitConfirmModal from '../../shared/components/QuitConfirmModal';
 import { DEBUG_MODE } from '../../shared/constants';
 import { type DebugAction } from '../../shared/components/DebugWidget';
 
@@ -93,7 +92,7 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
   const restored = freshStart ? null : loadSnapshot<MemoRandomSnapshot>(gameSnapshotKey(code));
 
   const [phase, setPhase] = useState<MemoRandomPhase>(restored?.gamePhase ?? 'starting');
-  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+
   const [round1EndTimestamp, setRound1EndTimestamp] = useState<number | null>(restored?.round1EndTimestamp ?? null);
   const [myLibrary, setMyLibrary] = useState<WordLibrary>(restored?.myLibrary ?? emptyLibrary());
   const [round2EndTimestamp, setRound2EndTimestamp] = useState<number | null>(restored?.round2EndTimestamp ?? null);
@@ -1025,9 +1024,6 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
           <p className="text-sm text-gray-400">
             Waiting for other players...{isHost && ` (${round1Progress}/${roster.length} submitted)`}
           </p>
-          <button onClick={() => setShowLeaveConfirm(true)} className="text-sm text-gray-500 hover:text-red-400 underline">
-            Leave game
-          </button>
         </div>
       )}
 
@@ -1048,9 +1044,6 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
           <p className="text-sm text-gray-400">
             Waiting for other players...{isHost && ` (${round2Progress}/${Object.keys(assignmentsRef.current).length} submitted)`}
           </p>
-          <button onClick={() => setShowLeaveConfirm(true)} className="text-sm text-gray-500 hover:text-red-400 underline">
-            Leave game
-          </button>
         </div>
       )}
 
@@ -1061,9 +1054,6 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
               ? `Round 2 in progress... (${round2Progress}/${Object.keys(assignmentsRef.current).length} submitted)`
               : 'Your round 1 submission arrived too late, so you sat out round 2. Waiting for results...'}
           </p>
-          <button onClick={() => setShowLeaveConfirm(true)} className="text-sm text-gray-500 hover:text-red-400 underline">
-            Leave game
-          </button>
         </div>
       )}
 
@@ -1093,17 +1083,6 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
           onPlayAgain={playAgain}
           onEndSession={onQuit}
           onDisconnect={onQuit}
-        />
-      )}
-
-      {showLeaveConfirm && (
-        <QuitConfirmModal
-          playerCount={Math.max(0, roster.length - 1)}
-          onConfirm={() => {
-            setShowLeaveConfirm(false);
-            onQuit();
-          }}
-          onCancel={() => setShowLeaveConfirm(false)}
         />
       )}
     </>
