@@ -44,7 +44,7 @@ import MatchResultScreen from './components/MatchResultScreen';
 import WinnerScreen from './components/WinnerScreen';
 import QuitConfirmModal from '../../shared/components/QuitConfirmModal';
 import { DEBUG_MODE } from '../../shared/constants';
-import DebugWidget, { type DebugAction } from '../../shared/components/DebugWidget';
+import { type DebugAction } from '../../shared/components/DebugWidget';
 
 // Host-only bookkeeping, persisted across refresh. Maps/Sets as arrays since sessionStorage only holds JSON.
 interface HostSnapshot {
@@ -89,7 +89,7 @@ interface MemoRandomSnapshot {
   host?: HostSnapshot;
 }
 
-export default function MemoRandomGame({ code, playerId, isHost, roster, isConnected, sendMessage, isDisplay, freshStart, onRegisterMessageHandler, onQuit }: GamePlayProps) {
+export default function MemoRandomGame({ code, playerId, isHost, roster, isConnected, sendMessage, isDisplay, freshStart, onRegisterMessageHandler, onQuit, onRegisterDebugActions }: GamePlayProps) {
   const restored = freshStart ? null : loadSnapshot<MemoRandomSnapshot>(gameSnapshotKey(code));
 
   const [phase, setPhase] = useState<MemoRandomPhase>(restored?.gamePhase ?? 'starting');
@@ -511,6 +511,14 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
     template, mySheetAnswers, currentMatchup, matchResult, myMatchVote, matchVoteLocked, seenSheets,
     winnerInfo, round1Progress, round2Progress,
   ]);
+
+  // Register debug actions with GameShell
+  useEffect(() => {
+    if (DEBUG_MODE && onRegisterDebugActions) {
+      onRegisterDebugActions(getDebugActions(), phase);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, isTimerPaused, round1Progress, round2Progress, currentMatchIndexRef.current]);
 
   // A host refresh kills every pending setTimeout fallback — re-arm whichever one applies, timed off the
   // persisted absolute end-timestamp so it still fires at the original real-world moment.
@@ -1096,17 +1104,6 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
             onQuit();
           }}
           onCancel={() => setShowLeaveConfirm(false)}
-        />
-      )}
-
-      {DEBUG_MODE && (
-        <DebugWidget
-          code={code}
-          phase={phase}
-          isHost={isHost}
-          rosterCount={roster.length}
-          isConnected={isConnected}
-          actions={getDebugActions()}
         />
       )}
     </>

@@ -6,7 +6,7 @@ import type { Envelope } from '../../shared/types';
 import type { GamePlayProps } from '../../shared/GameShell';
 import type { FakeItPhase, GameState, Line, Topic, Point } from './types';
 import { DEBUG_MODE } from '../../shared/constants';
-import DebugWidget, { type DebugAction } from '../../shared/components/DebugWidget';
+import { type DebugAction } from '../../shared/components/DebugWidget';
 import {
   ROLE_REVEAL_DURATION_MS,
   TURN_DURATION_MS,
@@ -44,6 +44,7 @@ export default function FakeItGame({
   freshStart,
   onRegisterMessageHandler,
   onQuit,
+  onRegisterDebugActions,
 }: GamePlayProps) {
   // Restore state from snapshot if not a fresh start
   const restored = freshStart ? null : JSON.parse(sessionStorage.getItem(`fake-it-snap-${code}`) || 'null') as FakeItSnapshot | null;
@@ -709,6 +710,14 @@ export default function FakeItGame({
     }
   }, [phase]);
 
+  // Register debug actions with GameShell
+  useEffect(() => {
+    if (DEBUG_MODE && onRegisterDebugActions) {
+      onRegisterDebugActions(getDebugActions(), phase);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, isTimerPaused, lines.length, Object.keys(votes).length, drawerIndex, drawingRound]);
+
   // Is it my turn to draw?
   const isMyTurn = phase === 'drawing' && roster[drawerIndex]?.id === playerId;
   const isImposter = playerId === imposterId;
@@ -1115,17 +1124,6 @@ export default function FakeItGame({
           playerCount={roster.length - 1}
           onConfirm={onQuit}
           onCancel={() => setShowLeaveConfirm(false)}
-        />
-      )}
-
-      {DEBUG_MODE && (
-        <DebugWidget
-          code={code}
-          phase={phase}
-          isHost={isHost}
-          rosterCount={roster.length}
-          isConnected={true}
-          actions={getDebugActions()}
         />
       )}
     </div>

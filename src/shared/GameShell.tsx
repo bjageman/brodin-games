@@ -12,7 +12,7 @@ import { JOIN_MAX_ATTEMPTS, JOIN_RETRY_INTERVAL_MS, DEBUG_MODE } from './constan
 import type { Envelope, JoinAckPayload, JoinRequestPayload, PlayerInfo, RosterUpdatePayload } from './types';
 import Lobby from './components/Lobby';
 import { GAMES_REGISTRY } from './games';
-import DebugWidget from './components/DebugWidget';
+import DebugWidget, { type DebugAction } from './components/DebugWidget';
 
 export type ShellPhase = 'joining' | 'join' | 'lobby' | 'in-game';
 
@@ -36,6 +36,7 @@ export interface GamePlayProps {
   freshStart: boolean;
   onRegisterMessageHandler: (handler: (envelope: Envelope) => void) => void;
   onQuit: () => void;
+  onRegisterDebugActions?: (actions: DebugAction[], currentPhaseName: string) => void;
 }
 
 interface GameShellProps {
@@ -89,6 +90,10 @@ export default function GameShell({
   );
   // See GamePlayProps.freshStart above.
   const [freshStart, setFreshStart] = useState(false);
+
+  // Active game debug state
+  const [activeGameDebugActions, setActiveGameDebugActions] = useState<DebugAction[]>([]);
+  const [activeGameDebugPhase, setActiveGameDebugPhase] = useState<string>('');
 
   const phaseRef = useRef(phase);
   useEffect(() => { phaseRef.current = phase; }, [phase]);
@@ -338,33 +343,41 @@ export default function GameShell({
           freshStart={freshStart}
           onRegisterMessageHandler={(handler) => { gameMessageHandlerRef.current = handler; }}
           onQuit={goToMainMenu}
+          onRegisterDebugActions={(actions, gamePhase) => {
+            setActiveGameDebugActions(actions);
+            setActiveGameDebugPhase(gamePhase);
+          }}
         />
       )}
 
-      {DEBUG_MODE && phase === 'lobby' && (
+      {DEBUG_MODE && (
         <DebugWidget
           code={code}
-          phase="Lobby"
+          phase={phase === 'lobby' ? 'Lobby' : activeGameDebugPhase || 'In-Game'}
           isHost={isHost}
           rosterCount={roster.length}
           isConnected={isConnected}
-          actions={[
-            {
-              label: '👥 Add 1 Bot Player',
-              onClick: () => addDebugBots(1),
-              variant: 'primary',
-            },
-            {
-              label: '👥 Add 3 Bot Players',
-              onClick: () => addDebugBots(3),
-              variant: 'success',
-            },
-            {
-              label: '👥 Add 5 Bot Players',
-              onClick: () => addDebugBots(5),
-              variant: 'warning',
-            },
-          ]}
+          actions={
+            phase === 'lobby'
+              ? [
+                  {
+                    label: '👥 Add 1 Bot Player',
+                    onClick: () => addDebugBots(1),
+                    variant: 'primary',
+                  },
+                  {
+                    label: '👥 Add 3 Bot Players',
+                    onClick: () => addDebugBots(3),
+                    variant: 'success',
+                  },
+                  {
+                    label: '👥 Add 5 Bot Players',
+                    onClick: () => addDebugBots(5),
+                    variant: 'warning',
+                  },
+                ]
+              : activeGameDebugActions
+          }
         />
       )}
     </div>
