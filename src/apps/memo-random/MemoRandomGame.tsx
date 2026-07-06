@@ -14,8 +14,9 @@ import {
   GRACE_PERIOD_MS,
   SUBMIT_RETRY_INTERVAL_MS,
   SUBMIT_MAX_ATTEMPTS,
+  MAX_WORDS_PER_CATEGORY,
 } from './constants';
-import { emptyLibrary } from './types';
+import { emptyLibrary, CATEGORIES } from './types';
 import type {
   Category,
   MemoRandomPhase,
@@ -28,6 +29,7 @@ import type {
   Round1StartPayload,
   Round2AssignmentsPayload,
   SheetSubmitPayload,
+  VoteSubmitAckPayload,
   VoteSubmitPayload,
   WinnerPayload,
   WordLibrary,
@@ -85,7 +87,7 @@ interface MemoRandomSnapshot {
   host?: HostSnapshot;
 }
 
-export default function MemoRandomGame({ code, playerId, isHost, roster, isConnected, sendMessage, freshStart, onRegisterMessageHandler, onQuit }: GamePlayProps) {
+export default function MemoRandomGame({ code, playerId, isHost, roster, isConnected, sendMessage, isDisplay, freshStart, onRegisterMessageHandler, onQuit }: GamePlayProps) {
   const restored = freshStart ? null : loadSnapshot<MemoRandomSnapshot>(gameSnapshotKey(code));
 
   const [phase, setPhase] = useState<MemoRandomPhase>(restored?.gamePhase ?? 'starting');
@@ -143,6 +145,7 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
   const round1AckedRef = useRef(false);
   const round2AnswersRef = useRef<Record<string, string> | null>(restored?.round2Answers ?? null);
   const round2AckedRef = useRef(false);
+  const matchVoteAckedRef = useRef(false);
 
   // Fallback in case GameShell's onIdlePrefetch didn't already warm this up.
   useEffect(() => {
@@ -274,6 +277,12 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
     } else if (envelope.type === 'sheet-submit-ack') {
       if (envelope.playerId !== playerId) return;
       round2AckedRef.current = true;
+    } else if (envelope.type === 'vote-submit-ack') {
+      if (envelope.playerId !== playerId) return;
+      const payload = envelope.payload as VoteSubmitAckPayload;
+      if (currentMatchup && payload.matchIndex === currentMatchup.matchIndex) {
+        matchVoteAckedRef.current = true;
+      }
     } else if (envelope.type === 'matchup-start') {
       const payload = envelope.payload as MatchupStartPayload;
       setCurrentMatchup(payload);
@@ -281,6 +290,7 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
       setMyMatchVote(null);
       setMatchVoteLocked(false);
       matchVoteSubmittedRef.current = false;
+      matchVoteAckedRef.current = false;
       setSeenSheets((prev) => ({ ...prev, [payload.left.playerId]: payload.left, [payload.right.playerId]: payload.right }));
       setPhase('matchup');
     } else if (envelope.type === 'match-result') {
@@ -335,8 +345,12 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
     }
   }
 
-  // A vote for a stale matchIndex (already scored and moved past) is a no-op.
+  // A vote for a stale matchIndex (already scored and moved past) is a no-op — still acked
+  // (tagged with that matchIndex) so a late-arriving retry doesn't just keep resending forever.
   function hostReceiveVote(fromId: string, matchIndex: number, side: MatchupSide | null, final: boolean) {
+    if (final) {
+      sendMessage({ type: 'vote-submit-ack', playerId: fromId, timestamp: Date.now(), payload: { matchIndex } });
+    }
     if (matchIndex !== currentMatchIndexRef.current || matchAdvancedRef.current) return;
     if (side) {
       matchVotesRef.current.set(fromId, side);
@@ -493,19 +507,35 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Shared by the timer-expiry and maxed-out-every-category triggers below.
+  function submitRound1Library() {
+    if (round1SubmittedRef.current) return;
+    round1SubmittedRef.current = true;
+    const library = myLibraryRef.current;
+    round1LibraryRef.current = library;
+    sendMessage({ type: 'word-library-submit', playerId, timestamp: Date.now(), payload: { library } });
+    if (isHost) hostReceiveWordLibrary(playerId, library);
+    setPhase('round1-waiting');
+  }
+
   // Round 1 local timer expiry: submit the (already-categorized) library
   // collected so far and wait for the host.
   const round1Countdown = useCountdown(round1EndTimestamp);
   useEffect(() => {
+    if (isDisplay) return;
     if (phase === 'round1' && round1Countdown.expired && !round1SubmittedRef.current) {
-      round1SubmittedRef.current = true;
-      const library = myLibraryRef.current;
-      round1LibraryRef.current = library;
-      sendMessage({ type: 'word-library-submit', playerId, timestamp: Date.now(), payload: { library } });
-      if (isHost) hostReceiveWordLibrary(playerId, library);
-      setPhase('round1-waiting');
+      submitRound1Library();
     }
-  }, [phase, round1Countdown.expired, playerId, sendMessage, isHost]);
+  }, [phase, round1Countdown.expired, playerId, sendMessage, isHost, isDisplay]);
+
+  // No point waiting out the timer once every category is maxed out — there's nothing left to type.
+  useEffect(() => {
+    if (isDisplay || phase !== 'round1' || round1SubmittedRef.current) return;
+    const maxedOut = CATEGORIES.filter((c) => c !== 'pronoun').every(
+      (c) => myLibrary[c].length >= MAX_WORDS_PER_CATEGORY
+    );
+    if (maxedOut) submitRound1Library();
+  }, [phase, myLibrary, isDisplay]);
 
   // Every client's timer expires at once, bursting submissions over ntfy — keep resending until acked or we give up.
   useEffect(() => {
@@ -538,6 +568,7 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
   // Round 2 local timer expiry: auto-fill unset blanks, submit, and wait.
   const round2Countdown = useCountdown(round2EndTimestamp);
   useEffect(() => {
+    if (isDisplay) return;
     if (phase === 'round2' && round2Countdown.expired && !round2SubmittedRef.current) {
       const tmpl = templateRef.current;
       const library = assignedLibraryRef.current;
@@ -551,7 +582,7 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
       }
       submitRound2Sheet(finalAnswers);
     }
-  }, [phase, round2Countdown.expired, playerId, sendMessage, isHost]);
+  }, [phase, round2Countdown.expired, playerId, sendMessage, isHost, isDisplay]);
 
   // Same rationale as the round-1 retry above: resend the sheet submission
   // until the host acks it or we give up.
@@ -594,9 +625,35 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
     setMatchVoteLocked(true);
   };
 
+  // Same rationale as the round1/round2 retries above: resend the final vote until the host acks it or we give up.
+  useEffect(() => {
+    if (isHost || !matchVoteLocked || !currentMatchup || !myMatchVote) return;
+    const matchIndex = currentMatchup.matchIndex;
+    const side = myMatchVote;
+    let attempts = 0;
+    const trySend = () => {
+      if (matchVoteAckedRef.current) {
+        clearInterval(interval);
+        return;
+      }
+      sendMessage({ type: 'vote-submit', playerId, timestamp: Date.now(), payload: { matchIndex, side, final: true } });
+      attempts++;
+      if (attempts >= SUBMIT_MAX_ATTEMPTS) clearInterval(interval);
+    };
+    const interval = setInterval(trySend, SUBMIT_RETRY_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [matchVoteLocked, currentMatchup, myMatchVote, isHost, playerId, sendMessage]);
+
   const playAgain = () => {
     sendMessage({ type: 'play-again', timestamp: Date.now(), payload: {} });
   };
+
+  // Host-only (wordLibrariesRef is only ever populated for the host); re-derived each render off
+  // the same ref round1Progress already tracks, so no extra state/snapshot field is needed.
+  const round1TotalWords = Array.from(wordLibrariesRef.current.values()).reduce(
+    (sum, library) => sum + CATEGORIES.reduce((s, c) => s + library[c].length, 0),
+    0
+  );
 
   return (
     <>
@@ -607,7 +664,22 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
       )}
 
       {phase === 'round1' && round1EndTimestamp && (
-        <Round1Typing endTimestamp={round1EndTimestamp} library={myLibrary} onAddWord={addWord} />
+        isDisplay ? (
+          <div className="flex-1 w-full flex flex-col items-center justify-center text-center space-y-6">
+            <p className="text-sm uppercase tracking-widest text-gray-400">Round 1: Type your words!</p>
+            <p className="text-2xl font-display font-bold text-brodin-accent">
+              {Math.ceil(round1Countdown.msRemaining / 1000)}s
+            </p>
+            <p className="text-[12rem] leading-none font-display font-extrabold text-brodin-accent">
+              {round1TotalWords}
+            </p>
+            <p className="text-3xl font-display font-bold text-gray-200">
+              words collected for research so far
+            </p>
+          </div>
+        ) : (
+          <Round1Typing endTimestamp={round1EndTimestamp} library={myLibrary} onAddWord={addWord} />
+        )
       )}
 
       {phase === 'round1-waiting' && (
@@ -647,7 +719,9 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
       {phase === 'round2-dropped' && (
         <div className="text-center space-y-4">
           <p className="text-sm text-gray-400">
-            Your round 1 submission arrived too late, so you sat out round 2. Waiting for results...
+            {isDisplay
+              ? `Round 2 in progress... (${round2Progress}/${Object.keys(assignmentsRef.current).length} submitted)`
+              : 'Your round 1 submission arrived too late, so you sat out round 2. Waiting for results...'}
           </p>
           <button onClick={() => setShowLeaveConfirm(true)} className="text-sm text-gray-500 hover:text-red-400 underline">
             Leave game
@@ -661,6 +735,7 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
           myPlayerId={playerId}
           myVote={myMatchVote}
           locked={matchVoteLocked}
+          readOnly={isDisplay}
           onVote={castMatchVote}
           onSubmit={submitMatchVote}
         />

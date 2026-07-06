@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "simulate": "node scripts/simulate-players.js"
+    "simulate": "node scripts/simulate-players.js",
+    "simulate:api": "node scripts/simulate-players-api.js"
   },
   "dependencies": {
     "an-array-of-english-words": "^2.0.0",

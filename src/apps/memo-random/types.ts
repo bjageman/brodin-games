@@ -52,6 +52,7 @@ export type MemoRandomMessageType =
   | 'sheet-submit-ack'
   | 'matchup-start'
   | 'vote-submit'
+  | 'vote-submit-ack'
   | 'match-result'
   | 'winner-announced';
 
@@ -86,6 +87,10 @@ export interface VoteSubmitPayload {
   matchIndex: number;
   side: MatchupSide | null;
   final: boolean;
+}
+
+export interface VoteSubmitAckPayload {
+  matchIndex: number;
 }
 
 export interface MatchResultPayload {

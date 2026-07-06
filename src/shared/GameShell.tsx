@@ -25,6 +25,8 @@ export interface GamePlayProps {
   roster: PlayerInfo[];
   isConnected: boolean;
   sendMessage: (payload: unknown) => Promise<void>;
+  // True only for a host that chose to just display status, not play.
+  isDisplay: boolean;
   // True only for a live 'lobby' -> 'in-game' transition this page load;
   // false when a refresh resumed mid-game. Can't infer this from "do I have
   // a restored snapshot?" since Play Again remounts the game fresh while a
@@ -42,6 +44,7 @@ interface GameShellProps {
   title: string;
   minPlayers: number;
   maxPlayers: number;
+  isDisplay?: boolean;
   onLeaveGame: () => void;
   gamePlay: ComponentType<GamePlayProps>;
   // Called once while still in the lobby, so a game can warm up anything
@@ -54,15 +57,16 @@ interface GameShellSnapshot {
   roster: PlayerInfo[];
 }
 
-export default function GameShell({ code, playerId, name, isHost, title, minPlayers, maxPlayers, onLeaveGame, gamePlay: GamePlay, onIdlePrefetch }: GameShellProps) {
+export default function GameShell({ code, playerId, name, isHost, title, minPlayers, maxPlayers, isDisplay = false, onLeaveGame, gamePlay: GamePlay, onIdlePrefetch }: GameShellProps) {
   const restored = loadSnapshot<GameShellSnapshot>(gameSnapshotKey(code));
 
   // Host is the roster authority, so it seeds itself directly rather than
-  // waiting on its own join-request to echo back over ntfy.
+  // waiting on its own join-request to echo back over ntfy. A display host
+  // isn't a player, so it's never added to the roster at all.
   const [phase, setPhase] = useState<ShellPhase>(restored?.phase ?? (isHost ? 'lobby' : 'joining'));
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [roster, setRoster] = useState<PlayerInfo[]>(
-    () => restored?.roster ?? (isHost ? [{ id: playerId, name }] : [])
+    () => restored?.roster ?? (isHost && !isDisplay ? [{ id: playerId, name }] : [])
   );
   // See GamePlayProps.freshStart above.
   const [freshStart, setFreshStart] = useState(false);
@@ -249,6 +253,7 @@ export default function GameShell({ code, playerId, name, isHost, title, minPlay
           minPlayers={minPlayers}
           roster={roster}
           isHost={isHost}
+          isDisplay={isDisplay}
           isConnected={isConnected}
           onStartGame={startGame}
           onQuit={goToMainMenu}
@@ -264,6 +269,7 @@ export default function GameShell({ code, playerId, name, isHost, title, minPlay
           roster={roster}
           isConnected={isConnected}
           sendMessage={sendMessage}
+          isDisplay={isDisplay}
           freshStart={freshStart}
           onRegisterMessageHandler={(handler) => { gameMessageHandlerRef.current = handler; }}
           onQuit={goToMainMenu}

@@ -8,11 +8,12 @@ interface MatchupScreenProps {
   myPlayerId: string;
   myVote: MatchupSide | null;
   locked: boolean;
+  readOnly?: boolean;
   onVote: (side: MatchupSide) => void;
   onSubmit: () => void;
 }
 
-export default function MatchupScreen({ matchup, myPlayerId, myVote, locked, onVote, onSubmit }: MatchupScreenProps) {
+export default function MatchupScreen({ matchup, myPlayerId, myVote, locked, readOnly = false, onVote, onSubmit }: MatchupScreenProps) {
   const { msRemaining } = useCountdown(matchup.endTimestamp);
   const secondsLeft = Math.ceil(msRemaining / 1000);
   const isOwnMemo = matchup.left.playerId === myPlayerId || matchup.right.playerId === myPlayerId;
@@ -20,10 +21,10 @@ export default function MatchupScreen({ matchup, myPlayerId, myVote, locked, onV
   const renderSide = (side: MatchupSide, sheet: PlayerSheetResult) => {
     // If your own memo is up for judgment, you sit this whole round out as a
     // spectator — no voting for either side, not even the other one.
-    if (isOwnMemo) {
-      const isMine = sheet.playerId === myPlayerId;
+    if (readOnly || isOwnMemo) {
+      const isMine = !readOnly && sheet.playerId === myPlayerId;
       return (
-        <div className="relative w-full md:flex-1 opacity-60 cursor-not-allowed">
+        <div className={cn("relative w-full md:flex-1", !readOnly && "opacity-60 cursor-not-allowed")}>
           <EmailCard sheet={sheet} accent="none" />
           {isMine && (
             <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-gray-950/70 p-4">
@@ -50,7 +51,7 @@ export default function MatchupScreen({ matchup, myPlayerId, myVote, locked, onV
     <div className="w-full max-w-md md:max-w-3xl mx-auto space-y-4">
       <div className="text-center">
         <p className="text-xs uppercase tracking-widest text-gray-400">
-          Memo {matchup.matchIndex + 1} of {matchup.totalMatches} — {isOwnMemo ? 'Wait for Others to Vote' : 'Pick the Better One'}
+          Memo {matchup.matchIndex + 1} of {matchup.totalMatches} — {readOnly ? 'Voting in Progress' : isOwnMemo ? 'Wait for Others to Vote' : 'Pick the Better One'}
         </p>
         <p className={cn("text-4xl font-display font-bold", secondsLeft <= 10 ? "text-red-400" : "text-brodin-accent")}>
           {secondsLeft}s
@@ -69,7 +70,7 @@ export default function MatchupScreen({ matchup, myPlayerId, myVote, locked, onV
         {renderSide('right', matchup.right)}
       </div>
 
-      {isOwnMemo || locked ? (
+      {readOnly || isOwnMemo || locked ? (
         <p className="text-center text-sm text-gray-400">Waiting for other players to vote...</p>
       ) : (
         <button

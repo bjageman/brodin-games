@@ -10,12 +10,14 @@ import { MIN_PLAYERS, MAX_PLAYERS } from './apps/memo-random/constants';
 interface HostRouteSnapshot {
   code: string;
   started: boolean;
+  isDisplay: boolean;
 }
 
 export default function HostPage() {
   const restored = loadSnapshot<HostRouteSnapshot>(HOST_ROUTE_KEY);
   const [name, setName] = useState(() => localStorage.getItem('brodin-name') || '');
   const [started, setStarted] = useState(() => restored?.started ?? false);
+  const [isDisplay, setIsDisplay] = useState(() => restored?.isDisplay ?? false);
   const [code] = useState(() => restored?.code ?? generateGameCode());
   const [playerId] = useState(() => {
     const saved = sessionStorage.getItem('brodin-player-id');
@@ -28,8 +30,8 @@ export default function HostPage() {
   // Lets a refresh resume directly into the game (same room code) instead
   // of dropping back to the name-entry form.
   useEffect(() => {
-    saveSnapshot(HOST_ROUTE_KEY, { code, started });
-  }, [code, started]);
+    saveSnapshot(HOST_ROUTE_KEY, { code, started, isDisplay });
+  }, [code, started, isDisplay]);
 
   const handleStart = (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,6 +54,15 @@ export default function HostPage() {
             className="w-full rounded-lg border border-brodin-primary/40 bg-brodin-field px-4 py-2.5 text-center font-semibold text-white focus:outline-none focus:border-brodin-accent"
             required
           />
+          <label className="flex items-center justify-center gap-2 text-sm text-gray-300">
+            <input
+              type="checkbox"
+              checked={isDisplay}
+              onChange={(e) => setIsDisplay(e.target.checked)}
+              className="h-4 w-4 rounded border-brodin-primary/40 bg-brodin-field accent-brodin-primary"
+            />
+            I'm just displaying this on a screen (not playing)
+          </label>
           <button
             type="submit"
             className="w-full bg-brodin-primary hover:bg-brodin-primaryDark text-white rounded-lg py-3 font-bold transition-colors"
@@ -73,6 +84,7 @@ export default function HostPage() {
         title="Memo-Random"
         minPlayers={MIN_PLAYERS}
         maxPlayers={MAX_PLAYERS}
+        isDisplay={isDisplay}
         onLeaveGame={() => setStarted(false)}
         gamePlay={MemoRandomGame}
         onIdlePrefetch={loadDictionary}
