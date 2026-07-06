@@ -12,6 +12,7 @@ export type SharedMessageType =
   | 'join-request'
   | 'join-ack'
   | 'roster-update'
+  | 'leave-lobby'
   | 'game-start'
   | 'play-again';
 

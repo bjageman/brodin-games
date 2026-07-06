@@ -120,6 +120,13 @@ export default function GameShell({ code, playerId, name, isHost, title, minPlay
         const payload = envelope.payload as RosterUpdatePayload;
         setRoster(payload.players);
       }
+    } else if (envelope.type === 'leave-lobby') {
+      if (isHost && phaseRef.current === 'lobby') {
+        const fromId = envelope.playerId;
+        // Forward ref to hostReceiveLeaveLobby (needs sendMessage, declared later) — fine, only called after mount.
+        // eslint-disable-next-line react-hooks/immutability
+        if (fromId) hostReceiveLeaveLobby(fromId);
+      }
     } else if (envelope.type === 'game-start') {
       if (phaseRef.current === 'lobby') {
         setFreshStart(true);
@@ -197,6 +204,14 @@ export default function GameShell({ code, playerId, name, isHost, title, minPlay
     });
   }
 
+  function hostReceiveLeaveLobby(fromId: string) {
+    if (!rosterRef.current.some((p) => p.id === fromId)) return;
+    const nextRoster = rosterRef.current.filter((p) => p.id !== fromId);
+    rosterRef.current = nextRoster;
+    setRoster(nextRoster);
+    sendMessage({ type: 'roster-update', timestamp: Date.now(), payload: { players: nextRoster } });
+  }
+
   // Join handshake: retry until the host acks, mirrors botc's join-retry pattern.
   useEffect(() => {
     if (phase !== 'joining') return;
@@ -230,6 +245,17 @@ export default function GameShell({ code, playerId, name, isHost, title, minPlay
     window.location.hash = '#/';
   };
 
+  // A non-host player leaving the lobby tells the host to drop them from the
+  // roster first (best-effort — they're leaving either way) so they don't
+  // linger as a ghost entry. The host quitting just ends its own session,
+  // same as always.
+  const leaveLobby = () => {
+    if (!isHost) {
+      sendMessage({ type: 'leave-lobby', playerId, timestamp: Date.now(), payload: {} });
+    }
+    goToMainMenu();
+  };
+
   return (
     <div className="w-full flex-1 flex flex-col items-center pt-2">
       {phase === 'joining' && (
@@ -256,7 +282,7 @@ export default function GameShell({ code, playerId, name, isHost, title, minPlay
           isDisplay={isDisplay}
           isConnected={isConnected}
           onStartGame={startGame}
-          onQuit={goToMainMenu}
+          onQuit={leaveLobby}
         />
       )}
 
