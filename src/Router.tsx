@@ -7,8 +7,8 @@ type Route = 'home' | 'host' | 'join';
 
 function getRouteFromHash(): Route {
   const hash = window.location.hash;
-  if (hash === '#/host') return 'host';
-  if (hash === '#/join' || hash.startsWith('#/join?')) return 'join';
+  if (hash.startsWith('#/host')) return 'host';
+  if (hash.startsWith('#/join')) return 'join';
   return 'home';
 }
 

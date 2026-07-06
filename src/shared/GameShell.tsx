@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ComponentType } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useGameSocket } from './hooks/useGameSocket';
 import {
   saveSnapshot,
@@ -11,6 +11,7 @@ import {
 import { JOIN_MAX_ATTEMPTS, JOIN_RETRY_INTERVAL_MS } from './constants';
 import type { Envelope, JoinAckPayload, JoinRequestPayload, PlayerInfo, RosterUpdatePayload } from './types';
 import Lobby from './components/Lobby';
+import { GAMES_REGISTRY } from './games';
 
 export type ShellPhase = 'joining' | 'join' | 'lobby' | 'in-game';
 
@@ -41,24 +42,41 @@ interface GameShellProps {
   playerId: string;
   name: string;
   isHost: boolean;
-  title: string;
-  minPlayers: number;
-  maxPlayers: number;
   isDisplay?: boolean;
   onLeaveGame: () => void;
-  gamePlay: ComponentType<GamePlayProps>;
-  // Called once while still in the lobby, so a game can warm up anything
-  // slow-loading (e.g. a dictionary) during idle time before it's needed.
-  onIdlePrefetch?: () => void;
+  initialGameId?: string; // e.g. 'memo-random' or 'fake-it'
 }
 
 interface GameShellSnapshot {
   phase: ShellPhase;
   roster: PlayerInfo[];
+  gameId: string | null;
 }
 
-export default function GameShell({ code, playerId, name, isHost, title, minPlayers, maxPlayers, isDisplay = false, onLeaveGame, gamePlay: GamePlay, onIdlePrefetch }: GameShellProps) {
+export default function GameShell({
+  code,
+  playerId,
+  name,
+  isHost,
+  isDisplay = false,
+  onLeaveGame,
+  initialGameId,
+}: GameShellProps) {
   const restored = loadSnapshot<GameShellSnapshot>(gameSnapshotKey(code));
+
+  // We track the game ID. The host gets it from initialGameId, while the client
+  // gets it from the join-ack message or session restore.
+  const [gameId, setGameId] = useState<string | null>(
+    () => restored?.gameId ?? (isHost ? initialGameId ?? 'memo-random' : null)
+  );
+
+  // Resolve config from registry
+  const gameConfig = gameId ? GAMES_REGISTRY[gameId] : null;
+  const title = gameConfig?.title ?? 'Loading...';
+  const minPlayers = gameConfig?.minPlayers ?? 3;
+  const maxPlayers = gameConfig?.maxPlayers ?? 12;
+  const GamePlay = gameConfig?.gamePlay;
+  const onIdlePrefetch = gameConfig?.onIdlePrefetch;
 
   // Host is the roster authority, so it seeds itself directly rather than
   // waiting on its own join-request to echo back over ntfy. A display host
@@ -84,13 +102,13 @@ export default function GameShell({ code, playerId, name, isHost, title, minPlay
   useEffect(() => {
     if (phase === 'lobby') onIdlePrefetch?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase]);
+  }, [phase, gameId]);
 
-  // Merges into whatever the active game module saved under the same key (see its matching merge-write).
+  // Merges into whatever the active game module saved under the same key.
   useEffect(() => {
     const current = loadSnapshot<Record<string, unknown>>(gameSnapshotKey(code)) ?? {};
-    saveSnapshot(gameSnapshotKey(code), { ...current, phase, roster });
-  }, [code, phase, roster]);
+    saveSnapshot(gameSnapshotKey(code), { ...current, phase, roster, gameId });
+  }, [code, phase, roster, gameId]);
 
   const handleMessage = (data: unknown) => {
     const envelope = data as Envelope;
@@ -107,6 +125,9 @@ export default function GameShell({ code, playerId, name, isHost, title, minPlay
       if (envelope.playerId === playerId && phaseRef.current === 'joining') {
         const payload = envelope.payload as JoinAckPayload;
         if (payload.accepted) {
+          if (payload.gameId) {
+            setGameId(payload.gameId);
+          }
           setPhase('lobby');
         } else {
           setPhase('join');
@@ -195,7 +216,7 @@ export default function GameShell({ code, playerId, name, isHost, title, minPlay
       type: 'join-ack',
       playerId: fromId,
       timestamp: Date.now(),
-      payload: { accepted: true },
+      payload: { accepted: true, gameId },
     });
     sendMessage({
       type: 'roster-update',
@@ -286,7 +307,7 @@ export default function GameShell({ code, playerId, name, isHost, title, minPlay
         />
       )}
 
-      {phase === 'in-game' && (
+      {phase === 'in-game' && GamePlay && (
         <GamePlay
           code={code}
           playerId={playerId}
