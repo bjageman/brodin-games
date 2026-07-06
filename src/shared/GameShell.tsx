@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type ComponentType } from 'react';
 import { useGameSocket } from './hooks/useGameSocket';
-import { assignPlayerEmoji } from './utils/playerEmoji';
 import {
   saveSnapshot,
   loadSnapshot,
@@ -9,16 +8,15 @@ import {
   HOST_ROUTE_KEY,
   JOIN_ROUTE_KEY,
 } from './utils/sessionSnapshot';
-import { JOIN_MAX_ATTEMPTS, JOIN_RETRY_INTERVAL_MS, MAX_PLAYERS } from './constants';
+import { JOIN_MAX_ATTEMPTS, JOIN_RETRY_INTERVAL_MS } from './constants';
 import type { Envelope, JoinAckPayload, JoinRequestPayload, PlayerInfo, RosterUpdatePayload } from './types';
 import Lobby from './components/Lobby';
 
 export type ShellPhase = 'joining' | 'join' | 'lobby' | 'in-game';
 
-// The contract every game module implements to plug into GameShell. Once the
-// shell hands off (phase === 'in-game'), the game owns its own phases,
-// message protocol, and refresh-resume snapshot entirely — the shell just
-// forwards it the transport and roster.
+// The contract every game module implements to plug into GameShell. Once
+// phase becomes 'in-game', the game owns its own phases, message protocol,
+// and refresh-resume snapshot — the shell just forwards transport + roster.
 export interface GamePlayProps {
   code: string;
   playerId: string;
@@ -27,12 +25,12 @@ export interface GamePlayProps {
   roster: PlayerInfo[];
   isConnected: boolean;
   sendMessage: (payload: unknown) => Promise<void>;
-  // True only when this game was just started live during this page load
-  // (host clicked Start Game, or this client just received that broadcast)
-  // — false when a refresh resumed straight into an already-running game.
-  // A game module needs this instead of "do I have a restored snapshot?"
-  // because after a Play Again it remounts fresh while an old snapshot from
-  // the *previous* finished game may still be sitting in sessionStorage.
+  // True only for a host that chose to just display status, not play.
+  isDisplay: boolean;
+  // True only for a live 'lobby' -> 'in-game' transition this page load;
+  // false when a refresh resumed mid-game. Can't infer this from "do I have
+  // a restored snapshot?" since Play Again remounts the game fresh while a
+  // stale snapshot from the *previous* finished game may still be present.
   freshStart: boolean;
   onRegisterMessageHandler: (handler: (envelope: Envelope) => void) => void;
   onQuit: () => void;
@@ -45,6 +43,8 @@ interface GameShellProps {
   isHost: boolean;
   title: string;
   minPlayers: number;
+  maxPlayers: number;
+  isDisplay?: boolean;
   onLeaveGame: () => void;
   gamePlay: ComponentType<GamePlayProps>;
   // Called once while still in the lobby, so a game can warm up anything
@@ -57,38 +57,28 @@ interface GameShellSnapshot {
   roster: PlayerInfo[];
 }
 
-export default function GameShell({ code, playerId, name, isHost, title, minPlayers, onLeaveGame, gamePlay: GamePlay, onIdlePrefetch }: GameShellProps) {
+export default function GameShell({ code, playerId, name, isHost, title, minPlayers, maxPlayers, isDisplay = false, onLeaveGame, gamePlay: GamePlay, onIdlePrefetch }: GameShellProps) {
   const restored = loadSnapshot<GameShellSnapshot>(gameSnapshotKey(code));
 
-  // The host doesn't need a network round trip to join its own game — it is
-  // the authority on the roster, so it seeds itself in directly rather than
-  // depending on ntfy echoing its own join-request back to itself (which is
-  // not guaranteed, and would otherwise strand the host on a spinner if that
-  // echo is ever dropped).
+  // Host is the roster authority, so it seeds itself directly rather than
+  // waiting on its own join-request to echo back over ntfy. A display host
+  // isn't a player, so it's never added to the roster at all.
   const [phase, setPhase] = useState<ShellPhase>(restored?.phase ?? (isHost ? 'lobby' : 'joining'));
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [roster, setRoster] = useState<PlayerInfo[]>(
-    () => restored?.roster ?? (isHost ? [{ id: playerId, name, emoji: assignPlayerEmoji([]) }] : [])
+    () => restored?.roster ?? (isHost && !isDisplay ? [{ id: playerId, name }] : [])
   );
-  // Only ever set true by a live 'lobby' -> 'in-game' transition during this
-  // page load — see the GamePlayProps.freshStart doc comment above.
+  // See GamePlayProps.freshStart above.
   const [freshStart, setFreshStart] = useState(false);
 
   const phaseRef = useRef(phase);
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   const rosterRef = useRef(roster);
   useEffect(() => { rosterRef.current = roster; }, [roster]);
-  // 'roster-update' broadcasts a full replacement snapshot every time
-  // someone joins. Each send is an independent fire-and-forget HTTP POST
-  // (not a single ordered stream), so under a burst of near-simultaneous
-  // joins an older snapshot can arrive after a newer one and roll the
-  // roster back down. Tracks the timestamp of the last snapshot actually
-  // applied so a late, stale one can be detected and ignored.
+  // Guards against an out-of-order roster-update rolling the roster back down.
   const lastRosterUpdateAtRef = useRef(0);
-  // Set by the active game module once mounted, so every envelope this shell
-  // sees (including ones it also handles itself, like 'game-start') can be
-  // forwarded to the game too. Mirrors the onMessageRef idiom already used
-  // inside useGameSocket itself.
+  // Set by the active game module once mounted, so every envelope also
+  // reaches it (mirrors useGameSocket's own onMessageRef idiom).
   const gameMessageHandlerRef = useRef<((envelope: Envelope) => void) | null>(null);
 
   useEffect(() => {
@@ -96,9 +86,7 @@ export default function GameShell({ code, playerId, name, isHost, title, minPlay
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
-  // Persists just this shell's slice, merged into whatever the active game
-  // module has already saved under the same key — see MemoRandomGame's
-  // matching merge-write for why this doesn't clobber the game's fields.
+  // Merges into whatever the active game module saved under the same key (see its matching merge-write).
   useEffect(() => {
     const current = loadSnapshot<Record<string, unknown>>(gameSnapshotKey(code)) ?? {};
     saveSnapshot(gameSnapshotKey(code), { ...current, phase, roster });
@@ -110,10 +98,7 @@ export default function GameShell({ code, playerId, name, isHost, title, minPlay
     if (isHost && envelope.type === 'join-request') {
       const payload = envelope.payload as JoinRequestPayload;
       const fromId = envelope.playerId;
-      // hostReceiveJoinRequest is declared below (it needs sendMessage,
-      // declared after handleMessage) — safe at call time since it's only
-      // ever invoked once the WebSocket delivers a message, well after the
-      // whole component body (including sendMessage) has finished setting up.
+      // Forward ref to hostReceiveJoinRequest (needs sendMessage, declared later) — fine, only called after mount.
       // eslint-disable-next-line react-hooks/immutability
       if (fromId && payload?.name) hostReceiveJoinRequest(fromId, payload.name);
     }
@@ -129,12 +114,7 @@ export default function GameShell({ code, playerId, name, isHost, title, minPlay
         }
       }
     } else if (envelope.type === 'roster-update') {
-      // The host is the roster authority — its own rosterRef is already
-      // updated synchronously (no round trip) the moment it processes a
-      // join, so it must never let a possibly-stale echo of its own
-      // broadcast roll that back. Non-host clients still apply these, but
-      // reject any snapshot older than the last one actually applied so an
-      // out-of-order late arrival can't undo a newer one either.
+      // Host already updated its own roster synchronously; only non-host clients apply this (and reject stale ones).
       if (!isHost && envelope.timestamp >= lastRosterUpdateAtRef.current) {
         lastRosterUpdateAtRef.current = envelope.timestamp;
         const payload = envelope.payload as RosterUpdatePayload;
@@ -146,9 +126,7 @@ export default function GameShell({ code, playerId, name, isHost, title, minPlay
         setPhase('in-game');
       }
     } else if (envelope.type === 'play-again') {
-      // Roster is deliberately left untouched — everyone just goes back to
-      // the same lobby, same room code, ready for the host to start a fresh
-      // game whenever they hit "Start Game" again.
+      // Roster stays untouched — everyone just returns to the same lobby.
       setPhase('lobby');
     }
 
@@ -158,17 +136,10 @@ export default function GameShell({ code, playerId, name, isHost, title, minPlay
   const { sendMessage, isConnected } = useGameSocket(code, handleMessage);
 
   function hostReceiveJoinRequest(fromId: string, fromName: string) {
-    // Matching on id ONLY (never name) for "is this an existing player" —
-    // two different real people can easily end up with the same or default
-    // name, and merging by name would silently steal an earlier joiner's
-    // roster slot (their old id vanishes, so their later submissions can't
-    // be attributed to anyone and show up as "Unknown").
+    // Match by id only — two players can share a name, and matching by name would steal the wrong roster slot.
     const existingMatch = rosterRef.current.find((p) => p.id === fromId);
 
-    // A late-arriving retry from someone who already successfully joined
-    // (their own join-ack echo was just slow/lost) is not a new join attempt
-    // — re-ack it so they can recover, rather than bouncing them to an error
-    // screen just because the game has since started without them noticing.
+    // A retry from an already-joined player still gets re-acked, even mid-game.
     if (phaseRef.current !== 'lobby' && phaseRef.current !== 'joining' && !existingMatch) {
       sendMessage({
         type: 'join-ack',
@@ -179,21 +150,17 @@ export default function GameShell({ code, playerId, name, isHost, title, minPlay
       return;
     }
 
-    if (!existingMatch && rosterRef.current.length >= MAX_PLAYERS) {
+    if (!existingMatch && rosterRef.current.length >= maxPlayers) {
       sendMessage({
         type: 'join-ack',
         playerId: fromId,
         timestamp: Date.now(),
-        payload: { accepted: false, reason: `Room is full (max ${MAX_PLAYERS} players).` },
+        payload: { accepted: false, reason: `Room is full (max ${maxPlayers} players).` },
       });
       return;
     }
 
-    // Distinct players must have distinct names — two "Bob"s in the same
-    // room would be ambiguous everywhere names are shown (voting, the
-    // scoreboard, "X and Y contributed the word list"). This is a rejection,
-    // not a merge, so it can't misattribute anyone's submissions the way
-    // matching by name used to.
+    // Reject duplicate names outright rather than merging — names are shown everywhere (voting, scoreboard).
     const nameTaken = !existingMatch && rosterRef.current.some(
       (p) => p.name.trim().toLowerCase() === fromName.trim().toLowerCase()
     );
@@ -210,13 +177,10 @@ export default function GameShell({ code, playerId, name, isHost, title, minPlay
     const nextRoster = existingMatch
       ? rosterRef.current.map((p) =>
           p === existingMatch
-            ? { id: fromId, name: fromName, emoji: existingMatch.emoji }
+            ? { id: fromId, name: fromName }
             : p
         )
-      : [
-          ...rosterRef.current,
-          { id: fromId, name: fromName, emoji: assignPlayerEmoji(rosterRef.current.map((p) => p.emoji)) },
-        ];
+      : [...rosterRef.current, { id: fromId, name: fromName }];
     rosterRef.current = nextRoster;
     setRoster(nextRoster);
 
@@ -259,10 +223,7 @@ export default function GameShell({ code, playerId, name, isHost, title, minPlay
   }
 
   const goToMainMenu = () => {
-    // Leaving for good — clear this game's snapshot plus both possible
-    // outer-route snapshots (whichever one actually applies; clearing the
-    // other is harmless) so a later visit to Host/Join doesn't resume into
-    // a game that was explicitly ended/left.
+    // Clear snapshots so a later Host/Join doesn't resume into a game we explicitly left.
     clearSnapshot(gameSnapshotKey(code));
     clearSnapshot(HOST_ROUTE_KEY);
     clearSnapshot(JOIN_ROUTE_KEY);
@@ -292,6 +253,7 @@ export default function GameShell({ code, playerId, name, isHost, title, minPlay
           minPlayers={minPlayers}
           roster={roster}
           isHost={isHost}
+          isDisplay={isDisplay}
           isConnected={isConnected}
           onStartGame={startGame}
           onQuit={goToMainMenu}
@@ -307,6 +269,7 @@ export default function GameShell({ code, playerId, name, isHost, title, minPlay
           roster={roster}
           isConnected={isConnected}
           sendMessage={sendMessage}
+          isDisplay={isDisplay}
           freshStart={freshStart}
           onRegisterMessageHandler={(handler) => { gameMessageHandlerRef.current = handler; }}
           onQuit={goToMainMenu}

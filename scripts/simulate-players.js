@@ -75,10 +75,6 @@ function randomDelay(minMs, maxMs) {
   return new Promise((resolve) => setTimeout(resolve, minMs + Math.random() * (maxMs - minMs)));
 }
 
-function randomCount(min, max) {
-  return min + Math.floor(Math.random() * (max - min + 1));
-}
-
 async function waitVisible(locator, timeout) {
   return locator.waitFor({ timeout }).then(() => true).catch(() => false);
 }
@@ -110,18 +106,26 @@ async function playThroughGame(page, name, verbose) {
   // could join mid-round or skip straight to waiting for round 2).
   debug('waiting for round 1 screen...');
   if (await waitVisible(page.getByText('Type as many words as you can'), 5 * 60_000)) {
-    // 3 to 5 words per category (matching the 5/category cap), typed in a
-    // shuffled order across categories rather than one category at a time.
-    const myWords = shuffled(
-      Object.values(WORD_POOLS).flatMap((pool) => shuffled(pool).slice(0, randomCount(3, 5)))
-    );
+    // Keep typing — picking a random still-short category each time — until every
+    // category hits 5 (matching the app's MAX_WORDS_PER_CATEGORY) or the round1
+    // screen disappears because time ran out first, whichever comes first.
     const input = page.getByPlaceholder('Type a word...');
-    for (const word of myWords) {
+    const pools = Object.fromEntries(Object.entries(WORD_POOLS).map(([cat, pool]) => [cat, shuffled(pool)]));
+    const counts = Object.fromEntries(Object.keys(WORD_POOLS).map((cat) => [cat, 0]));
+    const typedWords = [];
+    while (Object.values(counts).some((c) => c < 5)) {
+      if (!(await page.getByText('Type as many words as you can').isVisible().catch(() => false))) break;
+      const available = Object.keys(pools).filter((cat) => counts[cat] < 5 && pools[cat].length > 0);
+      if (available.length === 0) break;
+      const cat = available[Math.floor(Math.random() * available.length)];
+      const word = pools[cat].pop();
       await input.fill(word);
       await input.press('Enter');
+      counts[cat]++;
+      typedWords.push(word);
       await randomDelay(300, 1500);
     }
-    log(`typed ${myWords.length} words: ${myWords.join(', ')}`);
+    log(`typed ${typedWords.length} words: ${typedWords.join(', ')}`);
   } else {
     debug('round 1 screen never appeared — joined mid/after round 1');
   }

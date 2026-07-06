@@ -10,6 +10,7 @@ interface LobbyProps {
   minPlayers: number;
   roster: PlayerInfo[];
   isHost: boolean;
+  isDisplay?: boolean;
   isConnected: boolean;
   onStartGame?: () => void;
   onQuit?: () => void;
@@ -18,11 +19,13 @@ interface LobbyProps {
 const BOARD_BLUE = '#6d97ee';
 const INK = '#2b2f74';
 
-export default function Lobby({ code, title, minPlayers, roster, isHost, isConnected, onStartGame, onQuit }: LobbyProps) {
+export default function Lobby({ code, title, minPlayers, roster, isHost, isDisplay = false, isConnected, onStartGame, onQuit }: LobbyProps) {
   const [showModal, setShowModal] = useState(false);
   const [showQuitConfirm, setShowQuitConfirm] = useState(false);
   const joinUrl = `${window.location.origin}${window.location.pathname}#/join?code=${code}`;
-  const otherPlayerCount = Math.max(0, roster.length - 1);
+  // Every viewer occupies one roster slot to subtract as "self" — except a
+  // display host, which is never added to the roster at all.
+  const otherPlayerCount = Math.max(0, roster.length - (isHost && isDisplay ? 0 : 1));
 
   const handleQuitClick = () => {
     if (otherPlayerCount > 0) {
