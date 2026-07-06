@@ -8,6 +8,7 @@ services:
       dockerfile: Dockerfile
       args:
         - VITE_NTFY_SERVER_URL=ntfy.${DOMAIN}
+        - VITE_DEBUG=false
     environment:
       - VIRTUAL_HOST=games.${DOMAIN}
       - LETSENCRYPT_HOST=games.${DOMAIN}
