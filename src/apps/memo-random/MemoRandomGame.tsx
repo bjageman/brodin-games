@@ -359,7 +359,7 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
     } else if (action === 'resume-timer') {
       resumeTimer();
     } else if (action === 'adjust-timer') {
-      adjustTimer(payload.seconds ?? 0);
+      adjustTimer((payload as { seconds?: number })?.seconds ?? 0);
     } else if (action === 'simulate-words') {
       simulateOtherPlayersWords();
     } else if (action === 'simulate-sheets') {

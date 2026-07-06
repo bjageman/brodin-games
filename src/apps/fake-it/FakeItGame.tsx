@@ -212,7 +212,7 @@ export default function FakeItGame({
     } else if (action === 'resume-timer') {
       resumeTimer();
     } else if (action === 'adjust-timer') {
-      adjustTimer(payloadObj.seconds ?? 0);
+      adjustTimer((payloadObj as { seconds?: number })?.seconds ?? 0);
     } else if (action === 'simulate-drawing') {
       simulateCurrentDrawerDrawing();
     } else if (action === 'simulate-votes') {
