@@ -4,6 +4,12 @@ export const ROLE_REVEAL_DURATION_MS = 8000; // 8 seconds to show role & topic
 export const TURN_DURATION_MS = 25000;        // 25 seconds per drawing turn
 export const VOTE_DURATION_MS = 30000;        // 30 seconds to vote
 
+// A client that missed the host's one-shot initial state broadcast (its message
+// handler wasn't registered yet when the broadcast arrived) pulls the current
+// state by asking the host, retrying until it lands or we give up.
+export const STATE_REQUEST_RETRY_INTERVAL_MS = 1000;
+export const STATE_REQUEST_MAX_ATTEMPTS = 10;
+
 export const DRAWING_COLORS = [
   '#E11D48', // Rose
   '#2563EB', // Blue
