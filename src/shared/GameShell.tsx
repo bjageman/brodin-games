@@ -8,7 +8,7 @@ import {
   HOST_ROUTE_KEY,
   JOIN_ROUTE_KEY,
 } from './utils/sessionSnapshot';
-import { JOIN_MAX_ATTEMPTS, JOIN_RETRY_INTERVAL_MS, DEBUG_MODE } from './constants';
+import { JOIN_MAX_ATTEMPTS, JOIN_RETRY_INTERVAL_MS, GAME_START_RESENDS, GAME_START_RESEND_INTERVAL_MS, DEBUG_MODE } from './constants';
 import type { Envelope, JoinAckPayload, JoinRequestPayload, PlayerInfo, RosterUpdatePayload } from './types';
 import Lobby from './components/Lobby';
 import { GAMES_REGISTRY } from './games';
@@ -281,7 +281,16 @@ export default function GameShell({
 
   function startGame() {
     if (phaseRef.current !== 'lobby') return;
+    // ntfy is best-effort: a just-connected client can miss a single game-start
+    // and get stranded in the lobby. Re-broadcast a few times — every client
+    // guards on its own lobby phase, so the repeats are harmless no-ops for
+    // anyone who already advanced.
     sendMessage({ type: 'game-start', timestamp: Date.now(), payload: {} });
+    let resends = 0;
+    const interval = setInterval(() => {
+      sendMessage({ type: 'game-start', timestamp: Date.now(), payload: {} });
+      if (++resends >= GAME_START_RESENDS) clearInterval(interval);
+    }, GAME_START_RESEND_INTERVAL_MS);
     setFreshStart(true);
     setPhase('in-game');
   }
