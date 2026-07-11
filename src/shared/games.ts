@@ -1,6 +1,7 @@
 import { type ComponentType } from 'react';
 import MemoRandomGame from '../apps/memo-random/MemoRandomGame';
 import FakeItGame from '../apps/fake-it/FakeItGame';
+import BombDisarmGame from '../apps/bomb-disarm/BombDisarmGame';
 import { loadDictionary } from '../apps/memo-random/utils/dictionary';
 import type { GamePlayProps } from './GameShell';
 
@@ -28,5 +29,12 @@ export const GAMES_REGISTRY: Record<string, GameConfig> = {
     minPlayers: 3,
     maxPlayers: 12,
     gamePlay: FakeItGame,
+  },
+  'bomb-disarm': {
+    id: 'bomb-disarm',
+    title: 'Bomb Disarm',
+    minPlayers: 3,
+    maxPlayers: 10,
+    gamePlay: BombDisarmGame,
   },
 };

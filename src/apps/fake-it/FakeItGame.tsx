@@ -14,6 +14,8 @@ import {
   VOTE_DURATION_MS,
   DRAWING_COLORS,
   TOPICS,
+  STATE_REQUEST_RETRY_INTERVAL_MS,
+  STATE_REQUEST_MAX_ATTEMPTS,
 } from './constants';
 import DrawingCanvas from './components/DrawingCanvas';
 
@@ -627,6 +629,23 @@ export default function FakeItGame({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHost, freshStart, roster.length]);
 
+  // Client recovery: if we're still on the loading screen ('starting') after
+  // mounting, we likely missed the host's one-shot initial state broadcast
+  // (a race: the broadcast can arrive before our message handler registers).
+  // Poll the host for the current state until it lands or we give up.
+  useEffect(() => {
+    if (isHost || phase !== 'starting') return;
+    let attempts = 0;
+    const trySend = () => {
+      sendMessage({ type: 'fake-it-request-state', playerId, timestamp: Date.now(), payload: {} });
+      attempts++;
+      if (attempts >= STATE_REQUEST_MAX_ATTEMPTS) clearInterval(interval);
+    };
+    trySend();
+    const interval = setInterval(trySend, STATE_REQUEST_RETRY_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [isHost, phase, playerId, sendMessage]);
+
   // Host transition: Role Reveal -> Drawing
   useEffect(() => {
     if (isHost && phase === 'role-reveal' && roleRevealEndTimestamp && revealExpired) {
@@ -694,6 +713,11 @@ export default function FakeItGame({
         } else if (type === 'submit-vote') {
           const votePayload = payload as { targetId: string };
           handleClientSubmitVote(senderId, votePayload.targetId);
+        } else if (type === 'fake-it-request-state') {
+          // A client missed the one-shot initial broadcast (or reconnected) and
+          // is stuck on the loading screen — re-send the current full state.
+          // Only once the game has actually started; nothing to sync otherwise.
+          if (phase !== 'starting') broadcastState({});
         } else if (type === 'play-again') {
           // Play again handler
           setPhase('starting');
