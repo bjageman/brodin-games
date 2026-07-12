@@ -4,6 +4,15 @@ export const ROLE_REVEAL_DURATION_MS = 8000; // 8 seconds to show role & topic
 export const TURN_DURATION_MS = 25000;        // 25 seconds per drawing turn
 export const VOTE_DURATION_MS = 30000;        // 30 seconds to vote
 
+// Scores are denominated in dollars (the mockups show a payout board). The
+// imposter's escape is worth 1.5x a correct vote, preserving the old 3:2 ratio.
+export const PAYOUT_CORRECT_VOTE = 500;
+export const PAYOUT_IMPOSTER_ESCAPED = 750;
+
+export function formatMoney(amount: number): string {
+  return `$${amount.toLocaleString('en-US')}`;
+}
+
 // A client that missed the host's one-shot initial state broadcast (its message
 // handler wasn't registered yet when the broadcast arrived) pulls the current
 // state by asking the host, retrying until it lands or we give up.

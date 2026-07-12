@@ -1,9 +1,11 @@
 import { type ComponentType } from 'react';
 import MemoRandomGame from '../apps/memo-random/MemoRandomGame';
 import FakeItGame from '../apps/fake-it/FakeItGame';
+import FakeItLobby from '../apps/fake-it/components/FakeItLobby';
 import BombDisarmGame from '../apps/bomb-disarm/BombDisarmGame';
 import { loadDictionary } from '../apps/memo-random/utils/dictionary';
 import type { GamePlayProps } from './GameShell';
+import type { LobbyProps } from './components/Lobby';
 
 export interface GameConfig {
   id: string;
@@ -11,6 +13,10 @@ export interface GameConfig {
   minPlayers: number;
   maxPlayers: number;
   gamePlay: ComponentType<GamePlayProps>;
+  /** Overrides the shared lobby. Games without one get the default lobby. */
+  lobby?: ComponentType<LobbyProps>;
+  /** Page background while in this game's lobby. Defaults to the shared blue. */
+  lobbyBgClassName?: string;
   onIdlePrefetch?: () => void;
 }
 
@@ -29,6 +35,8 @@ export const GAMES_REGISTRY: Record<string, GameConfig> = {
     minPlayers: 3,
     maxPlayers: 12,
     gamePlay: FakeItGame,
+    lobby: FakeItLobby,
+    lobbyBgClassName: 'bg-fakeit-light text-fakeit-ink',
   },
   'bomb-disarm': {
     id: 'bomb-disarm',

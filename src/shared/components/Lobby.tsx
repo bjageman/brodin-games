@@ -3,7 +3,7 @@ import type { PlayerInfo } from '../types';
 import RoomCodeModal from './RoomCodeModal';
 import PlayerNote from './PlayerNote';
 
-interface LobbyProps {
+export interface LobbyProps {
   code: string;
   title: string;
   minPlayers: number;

@@ -13,6 +13,8 @@ import {
   TOPICS,
   STATE_REQUEST_RETRY_INTERVAL_MS,
   STATE_REQUEST_MAX_ATTEMPTS,
+  PAYOUT_CORRECT_VOTE,
+  PAYOUT_IMPOSTER_ESCAPED,
 } from './constants';
 import FakeItScreens from './components/FakeItViews';
 import { useFakeItDebug } from './useFakeItDebug';
@@ -35,6 +37,10 @@ interface FakeItSnapshot {
 
 const CONFETTI_COLORS = ['#f9749f', '#03d1b9', '#facc15'];
 
+// Phases the mockups draw on a dark stage: the prompt reveal, the drawing
+// easel, and the round payout. Lobby / vote / final tally are light.
+const DARK_PHASES = new Set<FakeItPhase>(['starting', 'role-reveal', 'drawing', 'results']);
+
 export default function FakeItGame({
   code,
   playerId,
@@ -45,6 +51,7 @@ export default function FakeItGame({
   onRegisterMessageHandler,
   onQuit,
   onRegisterDebugActions,
+  onGameBgChange,
 }: GamePlayProps) {
   // Restore state from snapshot if not a fresh start
   const restored = freshStart ? null : JSON.parse(sessionStorage.getItem(`fake-it-snap-${code}`) || 'null') as FakeItSnapshot | null;
@@ -253,15 +260,15 @@ export default function FakeItGame({
     });
 
     if (imposterCaught) {
-      // Artists won! Anyone who voted for imposter gets 2 points
+      // Artists won! Everyone who fingered the imposter gets paid.
       Object.entries(finalVotes).forEach(([voterId, votedId]) => {
         if (votedId === imposterId) {
-          newRoundPoints[voterId] = 2;
+          newRoundPoints[voterId] = PAYOUT_CORRECT_VOTE;
         }
       });
     } else {
-      // Imposter won! Imposter gets 3 points
-      newRoundPoints[imposterId] = 3;
+      // Imposter slipped through and collects the bigger purse.
+      newRoundPoints[imposterId] = PAYOUT_IMPOSTER_ESCAPED;
     }
 
     const nextScores = { ...scores };
@@ -512,6 +519,16 @@ export default function FakeItGame({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, isTimerPaused, lines.length, Object.keys(votes).length, drawerIndex, drawingRound]);
+
+  // Repaint the page chrome per phase. The mockups run the easel/painting
+  // screens dark and the vote / final tally light; see DARK_PHASES.
+  useEffect(() => {
+    onGameBgChange?.(
+      DARK_PHASES.has(phase)
+        ? 'bg-fakeit-dark text-white'
+        : 'bg-fakeit-light text-fakeit-ink'
+    );
+  }, [phase, onGameBgChange]);
 
   // Is it my turn to draw?
   const isMyTurn = phase === 'drawing' && roster[drawerIndex]?.id === playerId;

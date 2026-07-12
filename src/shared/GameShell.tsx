@@ -39,6 +39,11 @@ export interface GamePlayProps {
   onRegisterMessageHandler: (handler: (envelope: Envelope) => void) => void;
   onQuit: () => void;
   onRegisterDebugActions?: (actions: DebugAction[], currentPhaseName: string) => void;
+  // Lets a game repaint the page chrome as its phase changes (Fake It's play
+  // screens are dark, its vote/results screens are light). Pass Tailwind
+  // classes — background and text colour. Games that ignore this keep the
+  // default in-game background.
+  onGameBgChange?: (bgClassName: string | null) => void;
 }
 
 interface GameShellProps {
@@ -80,6 +85,7 @@ export default function GameShell({
   const minPlayers = gameConfig?.minPlayers ?? 3;
   const maxPlayers = gameConfig?.maxPlayers ?? 12;
   const GamePlay = gameConfig?.gamePlay;
+  const LobbyView = gameConfig?.lobby ?? Lobby;
   const onIdlePrefetch = gameConfig?.onIdlePrefetch;
 
   // Host is the roster authority, so it seeds itself directly rather than
@@ -96,6 +102,12 @@ export default function GameShell({
   // Active game debug state
   const [activeGameDebugActions, setActiveGameDebugActions] = useState<DebugAction[]>([]);
   const [activeGameDebugPhase, setActiveGameDebugPhase] = useState<string>('');
+  // Set by the active game (see GamePlayProps.onGameBgChange). Tagged with the
+  // game that set it so one game's palette can't bleed into another's.
+  const [gameBg, setGameBg] = useState<{ gameId: string | null; className: string | null }>({
+    gameId: null,
+    className: null,
+  });
 
   // Quit confirm state
   const [showQuitConfirm, setShowQuitConfirm] = useState(false);
@@ -309,7 +321,7 @@ export default function GameShell({
     if (phase === 'lobby') {
       return {
         title: undefined, // Lobby has its own custom Room Code header layout
-        bgClassName: 'bg-[#6d97ee] text-[#2b2f74]',
+        bgClassName: gameConfig?.lobbyBgClassName ?? 'bg-[#6d97ee] text-[#2b2f74]',
         dividerClassName: 'text-[#2b2f74] bg-current opacity-30 h-0', // Hide page layout divider in lobby
       };
     }
@@ -322,7 +334,7 @@ export default function GameShell({
     }
     return {
       title: isHost ? title : 'Playing...',
-      bgClassName: 'bg-brodin-bg',
+      bgClassName: (gameBg.gameId === gameId ? gameBg.className : null) ?? 'bg-brodin-bg',
       dividerClassName: 'text-brodin-primary',
     };
   };
@@ -352,7 +364,7 @@ export default function GameShell({
         )}
 
         {phase === 'lobby' && (
-          <Lobby
+          <LobbyView
             code={code}
             title={title}
             minPlayers={minPlayers}
@@ -380,6 +392,7 @@ export default function GameShell({
               setActiveGameDebugActions(actions);
               setActiveGameDebugPhase(gamePhase);
             }}
+            onGameBgChange={(className) => setGameBg({ gameId, className })}
           />
         )}
 
