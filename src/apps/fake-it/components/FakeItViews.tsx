@@ -7,7 +7,6 @@ import DrawingCanvas from './DrawingCanvas';
 interface FakeItScreensProps {
   phase: FakeItPhase;
   isImposter: boolean;
-  displayTopic: Topic | null;
   topic: Topic | null;
   revealSec: number;
   drawingRound: number;
@@ -68,7 +67,7 @@ function Paper({ children, className }: { children: React.ReactNode; className?:
 }
 
 export default function FakeItScreens({
-  phase, isImposter, displayTopic, topic, revealSec, drawingRound, drawerIndex,
+  phase, isImposter, topic, revealSec, drawingRound, drawerIndex,
   roster, playerId, imposterId, getPlayerColor, turnSec, turnMs, voteSec, lines,
   isMyTurn, handleDrawEnd, myVote, handleVoteSubmit, votes, scores, roundPoints,
   isHost, handleNextRound, setPhase, playAgain, onQuit,
@@ -97,14 +96,14 @@ export default function FakeItScreens({
           <div className="relative overflow-hidden rounded-3xl">
             <div className="bg-fakeit-panel px-6 py-12 text-fakeit-dark">
               <p className="font-serifDisplay text-4xl font-bold leading-tight">
-                {isImposter ? HIDDEN_WORD : displayTopic?.name}
+                {isImposter ? HIDDEN_WORD : topic?.name}
               </p>
               <p className="mt-1 font-serifDisplay text-base">
-                Category: {displayTopic?.category}
+                Category: {topic?.category}
               </p>
               <p className="mt-5 text-sm leading-relaxed text-fakeit-dark/75">
                 {isImposter
-                  ? 'You do not know the word. Watch the others paint, copy their strokes, and blend in.'
+                  ? 'You only know the category. Watch the others paint, copy their strokes, and blend in.'
                   : 'Paint it stroke by stroke — and find the faker among you.'}
               </p>
             </div>
@@ -124,7 +123,7 @@ export default function FakeItScreens({
       {/* Drawing */}
       {phase === 'drawing' && (
         <div className="mx-auto flex w-full max-w-xl flex-col items-center gap-4">
-          <PromptPanel topic={displayTopic} isImposter={isImposter} />
+          <PromptPanel topic={topic} isImposter={isImposter} />
 
           <div className="flex w-full items-center justify-between px-4">
             <p className="text-xs uppercase tracking-wider text-white/60">

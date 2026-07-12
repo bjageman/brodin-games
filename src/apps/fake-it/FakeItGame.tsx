@@ -540,14 +540,12 @@ export default function FakeItGame({
   // Is it my turn to draw?
   const isMyTurn = phase === 'drawing' && roster[drawerIndex]?.id === playerId;
   const isImposter = playerId === imposterId;
-  const displayTopic = isImposter ? null : topic;
 
 
   return (
     <FakeItScreens
       phase={phase}
       isImposter={isImposter}
-      displayTopic={displayTopic}
       topic={topic}
       revealSec={revealSec}
       drawingRound={drawingRound}
