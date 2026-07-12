@@ -31,6 +31,16 @@ export default {
           cream: '#feefc8',
           pin: '#ed6c72',
         },
+        // Homepage palette, sampled directly from the Canva mockup
+        // (Design Docs/Home Page). Cards alternate cyan/pink.
+        home: {
+          cyan: '#9bf6ff',
+          pink: '#e86eca',
+          featured: '#f6d7e9',
+          play: '#38b6ff',
+          star: '#ffd700',
+          ink: '#0d0d0d',
+        },
       },
       keyframes: {
         shake: {
