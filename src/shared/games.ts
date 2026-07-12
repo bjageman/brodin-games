@@ -31,15 +31,26 @@ export interface GameTheme {
   heading: string;
 }
 
+/**
+ * Matches the homepage: white page, cyan surfaces, the "PLAY NOW" blue for
+ * primary actions, near-black ink. Coming off a bright homepage into dark navy
+ * chrome was a jarring seam, so this is what a game gets unless it says
+ * otherwise.
+ *
+ * Note this themes the chrome *around* a game (create-room page, lobby,
+ * room-code modal). The in-game screens still run on the game's own background
+ * — Memo-Random and Bomb Disarm remain dark — so `heading` is only applied
+ * in-game when a game supplies a matching background of its own.
+ */
 export const DEFAULT_THEME: GameTheme = {
-  lobbyBg: 'bg-[#6d97ee] text-[#2b2f74]',
-  pageBg: 'bg-brodin-bg text-gray-100',
-  panel: 'bg-brodin-panel border-brodin-primary/30',
-  field: 'bg-brodin-field border-brodin-primary/40 text-white focus:border-brodin-accent',
-  accent: 'bg-brodin-primary hover:bg-brodin-primaryDark text-white',
-  code: 'text-brodin-accent',
-  muted: 'text-gray-300',
-  heading: 'text-brodin-accent',
+  lobbyBg: 'bg-home-cyan text-home-ink',
+  pageBg: 'bg-white text-home-ink',
+  panel: 'bg-home-cyan border-home-ink/15 text-home-ink',
+  field: 'bg-white border-home-ink/25 text-home-ink focus:border-home-play',
+  accent: 'bg-home-play hover:brightness-95 text-white',
+  code: 'text-home-ink',
+  muted: 'text-home-ink/70',
+  heading: 'text-home-ink',
 };
 
 const FAKE_IT_THEME: GameTheme = {
