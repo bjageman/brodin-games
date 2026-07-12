@@ -342,13 +342,17 @@ export default function GameShell({
         dividerClassName: 'text-brodin-primary',
       };
     }
+    // Only games that paint their own in-game background (Fake It) get the
+    // themed header. The others still play on dark navy, where the theme's
+    // near-black heading would be invisible — they keep the old brodin chrome
+    // until they're redesigned.
+    const ownBg = gameBg.gameId === gameId ? gameBg.className : null;
+
     return {
       title: isHost ? title : 'Playing...',
-      bgClassName: (gameBg.gameId === gameId ? gameBg.className : null) ?? 'bg-brodin-bg',
-      // Without these the title falls back to PageLayout's cyan brodin-accent
-      // and the divider to brodin pink, whatever the game's palette is.
-      headerClassName: theme.heading,
-      dividerClassName: theme.heading,
+      bgClassName: ownBg ?? 'bg-brodin-bg',
+      headerClassName: ownBg ? theme.heading : undefined,
+      dividerClassName: ownBg ? theme.heading : 'text-brodin-primary',
     };
   };
 
