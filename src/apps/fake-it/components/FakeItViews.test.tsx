@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import type { PlayerInfo } from '../../../shared/types';
 import type { FakeItPhase, Topic } from '../types';
 import FakeItScreens from './FakeItViews';
@@ -11,8 +11,19 @@ const ROSTER: PlayerInfo[] = [
   { id: 'p2', name: 'Bob' },
 ];
 
+interface Overrides {
+  isHost?: boolean;
+  endGame?: () => void;
+  scores?: Record<string, number>;
+}
+
 /** Renders a screen as `playerId`, defaulting every prop the phase ignores. */
-function renderScreen(phase: FakeItPhase, playerId: string, imposterId: string) {
+function renderScreen(
+  phase: FakeItPhase,
+  playerId: string,
+  imposterId: string,
+  overrides: Overrides = {}
+) {
   return render(
     <FakeItScreens
       phase={phase}
@@ -34,11 +45,11 @@ function renderScreen(phase: FakeItPhase, playerId: string, imposterId: string) 
       myVote={null}
       handleVoteSubmit={() => {}}
       votes={{}}
-      scores={{}}
+      scores={overrides.scores ?? {}}
       roundPoints={{}}
-      isHost={false}
+      isHost={overrides.isHost ?? false}
       handleNextRound={() => {}}
-      setPhase={() => {}}
+      endGame={overrides.endGame ?? (() => {})}
       playAgain={() => {}}
       onQuit={() => {}}
     />
@@ -58,5 +69,28 @@ describe.each(['role-reveal', 'drawing'] as const)('%s prompt', (phase) => {
 
     expect(screen.getByText('Flamingo')).toBeInTheDocument();
     expect(screen.getByText(/Category: Animal/)).toBeInTheDocument();
+  });
+});
+
+describe('ending the game', () => {
+  it("routes the host's end-game button through endGame, which broadcasts", () => {
+    const endGame = vi.fn();
+
+    renderScreen('results', 'p1', 'p2', { isHost: true, endGame });
+    fireEvent.click(screen.getByRole('button', { name: /End game/ }));
+
+    expect(endGame).toHaveBeenCalledTimes(1);
+  });
+
+  it('tells everyone the game is over and lists every final score', () => {
+    renderScreen('leaderboard', 'p2', 'p1', { scores: { p1: 1500, p2: 500 } });
+
+    expect(screen.getByText('Game Over')).toBeInTheDocument();
+    expect(screen.getByText('Final Scores')).toBeInTheDocument();
+    // Winner up top, everyone else in the list below — nobody omitted.
+    expect(screen.getByText(/Winner: Alice/)).toBeInTheDocument();
+    expect(screen.getByText('$1,500')).toBeInTheDocument();
+    expect(screen.getByText('Bob')).toBeInTheDocument();
+    expect(screen.getByText('$500')).toBeInTheDocument();
   });
 });

@@ -330,6 +330,14 @@ export default function FakeItGame({
     });
   }
 
+  // Host: End the game. Every other phase change is broadcast; this one used to
+  // be a bare setPhase, which moved the host to the final tally and left every
+  // player sitting on the round payout screen.
+  function endGame() {
+    setPhase('leaderboard');
+    broadcastState({ phase: 'leaderboard' });
+  }
+
   // Host: Trigger play-again back to lobby
   function playAgain() {
     sendMessage({ type: 'play-again', timestamp: Date.now(), payload: {} });
@@ -567,7 +575,7 @@ export default function FakeItGame({
       roundPoints={roundPoints}
       isHost={isHost}
       handleNextRound={handleNextRound}
-      setPhase={setPhase}
+      endGame={endGame}
       playAgain={playAgain}
       onQuit={onQuit}
     />
