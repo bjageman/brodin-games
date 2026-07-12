@@ -28,8 +28,8 @@ const GAMES: Game[] = [
   },
   {
     id: 'bomb-disarm',
-    title: 'Bomb Defuse',
-    description: 'Defuse a Bomb but be careful of the traitors among you!',
+    title: 'Bomb Disarm',
+    description: 'Disarm a Bomb but be careful of the traitors among you!',
     art: '/games/bomb-disarm.png',
     tone: 'pink',
     href: '#/host?game=bomb-disarm',
