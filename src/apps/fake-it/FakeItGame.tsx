@@ -10,9 +10,11 @@ import {
   TURN_DURATION_MS,
   VOTE_DURATION_MS,
   DRAWING_COLORS,
-  TOPICS,
+  pickTopic,
   STATE_REQUEST_RETRY_INTERVAL_MS,
   STATE_REQUEST_MAX_ATTEMPTS,
+  PAYOUT_CORRECT_VOTE,
+  PAYOUT_IMPOSTER_ESCAPED,
 } from './constants';
 import FakeItScreens from './components/FakeItViews';
 import { useFakeItDebug } from './useFakeItDebug';
@@ -31,9 +33,14 @@ interface FakeItSnapshot {
   roleRevealEndTimestamp: number | null;
   turnEndTimestamp: number | null;
   voteEndTimestamp: number | null;
+  usedTopicNames: string[];
 }
 
 const CONFETTI_COLORS = ['#f9749f', '#03d1b9', '#facc15'];
+
+// Phases the mockups draw on a dark stage: the prompt reveal, the drawing
+// easel, and the round payout. Lobby / vote / final tally are light.
+const DARK_PHASES = new Set<FakeItPhase>(['starting', 'role-reveal', 'drawing', 'results']);
 
 export default function FakeItGame({
   code,
@@ -45,6 +52,7 @@ export default function FakeItGame({
   onRegisterMessageHandler,
   onQuit,
   onRegisterDebugActions,
+  onGameBgChange,
 }: GamePlayProps) {
   // Restore state from snapshot if not a fresh start
   const restored = freshStart ? null : JSON.parse(sessionStorage.getItem(`fake-it-snap-${code}`) || 'null') as FakeItSnapshot | null;
@@ -52,6 +60,8 @@ export default function FakeItGame({
   const [phase, setPhase] = useState<FakeItPhase>(restored?.gamePhase ?? 'starting');
   const [imposterId, setImposterId] = useState<string>(restored?.imposterId ?? '');
   const [topic, setTopic] = useState<Topic | null>(restored?.topic ?? null);
+  // Host-only: topics already played this game, so rounds don't repeat a word.
+  const [usedTopicNames, setUsedTopicNames] = useState<string[]>(restored?.usedTopicNames ?? []);
   const [drawerIndex, setDrawerIndex] = useState<number>(restored?.drawerIndex ?? 0);
   const [drawingRound, setDrawingRound] = useState<number>(restored?.drawingRound ?? 1);
   const [lines, setLines] = useState<Line[]>(restored?.lines ?? []);
@@ -89,6 +99,7 @@ export default function FakeItGame({
       roleRevealEndTimestamp,
       turnEndTimestamp,
       voteEndTimestamp,
+      usedTopicNames,
     };
     sessionStorage.setItem(`fake-it-snap-${code}`, JSON.stringify(snapshot));
   }, [
@@ -102,6 +113,7 @@ export default function FakeItGame({
     votes,
     scores,
     roundPoints,
+    usedTopicNames,
     roleRevealEndTimestamp,
     turnEndTimestamp,
     voteEndTimestamp,
@@ -253,15 +265,15 @@ export default function FakeItGame({
     });
 
     if (imposterCaught) {
-      // Artists won! Anyone who voted for imposter gets 2 points
+      // Artists won! Everyone who fingered the imposter gets paid.
       Object.entries(finalVotes).forEach(([voterId, votedId]) => {
         if (votedId === imposterId) {
-          newRoundPoints[voterId] = 2;
+          newRoundPoints[voterId] = PAYOUT_CORRECT_VOTE;
         }
       });
     } else {
-      // Imposter won! Imposter gets 3 points
-      newRoundPoints[imposterId] = 3;
+      // Imposter slipped through and collects the bigger purse.
+      newRoundPoints[imposterId] = PAYOUT_IMPOSTER_ESCAPED;
     }
 
     const nextScores = { ...scores };
@@ -286,7 +298,8 @@ export default function FakeItGame({
 
   // Host: Start next round/reset state
   function handleNextRound() {
-    const randomTopic = TOPICS[Math.floor(Math.random() * TOPICS.length)];
+    const { topic: randomTopic, usedNames } = pickTopic(usedTopicNames);
+    setUsedTopicNames(usedNames);
     const randomImposter = roster[Math.floor(Math.random() * roster.length)];
     const revealEnd = Date.now() + ROLE_REVEAL_DURATION_MS;
 
@@ -349,7 +362,7 @@ export default function FakeItGame({
       const activePlayers = roster;
       if (activePlayers.length === 0) return;
 
-      const randomTopic = TOPICS[Math.floor(Math.random() * TOPICS.length)];
+      const { topic: randomTopic, usedNames } = pickTopic(usedTopicNames);
       const randomImposter = activePlayers[Math.floor(Math.random() * activePlayers.length)];
 
       const initialScores = { ...scores };
@@ -365,6 +378,7 @@ export default function FakeItGame({
       setPhase('role-reveal');
       setImposterId(randomImposter.id);
       setTopic(randomTopic);
+      setUsedTopicNames(usedNames);
       setDrawerIndex(0);
       setDrawingRound(1);
       setLines([]);
@@ -512,6 +526,16 @@ export default function FakeItGame({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, isTimerPaused, lines.length, Object.keys(votes).length, drawerIndex, drawingRound]);
+
+  // Repaint the page chrome per phase. The mockups run the easel/painting
+  // screens dark and the vote / final tally light; see DARK_PHASES.
+  useEffect(() => {
+    onGameBgChange?.(
+      DARK_PHASES.has(phase)
+        ? 'bg-fakeit-dark text-white'
+        : 'bg-fakeit-light text-fakeit-ink'
+    );
+  }, [phase, onGameBgChange]);
 
   // Is it my turn to draw?
   const isMyTurn = phase === 'drawing' && roster[drawerIndex]?.id === playerId;
