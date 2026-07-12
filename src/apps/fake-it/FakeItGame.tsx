@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import confetti from 'canvas-confetti';
 import { useCountdown } from '../../shared/hooks/useCountdown';
 import type { Envelope } from '../../shared/types';
@@ -76,12 +76,24 @@ export default function FakeItGame({
 
   const [myVote, setMyVote] = useState<string | null>(null);
 
+  // The host merges each incoming vote onto the running tally. Reading that
+  // tally from `votes` meant reading it from the message handler's closure,
+  // which is only refreshed on re-render — so two votes arriving in the same
+  // tick both merged onto the same snapshot and the second silently dropped
+  // the first. This ref is updated synchronously, so a burst accumulates.
+  const votesRef = useRef<Record<string, string>>(restored?.votes ?? {});
+
+  function applyVotes(next: Record<string, string>) {
+    votesRef.current = next;
+    setVotes(next);
+  }
+
   // Dev-only host controls (hoisted helpers below are passed in as context).
   const { isTimerPaused, handleDebugHostAction, getDebugActions } = useFakeItDebug({
     isHost, playerId, sendMessage, phase, roster, drawerIndex, lines, votes,
     roleRevealEndTimestamp, turnEndTimestamp, voteEndTimestamp,
     setRoleRevealEndTimestamp, setTurnEndTimestamp, setVoteEndTimestamp,
-    setPhase, setLines, setVotes, broadcastState, advanceTurn, revealResults, getPlayerColor,
+    setPhase, setLines, setVotes: applyVotes, broadcastState, advanceTurn, revealResults, getPlayerColor,
   });
 
   // Save state snapshots on change
@@ -226,8 +238,8 @@ export default function FakeItGame({
   function handleClientSubmitVote(senderId: string | undefined, targetId: string) {
     if (!senderId) return;
 
-    const nextVotes = { ...votes, [senderId]: targetId };
-    setVotes(nextVotes);
+    const nextVotes = { ...votesRef.current, [senderId]: targetId };
+    applyVotes(nextVotes);
 
     const activeVoters = roster.length;
     const submittedVotes = Object.keys(nextVotes).length;
@@ -282,7 +294,7 @@ export default function FakeItGame({
     });
 
     setPhase('results');
-    setVotes(finalVotes);
+    applyVotes(finalVotes);
     setScores(nextScores);
     setRoundPoints(newRoundPoints);
     setVoteEndTimestamp(null);
@@ -309,7 +321,7 @@ export default function FakeItGame({
     setDrawerIndex(0);
     setDrawingRound(1);
     setLines([]);
-    setVotes({});
+    applyVotes({});
     setRoundPoints({});
     setRoleRevealEndTimestamp(revealEnd);
     setTurnEndTimestamp(null);
@@ -390,7 +402,7 @@ export default function FakeItGame({
       setDrawerIndex(0);
       setDrawingRound(1);
       setLines([]);
-      setVotes({});
+      applyVotes({});
       setScores(initialScores);
       setRoundPoints({});
       setRoleRevealEndTimestamp(revealEnd);
@@ -468,7 +480,9 @@ export default function FakeItGame({
   // Host transition: Voting Timeout
   useEffect(() => {
     if (isHost && phase === 'voting' && voteEndTimestamp && voteExpired) {
-      revealResults(votes);
+      // The ref, not `votes` — a vote landing in the same tick as the timer
+      // expiring would otherwise be left out of the tally.
+      revealResults(votesRef.current);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHost, phase, voteEndTimestamp, voteExpired]);
@@ -487,7 +501,7 @@ export default function FakeItGame({
           setDrawerIndex(state.drawerIndex);
           setDrawingRound(state.drawingRound);
           setLines(state.lines);
-          setVotes(state.votes);
+          applyVotes(state.votes);
           setScores(state.scores);
           setRoundPoints(state.roundPoints);
           setRoleRevealEndTimestamp(state.roleRevealEndTimestamp);

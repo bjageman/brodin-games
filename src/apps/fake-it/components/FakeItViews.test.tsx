@@ -11,10 +11,13 @@ const ROSTER: PlayerInfo[] = [
   { id: 'p2', name: 'Bob' },
 ];
 
+const TRIO: PlayerInfo[] = [...ROSTER, { id: 'p3', name: 'Cara' }];
+
 interface Overrides {
   isHost?: boolean;
   endGame?: () => void;
   scores?: Record<string, number>;
+  roster?: PlayerInfo[];
 }
 
 /** Renders a screen as `playerId`, defaulting every prop the phase ignores. */
@@ -32,7 +35,7 @@ function renderScreen(
       revealSec={5}
       drawingRound={1}
       drawerIndex={0}
-      roster={ROSTER}
+      roster={overrides.roster ?? ROSTER}
       playerId={playerId}
       imposterId={imposterId}
       getPlayerColor={() => '#000000'}
@@ -92,5 +95,36 @@ describe('ending the game', () => {
     expect(screen.getByText('$1,500')).toBeInTheDocument();
     expect(screen.getByText('Bob')).toBeInTheDocument();
     expect(screen.getByText('$500')).toBeInTheDocument();
+  });
+});
+
+describe('final-score ties', () => {
+  it('declares every player tied at the top a winner', () => {
+    renderScreen('leaderboard', 'p1', 'p2', { scores: { p1: 1000, p2: 1000 } });
+
+    expect(screen.getByText(/Winners: Alice & Bob/)).toBeInTheDocument();
+    // Neither is demoted into the also-ran list below the easels.
+    expect(screen.queryByText(/Winner:\s/)).not.toBeInTheDocument();
+  });
+
+  it('lists three-way ties readably and gives each winner an easel', () => {
+    const { container } = renderScreen('leaderboard', 'p1', 'p2', {
+      roster: TRIO,
+      scores: { p1: 500, p2: 500, p3: 500 },
+    });
+
+    expect(screen.getByText(/Winners: Alice, Bob & Cara/)).toBeInTheDocument();
+    expect(container.querySelectorAll('img')).toHaveLength(3);
+  });
+
+  it('still crowns a single winner when the top score is not tied', () => {
+    renderScreen('leaderboard', 'p1', 'p2', {
+      roster: TRIO,
+      // Bob and Cara tie, but for second — that must not make them winners.
+      scores: { p1: 1500, p2: 500, p3: 500 },
+    });
+
+    expect(screen.getByText(/Winner: Alice/)).toBeInTheDocument();
+    expect(screen.queryByText(/Winners:/)).not.toBeInTheDocument();
   });
 });
