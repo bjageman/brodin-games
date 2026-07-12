@@ -1,7 +1,7 @@
 import { cn } from '../../../shared/utils/cn';
 import type { PlayerInfo } from '../../../shared/types';
 import type { FakeItPhase, Line, Point, Topic } from '../types';
-import { TURN_DURATION_MS } from '../constants';
+import { TURN_DURATION_MS, formatMoney } from '../constants';
 import DrawingCanvas from './DrawingCanvas';
 
 interface FakeItScreensProps {
@@ -34,400 +34,400 @@ interface FakeItScreensProps {
   onQuit: () => void;
 }
 
-// All of Fake It's per-phase screens. The game component owns the state machine
-// and hands the current slice down as props.
+/** The imposter is shown the category but never the word itself. */
+const HIDDEN_WORD = '?????????????';
+
+function Dot({ color, className }: { color: string; className?: string }) {
+  return (
+    <span
+      className={cn('inline-block shrink-0 rounded-full', className ?? 'h-4 w-4')}
+      style={{ backgroundColor: color }}
+    />
+  );
+}
+
+/** The tan prompt slab at the top of the painting screens. */
+function PromptPanel({ topic, isImposter }: { topic: Topic | null; isImposter: boolean }) {
+  return (
+    <div className="w-full rounded-b-3xl bg-fakeit-panel px-6 py-4 text-fakeit-dark">
+      <p className="font-serifDisplay text-3xl font-bold leading-tight">
+        {isImposter ? HIDDEN_WORD : topic?.name}
+      </p>
+      <p className="font-serifDisplay text-sm">Category: {topic?.category}</p>
+    </div>
+  );
+}
+
+/** Paper-canvas wrapper shared by the drawing / vote / results screens. */
+function Paper({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={cn('relative aspect-square w-full max-w-[400px] bg-[#f7f7f7] shadow-lg', className)}>
+      {children}
+    </div>
+  );
+}
+
 export default function FakeItScreens({
   phase, isImposter, displayTopic, topic, revealSec, drawingRound, drawerIndex,
   roster, playerId, imposterId, getPlayerColor, turnSec, turnMs, voteSec, lines,
   isMyTurn, handleDrawEnd, myVote, handleVoteSubmit, votes, scores, roundPoints,
   isHost, handleNextRound, setPhase, playAgain, onQuit,
 }: FakeItScreensProps) {
+  const drawer = roster[drawerIndex];
+  const imposter = roster.find((p) => p.id === imposterId);
+  const pot = Object.values(roundPoints).reduce((sum, n) => sum + n, 0);
+  const imposterCaught = pot > 0 && (roundPoints[imposterId] ?? 0) === 0;
+
   return (
-    <div className="w-full flex-1 flex flex-col items-center">
+    <div className="flex w-full flex-1 flex-col items-center">
       {/* Starting / Spinner */}
       {phase === 'starting' && (
-        <div className="flex-1 flex items-center justify-center py-20">
-          <div className="w-12 h-12 border-4 border-brodin-primary border-t-transparent rounded-full animate-spin" />
+        <div className="flex flex-1 items-center justify-center py-20">
+          <div className="h-12 w-12 animate-spin rounded-full border-4 border-fakeit-panel border-t-transparent" />
         </div>
       )}
 
-      {/* Role Reveal Screen */}
+      {/* Role Reveal — stage curtains draw back off the prompt */}
       {phase === 'role-reveal' && (
-        <div className="w-full max-w-md mx-auto py-8 px-4 text-center space-y-8 animate-fadeIn">
-          <h2 className="font-display text-2xl font-extrabold text-white tracking-wider uppercase">
-            Prepare to Draw
+        <div className="mx-auto w-full max-w-md px-4 py-8 text-center">
+          <h2 className="mb-6 font-serifDisplay text-2xl font-bold text-fakeit-panel">
+            {isImposter ? 'You are the Imposter' : 'Prepare to Paint'}
           </h2>
 
-          <div
-            className={cn(
-              "p-8 rounded-3xl border shadow-2xl transition-all duration-500 scale-100 transform",
-              isImposter
-                ? "bg-gradient-to-br from-bento-pink/20 to-brodin-panel border-bento-pink"
-                : "bg-gradient-to-br from-brodin-accent/20 to-brodin-panel border-brodin-accent"
-            )}
-          >
-            {isImposter ? (
-              <div className="space-y-6">
-                <span className="text-4xl">🕵️‍♂️</span>
-                <h3 className="font-display text-3xl font-black text-bento-pink uppercase tracking-widest animate-pulse">
-                  Imposter
-                </h3>
-                <p className="text-gray-300 text-sm leading-relaxed">
-                  You do not know the topic. Watch the other players draw, copy their strokes, and blend in!
-                </p>
-                <div className="text-5xl font-extrabold text-white tracking-widest bg-brodin-field py-4 rounded-2xl border border-white/5">
-                  ???
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                <span className="text-4xl">🎨</span>
-                <h3 className="font-display text-3xl font-black text-brodin-accent uppercase tracking-widest">
-                  Artist
-                </h3>
-                <p className="text-gray-300 text-sm leading-relaxed">
-                  Your topic is below. Draw it line-by-line and identify the faking imposter!
-                </p>
-                <div className="bg-brodin-field p-5 rounded-2xl border border-white/5 space-y-2">
-                  <p className="text-xs text-gray-400 uppercase tracking-widest font-bold">Category: {displayTopic?.category}</p>
-                  <p className="text-3xl font-black text-white uppercase tracking-wider">{displayTopic?.name}</p>
-                </div>
-              </div>
-            )}
+          <div className="relative overflow-hidden rounded-3xl">
+            <div className="bg-fakeit-panel px-6 py-12 text-fakeit-dark">
+              <p className="font-serifDisplay text-4xl font-bold leading-tight">
+                {isImposter ? HIDDEN_WORD : displayTopic?.name}
+              </p>
+              <p className="mt-1 font-serifDisplay text-base">
+                Category: {displayTopic?.category}
+              </p>
+              <p className="mt-5 text-sm leading-relaxed text-fakeit-dark/75">
+                {isImposter
+                  ? 'You do not know the word. Watch the others paint, copy their strokes, and blend in.'
+                  : 'Paint it stroke by stroke — and find the faker among you.'}
+              </p>
+            </div>
+
+            {/* The curtains themselves. They cover the panel, hold, then part. */}
+            <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+              <div className="absolute inset-y-0 left-0 w-1/2 animate-curtainLeft border-r border-black/20 bg-fakeit-bar" />
+              <div className="absolute inset-y-0 right-0 w-1/2 animate-curtainRight border-l border-black/20 bg-fakeit-bar" />
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <div className="text-4xl font-black text-brodin-gold animate-bounce">
-              {revealSec}
-            </div>
-            <p className="text-xs uppercase tracking-widest text-gray-400">Game starting in...</p>
-          </div>
+          <p className="mt-6 font-serifDisplay text-4xl font-bold text-fakeit-panel">{revealSec}</p>
+          <p className="text-xs uppercase tracking-widest text-white/60">Starting in…</p>
         </div>
       )}
 
-      {/* Drawing Screen */}
+      {/* Drawing */}
       {phase === 'drawing' && (
-        <div className="w-full max-w-xl mx-auto px-4 flex flex-col items-center space-y-4 animate-fadeIn">
-          {/* Header info */}
-          <div className="w-full flex justify-between items-center bg-brodin-panel/60 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/5">
-            <div className="space-y-0.5">
-              <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">
-                Drawing Round {drawingRound} of 2
-              </p>
-              <div className="flex items-center gap-1.5">
-                <span
-                  className="w-2.5 h-2.5 rounded-full animate-pulse"
-                  style={{ backgroundColor: getPlayerColor(roster[drawerIndex]?.id) }}
-                />
-                <p className="text-sm font-bold text-white">
-                  {roster[drawerIndex]?.id === playerId ? (
-                    <span className="text-brodin-accent font-black">YOUR TURN!</span>
-                  ) : (
-                    <span>{roster[drawerIndex]?.name} is drawing...</span>
-                  )}
-                </p>
-              </div>
-            </div>
-            <div className="text-right">
-              <span className={cn("text-lg font-black font-mono", turnSec < 8 ? "text-bento-pink animate-pulse" : "text-brodin-gold")}>
-                {turnSec}s
-              </span>
-            </div>
+        <div className="mx-auto flex w-full max-w-xl flex-col items-center gap-4">
+          <PromptPanel topic={displayTopic} isImposter={isImposter} />
+
+          <div className="flex w-full items-center justify-between px-4">
+            <p className="text-xs uppercase tracking-wider text-white/60">
+              Round {drawingRound} of 2
+            </p>
+            <span
+              className={cn(
+                'font-mono text-lg font-black',
+                turnSec < 8 ? 'animate-pulse text-red-400' : 'text-fakeit-panel'
+              )}
+            >
+              {turnSec}s
+            </span>
           </div>
 
-          {/* Time progress bar */}
-          <div className="w-full h-1.5 bg-brodin-field rounded-full overflow-hidden">
+          <div className="h-1.5 w-[calc(100%-2rem)] overflow-hidden rounded-full bg-white/10">
             <div
-              className={cn("h-full transition-all duration-300", turnSec < 8 ? "bg-bento-pink" : "bg-brodin-accent")}
+              className={cn(
+                'h-full transition-all duration-300',
+                turnSec < 8 ? 'bg-red-400' : 'bg-fakeit-panel'
+              )}
               style={{ width: `${Math.min(100, (turnMs / TURN_DURATION_MS) * 100)}%` }}
             />
           </div>
 
-          {/* Canvas Wrapper */}
-          <div className="relative w-full max-w-[400px] aspect-square">
+          <Paper>
             <DrawingCanvas
               lines={lines}
               activeColor={getPlayerColor(playerId)}
               canDraw={isMyTurn}
               onDrawEnd={handleDrawEnd}
-              className="w-full h-full"
+              className="h-full w-full"
             />
-            {/* Overlay if not turn */}
             {!isMyTurn && (
-              <div className="absolute inset-0 bg-gray-950/20 backdrop-blur-[1px] pointer-events-none rounded-2xl flex items-center justify-center">
-                <div className="bg-brodin-panel/90 px-4 py-2 rounded-xl border border-white/5 shadow-lg max-w-[80%] text-center">
-                  <p className="text-xs text-gray-300 font-medium">
-                    ✏️ {roster[drawerIndex]?.name} is drawing. Please wait...
-                  </p>
-                </div>
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/5">
+                <p className="rounded-lg bg-fakeit-dark/80 px-3 py-1.5 text-xs font-semibold text-white">
+                  {drawer?.name} is painting…
+                </p>
               </div>
             )}
+          </Paper>
+
+          <div className="w-full px-4 pb-6">
+            <p className="text-center font-serifDisplay text-2xl font-bold text-fakeit-panel">
+              Currently Painting
+            </p>
+
+            <div className="mt-2 flex items-center justify-center gap-3">
+              <span className="font-display text-2xl font-bold tracking-[0.2em] text-white">
+                {isMyTurn ? 'YOU' : drawer?.name?.toUpperCase()}
+              </span>
+              <Dot color={getPlayerColor(drawer?.id ?? '')} className="h-6 w-6" />
+            </div>
+
+            {/* Turn order. Scrolls rather than running off the screen — with a
+                full lobby this list is taller than the viewport. */}
+            <ul className="mx-auto mt-4 max-h-40 max-w-xs space-y-1.5 overflow-y-auto">
+              {roster.map((p, idx) => (
+                <li
+                  key={p.id}
+                  className={cn(
+                    'flex items-center justify-between gap-3 rounded px-2 py-1',
+                    idx === drawerIndex ? 'bg-white/10' : 'opacity-70'
+                  )}
+                >
+                  <span className="truncate font-serifDisplay text-lg text-white">{p.name}</span>
+                  <Dot color={getPlayerColor(p.id)} className="h-5 w-5" />
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {/* Voting */}
+      {phase === 'voting' && (
+        <div className="mx-auto flex w-full max-w-xl flex-col items-center gap-5 px-4 pb-8">
+          <Paper className="mt-2">
+            <DrawingCanvas lines={lines} canDraw={false} onDrawEnd={() => {}} className="h-full w-full" />
+          </Paper>
+
+          <div className="w-full">
+            <div className="flex items-baseline justify-between">
+              <h3 className="font-serifDisplay text-3xl font-bold text-fakeit-ink">
+                Who is the Imposter?
+              </h3>
+              <span className="font-mono text-sm font-bold text-fakeit-ink">{voteSec}s</span>
+            </div>
+            <div className="mt-2 h-px w-full bg-fakeit-ink/30" />
           </div>
 
-          {/* Topic helper for artists */}
-          {!isImposter && (
-            <div className="text-center bg-brodin-field/60 px-5 py-2.5 rounded-xl border border-white/5">
-              <p className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Your Secret Topic</p>
-              <p className="text-base font-extrabold text-white uppercase">{topic?.name}</p>
+          {myVote ? (
+            <p className="rounded-lg bg-fakeit-panel px-4 py-3 text-center text-sm text-fakeit-dark">
+              Vote locked in for{' '}
+              <span className="font-bold">{roster.find((p) => p.id === myVote)?.name}</span>. Waiting
+              for the others…
+            </p>
+          ) : (
+            <div className="grid w-full grid-cols-2 gap-4">
+              {roster
+                .filter((p) => p.id !== playerId)
+                .map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => handleVoteSubmit(p.id)}
+                    className="flex items-center justify-center gap-2 bg-fakeit-button px-3 py-4 text-white transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                  >
+                    {/* The colour dot is the whole point — it's how you tell who
+                        painted which strokes on the canvas above. */}
+                    <Dot color={getPlayerColor(p.id)} className="h-4 w-4 ring-1 ring-white/50" />
+                    <span className="truncate text-sm font-semibold tracking-[0.15em]">
+                      {p.name.toUpperCase()}
+                    </span>
+                  </button>
+                ))}
             </div>
           )}
 
-          {/* Player roster footer */}
-          <div className="w-full bg-brodin-panel/30 p-3 rounded-2xl border border-white/5">
-            <p className="text-[10px] text-gray-400 uppercase tracking-widest font-bold mb-2 text-center">Roster Order</p>
-            <div className="flex gap-3 overflow-x-auto justify-center pb-1">
-              {roster.map((p, idx) => {
-                const active = idx === drawerIndex;
-                const hasDrawn = lines.filter((l) => l.playerId === p.id).length >= drawingRound;
-                return (
-                  <div
-                    key={p.id}
-                    className={cn(
-                      "flex flex-col items-center p-2 rounded-xl min-w-[70px] border transition-all duration-300",
-                      active ? "bg-white/10 border-white/30 scale-105" : "border-transparent opacity-70"
-                    )}
-                  >
-                    <div
-                      className="w-8 h-8 rounded-full border-2 flex items-center justify-center text-xs font-black text-white"
-                      style={{ borderColor: getPlayerColor(p.id), backgroundColor: getPlayerColor(p.id) + '20' }}
-                    >
-                      {p.name.slice(0, 2).toUpperCase()}
-                    </div>
-                    <span className="text-[10px] font-semibold text-gray-300 truncate max-w-[65px] mt-1">{p.name}</span>
-                    {hasDrawn && <span className="text-[9px] text-brodin-accent mt-0.5">✓ Drawn</span>}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Voting Screen */}
-      {phase === 'voting' && (
-        <div className="w-full max-w-xl mx-auto px-4 flex flex-col items-center space-y-4 animate-fadeIn">
-          <div className="w-full text-center bg-brodin-panel/60 p-4 rounded-2xl border border-white/5">
-            <h3 className="font-display text-lg font-bold text-white uppercase">Who is the Imposter?</h3>
-            <p className="text-xs text-gray-400 mt-1">Study the final drawing. Vote for the player who is faking it!</p>
-            <div className="text-brodin-gold font-mono font-bold text-sm mt-1">{voteSec}s remaining</div>
-          </div>
-
-          {/* Final Masterpiece */}
-          <div className="w-full max-w-[400px] aspect-square">
-            <DrawingCanvas
-              lines={lines}
-              canDraw={false}
-              onDrawEnd={() => {}}
-              className="w-full h-full"
-            />
-          </div>
-
-          {/* Voting Buttons */}
-          <div className="w-full space-y-2">
-            {myVote ? (
-              <div className="text-center p-4 bg-brodin-field rounded-xl border border-white/5 text-sm text-gray-300">
-                Vote submitted for <span className="text-white font-bold">{roster.find((p) => p.id === myVote)?.name}</span>. Waiting for other players...
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-2 w-full">
-                {roster
-                  .filter((p) => p.id !== playerId)
-                  .map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => handleVoteSubmit(p.id)}
-                      className="bg-brodin-panel hover:bg-brodin-panel/85 active:scale-[0.98] border border-white/10 rounded-xl p-3.5 flex flex-col items-center gap-1.5 transition-all text-white font-bold"
-                    >
-                      <div
-                        className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black"
-                        style={{ backgroundColor: getPlayerColor(p.id) }}
-                      >
-                        {p.name.slice(0, 2).toUpperCase()}
-                      </div>
-                      <span className="text-sm truncate w-full text-center">{p.name}</span>
-                    </button>
-                  ))}
-              </div>
-            )}
-          </div>
-
-          {/* Who has voted progress checkmarks */}
-          <div className="w-full bg-brodin-panel/20 p-3 rounded-xl text-center border border-white/5">
-            <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-2">Vote Submissions</p>
-            <div className="flex gap-2 flex-wrap justify-center">
-              {roster.map((p) => {
-                const voted = votes[p.id] !== undefined;
-                return (
-                  <span
-                    key={p.id}
-                    className={cn(
-                      "text-xs px-2.5 py-1 rounded-full font-bold transition-all",
-                      voted ? "bg-brodin-accent/20 text-brodin-accent border border-brodin-accent/30" : "bg-brodin-field text-gray-400 border border-white/5"
-                    )}
-                  >
-                    {p.name} {voted ? '✓' : ''}
-                  </span>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Results Screen */}
-      {phase === 'results' && (
-        <div className="w-full max-w-xl mx-auto px-4 flex flex-col items-center space-y-6 animate-fadeIn">
-          {/* Large Imposter Reveal Card */}
-          <div className="w-full bg-gradient-to-br from-bento-pink/15 to-brodin-panel border border-bento-pink rounded-3xl p-6 text-center space-y-4 shadow-xl">
-            <p className="text-[10px] font-bold text-bento-pink uppercase tracking-widest">Imposter Revealed!</p>
-            <h3 className="font-display text-3xl font-black text-white uppercase tracking-wider">
-              {roster.find((p) => p.id === imposterId)?.name ?? 'Unknown'}
-            </h3>
-            <p className="text-xs text-gray-300">
-              was the Imposter! The secret topic was{' '}
-              <span className="text-brodin-accent font-black uppercase">{topic?.name}</span> (Category: {topic?.category}).
-            </p>
-          </div>
-
-          {/* Masterpiece Showcase */}
-          <div className="w-full max-w-[340px] aspect-square">
-            <DrawingCanvas
-              lines={lines}
-              canDraw={false}
-              onDrawEnd={() => {}}
-              className="w-full h-full"
-            />
-          </div>
-
-          {/* Vote breakdowns & Point summaries */}
-          <div className="w-full bg-brodin-panel p-5 rounded-2xl border border-white/5 space-y-3 shadow-lg">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400 border-b border-white/5 pb-2">Round Scorecard</h4>
-            <div className="space-y-2">
-              {roster.map((p) => {
-                const isPImposter = p.id === imposterId;
-                const voteTargetId = votes[p.id];
-                const voteTarget = roster.find((player) => player.id === voteTargetId);
-                const pointsEarned = roundPoints[p.id] || 0;
-
-                return (
-                  <div key={p.id} className="flex justify-between items-center text-sm">
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: getPlayerColor(p.id) }} />
-                        <span className="font-bold text-white">
-                          {p.name} {isPImposter && <span className="text-xs text-bento-pink font-bold">(Imposter)</span>}
-                        </span>
-                      </div>
-                      {!isPImposter && voteTarget && (
-                        <p className="text-xs text-gray-400">
-                          Voted for: <span className="text-gray-300 font-bold">{voteTarget.name}</span>{' '}
-                          {voteTargetId === imposterId ? '✅' : '❌'}
-                        </p>
-                      )}
-                    </div>
-                    <div className="text-right">
-                      <span className={cn("text-xs font-black font-mono px-2 py-1 rounded", pointsEarned > 0 ? "bg-brodin-accent/10 text-brodin-accent border border-brodin-accent/20" : "bg-white/5 text-gray-400")}>
-                        +{pointsEarned} pts
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Next Actions */}
-          {isHost ? (
-            <div className="w-full space-y-2">
-              <button
-                onClick={() => setPhase('leaderboard')}
-                className="w-full bg-brodin-accent hover:bg-brodin-accent/90 text-gray-950 rounded-lg py-3 font-black transition-colors uppercase tracking-wider text-sm"
+          <div className="flex w-full flex-wrap justify-center gap-2">
+            {roster.map((p) => (
+              <span
+                key={p.id}
+                className={cn(
+                  'rounded-full px-2.5 py-1 text-xs font-bold',
+                  votes[p.id] !== undefined
+                    ? 'bg-fakeit-ink text-white'
+                    : 'bg-fakeit-ink/10 text-fakeit-ink/60'
+                )}
               >
-                View Final Leaderboard
-              </button>
+                {p.name} {votes[p.id] !== undefined ? '✓' : ''}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Round Totals */}
+      {phase === 'results' && (
+        <div className="mx-auto flex w-full max-w-xl flex-col items-center gap-4 px-4 pb-8">
+          <Paper className="mt-2">
+            <DrawingCanvas lines={lines} canDraw={false} onDrawEnd={() => {}} className="h-full w-full" />
+          </Paper>
+
+          <div className="flex w-full items-baseline justify-between">
+            <span className="font-serifDisplay text-3xl font-bold text-fakeit-panel">
+              {topic?.name}
+            </span>
+            <span className="font-serifDisplay text-3xl font-bold text-fakeit-panel">
+              {formatMoney(pot)}
+            </span>
+          </div>
+
+          {/* Not in the mockup, but the round is meaningless without knowing
+              whether the imposter got away. */}
+          <p className="w-full text-sm text-white/80">
+            The imposter was{' '}
+            <span className="font-bold text-white">{imposter?.name ?? 'unknown'}</span>
+            {' — '}
+            <span className={imposterCaught ? 'font-bold text-emerald-400' : 'font-bold text-red-400'}>
+              {imposterCaught ? 'caught!' : 'they got away!'}
+            </span>
+          </p>
+
+          <div className="w-full rounded-3xl border-2 border-blue-500 bg-fakeit-panel p-5 text-fakeit-dark">
+            <h4 className="text-center font-serifDisplay text-2xl font-bold underline">Payout</h4>
+            <p className="mb-4 text-center text-sm font-semibold">
+              {imposterCaught ? '(for guessing the imposter)' : '(the imposter escaped)'}
+            </p>
+
+            <ul className="space-y-1.5">
+              {roster
+                .filter((p) => (roundPoints[p.id] ?? 0) > 0)
+                .map((p) => (
+                  <li key={p.id} className="flex items-center justify-between gap-3">
+                    <span className="flex items-center gap-2 truncate">
+                      <Dot color={getPlayerColor(p.id)} className="h-3.5 w-3.5" />
+                      <span className="truncate">{p.name}</span>
+                    </span>
+                    <span className="font-display font-bold text-fakeit-money">
+                      {formatMoney(roundPoints[p.id] ?? 0)}
+                    </span>
+                  </li>
+                ))}
+              {pot === 0 && (
+                <li className="text-center text-sm italic">Nobody was paid this round.</li>
+              )}
+            </ul>
+          </div>
+
+          {isHost ? (
+            <div className="flex w-full flex-col items-center gap-2">
               <button
                 onClick={handleNextRound}
-                className="w-full bg-brodin-primary hover:bg-brodin-primaryDark text-white rounded-lg py-3 font-bold transition-colors uppercase tracking-wider text-sm"
+                className="rounded-full bg-fakeit-button px-10 py-3.5 font-display text-lg font-bold text-white transition-transform hover:scale-[1.03]"
               >
                 Next Round
               </button>
+              <button
+                onClick={() => setPhase('leaderboard')}
+                className="text-sm text-white/70 underline"
+              >
+                End game & show final scores
+              </button>
             </div>
           ) : (
-            <p className="text-xs text-gray-400 text-center animate-pulse">Waiting for the host to proceed...</p>
+            <p className="animate-pulse text-sm text-white/60">Waiting for the host…</p>
           )}
         </div>
       )}
 
-      {/* Leaderboard Screen */}
+      {/* Final Score */}
       {phase === 'leaderboard' && (
-        <div className="w-full max-w-xl mx-auto px-4 flex flex-col items-center space-y-6 animate-fadeIn">
-          <h2 className="font-display text-2xl font-black text-brodin-gold tracking-widest uppercase">
-            Leaderboard
-          </h2>
+        <FinalScore
+          roster={roster}
+          scores={scores}
+          getPlayerColor={getPlayerColor}
+          isHost={isHost}
+          playAgain={playAgain}
+          onQuit={onQuit}
+        />
+      )}
+    </div>
+  );
+}
 
-          {/* Ranking Board */}
-          <div className="w-full bg-brodin-panel p-6 rounded-3xl border border-white/5 space-y-3 shadow-xl">
-            {roster
-              .map((p) => ({
-                ...p,
-                score: scores[p.id] || 0,
-              }))
-              .sort((a, b) => b.score - a.score)
-              .map((p, idx) => {
-                const isWinner = idx === 0;
-                return (
-                  <div
-                    key={p.id}
-                    className={cn(
-                      "flex justify-between items-center p-3 rounded-2xl transition-all border",
-                      isWinner
-                        ? "bg-brodin-gold/10 border-brodin-gold/30 text-brodin-gold"
-                        : "bg-brodin-field/40 border-transparent text-gray-300"
-                    )}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="font-mono font-black text-lg w-6">
-                        {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}.`}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full" style={{ backgroundColor: getPlayerColor(p.id) }} />
-                        <span className="font-bold text-white">{p.name}</span>
-                        {p.id === imposterId && <span className="text-[9px] uppercase tracking-wider font-bold bg-bento-pink/15 text-bento-pink px-1.5 py-0.5 rounded">Imposter</span>}
-                      </div>
-                    </div>
-                    <span className="font-mono font-black text-lg">{p.score} pts</span>
-                  </div>
-                );
-              })}
+function FinalScore({
+  roster, scores, getPlayerColor, isHost, playAgain, onQuit,
+}: {
+  roster: PlayerInfo[];
+  scores: Record<string, number>;
+  getPlayerColor: (pId: string) => string;
+  isHost: boolean;
+  playAgain: () => void;
+  onQuit: () => void;
+}) {
+  const ranked = roster
+    .map((p) => ({ ...p, score: scores[p.id] ?? 0 }))
+    .sort((a, b) => b.score - a.score);
+
+  const [winner, ...rest] = ranked;
+
+  return (
+    <div className="mx-auto flex w-full max-w-xl flex-col items-center gap-6 px-4 pb-10 text-fakeit-ink">
+      <div className="flex w-full items-baseline justify-between">
+        <h2 className="font-serifDisplay text-2xl font-bold uppercase tracking-wide">
+          Winner: {winner?.name ?? '—'}
+        </h2>
+        <span className="font-display text-3xl font-extrabold text-fakeit-money">
+          {formatMoney(winner?.score ?? 0)}
+        </span>
+      </div>
+
+      {winner && (
+        <div className="relative w-full max-w-[220px]">
+          <img src="/games/fake-it-easel-lobby.png" alt="" className="w-full" />
+          <div
+            className="absolute flex items-center justify-center overflow-hidden px-1"
+            style={{ left: '3.6%', top: '16.7%', width: '91.8%', height: '52%' }}
+          >
+            <span className="text-center font-script text-3xl font-bold text-[#1a1a1a]">
+              {winner.name}
+            </span>
           </div>
-
-          {/* Next Actions */}
-          {isHost ? (
-            <div className="w-full space-y-2">
-              <button
-                onClick={playAgain}
-                className="w-full bg-brodin-primary hover:bg-brodin-primaryDark text-white rounded-lg py-3 font-bold transition-colors uppercase tracking-wider text-sm shadow-lg shadow-brodin-primary/20"
-              >
-                Return to Lobby (Play Again)
-              </button>
-              <button
-                onClick={onQuit}
-                className="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg py-3 font-semibold transition-colors uppercase tracking-wider text-sm"
-              >
-                Quit Game
-              </button>
-            </div>
-          ) : (
-            <div className="w-full space-y-4 text-center">
-              <p className="text-xs text-gray-400 animate-pulse">Waiting for the host to restart...</p>
-              <button onClick={onQuit} className="text-xs text-gray-400 underline">
-                Disconnect
-              </button>
-            </div>
-          )}
         </div>
       )}
 
+      <ul className="w-full space-y-2">
+        {rest.map((p) => (
+          <li key={p.id} className="flex items-center justify-between gap-3">
+            <span className="flex items-center gap-2 truncate">
+              <Dot color={getPlayerColor(p.id)} className="h-3.5 w-3.5" />
+              <span className="truncate font-serifDisplay text-xl uppercase">{p.name}</span>
+            </span>
+            <span className="font-display text-2xl font-extrabold text-fakeit-money">
+              {formatMoney(p.score)}
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      {isHost ? (
+        <div className="flex w-full flex-col items-center gap-3">
+          <button
+            onClick={playAgain}
+            className="w-full max-w-[280px] rounded-full bg-fakeit-button py-3.5 font-display text-lg font-bold text-white transition-transform hover:scale-[1.03]"
+          >
+            PLAY AGAIN
+          </button>
+          <button
+            onClick={onQuit}
+            className="w-full max-w-[280px] rounded-full bg-fakeit-panel py-3.5 font-display text-lg font-bold text-white transition-transform hover:scale-[1.03]"
+          >
+            QUIT
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center gap-3">
+          <p className="animate-pulse text-sm opacity-70">Waiting for the host to restart…</p>
+          <button onClick={onQuit} className="text-sm underline opacity-70">
+            Disconnect
+          </button>
+        </div>
+      )}
     </div>
   );
 }
