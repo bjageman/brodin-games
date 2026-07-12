@@ -209,7 +209,7 @@ export default function HomePage() {
 
         {/* Not in the mockup, but the homepage is the only route into #/join —
             players need a way in that isn't the host's QR code. */}
-        <div className="mx-auto mt-3 flex max-w-3xl justify-end">
+        <div className="mx-auto mt-3 flex max-w-3xl justify-start">
           <a
             href="#/join"
             className="rounded-full bg-white/70 px-4 py-1.5 text-sm font-bold text-home-ink transition-colors hover:bg-white"
