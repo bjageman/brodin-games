@@ -103,3 +103,26 @@ export const TOPICS: Topic[] = [
   { name: 'Fire Truck', category: 'Vehicle' },
   { name: 'Sailboat', category: 'Vehicle' },
 ];
+
+/**
+ * Picks the next topic, avoiding any already used this game.
+ *
+ * Topics used to be drawn uniformly at random each round, which meant a word
+ * could recur — and since the round payout reveals the word to everyone, a
+ * repeat hands the imposter a word the whole table has already seen. Draw
+ * without replacement instead, reshuffling only once the pool is exhausted.
+ *
+ * Returns the new used-list rather than mutating, so it stays pure/testable.
+ */
+export function pickTopic(usedNames: string[]): { topic: Topic; usedNames: string[] } {
+  const unused = TOPICS.filter((t) => !usedNames.includes(t.name));
+  const exhausted = unused.length === 0;
+  const pool = exhausted ? TOPICS : unused;
+  const topic = pool[Math.floor(Math.random() * pool.length)];
+
+  return {
+    topic,
+    // Every topic has been played: start a fresh cycle from this one.
+    usedNames: exhausted ? [topic.name] : [...usedNames, topic.name],
+  };
+}

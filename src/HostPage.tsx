@@ -3,7 +3,8 @@ import { generateGameCode } from './shared/utils/gameCode';
 import PageLayout from './shared/components/PageLayout';
 import GameShell from './shared/GameShell';
 import { saveSnapshot, loadSnapshot, HOST_ROUTE_KEY } from './shared/utils/sessionSnapshot';
-import { GAMES_REGISTRY } from './shared/games';
+import { GAMES_REGISTRY, DEFAULT_THEME } from './shared/games';
+import { cn } from './shared/utils/cn';
 
 interface HostRouteSnapshot {
   code: string;
@@ -44,9 +45,21 @@ export default function HostPage() {
   };
 
   if (!started) {
+    // Wear the game's own colours — a Fake It room shouldn't open on dark blue.
+    const theme = gameConfig.theme ?? DEFAULT_THEME;
+
     return (
-      <PageLayout title={`Host ${gameConfig.title}`} backHref="#/">
-        <form onSubmit={handleStart} className="w-full max-w-md sm:max-w-lg mx-auto border border-brodin-primary/30 rounded-lg p-6 space-y-4 bg-brodin-panel">
+      <PageLayout
+        title={`Host ${gameConfig.title}`}
+        backHref="#/"
+        bgClassName={theme.pageBg}
+        headerClassName={theme.heading}
+        dividerClassName={theme.heading}
+      >
+        <form
+          onSubmit={handleStart}
+          className={cn('w-full max-w-md sm:max-w-lg mx-auto border rounded-lg p-6 space-y-4', theme.panel)}
+        >
           <h2 className="text-center font-display text-base font-bold uppercase tracking-wide">Enter Your Name</h2>
           <input
             type="text"
@@ -54,21 +67,24 @@ export default function HostPage() {
             placeholder="Your name..."
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full rounded-lg border border-brodin-primary/40 bg-brodin-field px-4 py-2.5 text-center font-semibold text-white focus:outline-none focus:border-brodin-accent"
+            className={cn(
+              'w-full rounded-lg border px-4 py-2.5 text-center font-semibold focus:outline-none',
+              theme.field
+            )}
             required
           />
-          <label className="flex items-center justify-center gap-2 text-sm text-gray-300">
+          <label className={cn('flex items-center justify-center gap-2 text-sm', theme.muted)}>
             <input
               type="checkbox"
               checked={isDisplay}
               onChange={(e) => setIsDisplay(e.target.checked)}
-              className="h-4 w-4 rounded border-brodin-primary/40 bg-brodin-field accent-brodin-primary"
+              className={cn('h-4 w-4 rounded border', theme.field)}
             />
             I'm just displaying this on a screen (not playing)
           </label>
           <button
             type="submit"
-            className="w-full bg-brodin-primary hover:bg-brodin-primaryDark text-white rounded-lg py-3 font-bold transition-colors"
+            className={cn('w-full rounded-lg py-3 font-bold transition-colors', theme.accent)}
           >
             Create Room
           </button>

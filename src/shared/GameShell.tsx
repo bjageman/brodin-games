@@ -11,7 +11,7 @@ import {
 import { JOIN_MAX_ATTEMPTS, JOIN_RETRY_INTERVAL_MS, GAME_START_RESENDS, GAME_START_RESEND_INTERVAL_MS, DEBUG_MODE } from './constants';
 import type { Envelope, JoinAckPayload, JoinRequestPayload, PlayerInfo, RosterUpdatePayload } from './types';
 import Lobby from './components/Lobby';
-import { GAMES_REGISTRY } from './games';
+import { GAMES_REGISTRY, DEFAULT_THEME } from './games';
 import DebugWidget, { type DebugAction } from './components/DebugWidget';
 import PageLayout from './components/PageLayout';
 import QuitConfirmModal from './components/QuitConfirmModal';
@@ -86,6 +86,7 @@ export default function GameShell({
   const maxPlayers = gameConfig?.maxPlayers ?? 12;
   const GamePlay = gameConfig?.gamePlay;
   const LobbyView = gameConfig?.lobby ?? Lobby;
+  const theme = gameConfig?.theme ?? DEFAULT_THEME;
   const onIdlePrefetch = gameConfig?.onIdlePrefetch;
 
   // Host is the roster authority, so it seeds itself directly rather than
@@ -321,8 +322,11 @@ export default function GameShell({
     if (phase === 'lobby') {
       return {
         title: undefined, // Lobby has its own custom Room Code header layout
-        bgClassName: gameConfig?.lobbyBgClassName ?? 'bg-[#6d97ee] text-[#2b2f74]',
+        bgClassName: theme.lobbyBg,
         dividerClassName: 'text-[#2b2f74] bg-current opacity-30 h-0', // Hide page layout divider in lobby
+        // A game-supplied lobby draws its own header row (title + room code +
+        // Quit), so PageLayout must not stack a second one above it.
+        ownsHeader: Boolean(gameConfig?.lobby),
       };
     }
     if (phase === 'joining' || phase === 'join') {
@@ -341,12 +345,17 @@ export default function GameShell({
 
   const layoutProps = getLayoutProps();
 
+  const quitFromShell =
+    phase === 'joining' || phase === 'join' || layoutProps.ownsHeader
+      ? undefined
+      : () => setShowQuitConfirm(true);
+
   return (
     <PageLayout
       title={layoutProps.title}
       bgClassName={layoutProps.bgClassName}
       dividerClassName={layoutProps.dividerClassName}
-      onQuit={phase === 'joining' || phase === 'join' ? undefined : () => setShowQuitConfirm(true)}
+      onQuit={quitFromShell}
     >
       <div className="w-full flex-grow flex flex-col items-center pt-2">
         {phase === 'joining' && (
@@ -372,6 +381,8 @@ export default function GameShell({
             isHost={isHost}
             isConnected={isConnected}
             onStartGame={startGame}
+            onQuit={() => setShowQuitConfirm(true)}
+            theme={theme}
           />
         )}
 

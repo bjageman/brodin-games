@@ -44,6 +44,8 @@ export default function FakeItLobby({
   isHost,
   isConnected,
   onStartGame,
+  onQuit,
+  theme,
 }: LobbyProps) {
   const [showModal, setShowModal] = useState(false);
   const joinUrl = `${window.location.origin}${window.location.pathname}#/join?code=${code}`;
@@ -52,16 +54,34 @@ export default function FakeItLobby({
 
   return (
     <div className="flex w-full flex-grow flex-col text-fakeit-ink">
-      <header className="relative px-4 pb-2 pt-5 sm:pt-8">
+      {/* One row — Quit | title | room code — with a single rule beneath it.
+          PageLayout skips its own header here (GameConfig.lobby owns it), so
+          nothing stacks above and nothing collides with the rule. */}
+      <header className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-2 pb-3 pt-5 sm:px-4">
+        <div className="justify-self-start">
+          {onQuit && (
+            <button
+              onClick={onQuit}
+              className="font-display text-sm font-semibold text-fakeit-ink/70 transition-colors hover:text-fakeit-ink"
+            >
+              Quit
+            </button>
+          )}
+        </div>
+
+        <h1 className="justify-self-center whitespace-nowrap font-serifDisplay text-2xl font-bold sm:text-4xl">
+          {title}
+        </h1>
+
         <button
           onClick={() => setShowModal(true)}
-          className="mx-auto mb-3 block text-center leading-tight transition-transform hover:scale-105 sm:absolute sm:right-8 sm:top-7 sm:mx-0 sm:mb-0 sm:text-right"
+          className="justify-self-end text-right leading-tight transition-transform hover:scale-105"
         >
-          <span className="block font-serifDisplay text-lg font-bold">Room Code</span>
-          <span className="block font-serifDisplay text-2xl tracking-[0.15em]">{code}</span>
+          <span className="block font-serifDisplay text-xs font-bold sm:text-lg">Room Code</span>
+          <span className="block font-serifDisplay text-lg tracking-[0.15em] sm:text-2xl">
+            {code}
+          </span>
         </button>
-
-        <h1 className="text-center font-serifDisplay text-3xl font-bold sm:text-4xl">{title}</h1>
       </header>
 
       <div className="h-px w-full bg-fakeit-ink/30" />
@@ -108,7 +128,12 @@ export default function FakeItLobby({
       </footer>
 
       {showModal && (
-        <RoomCodeModal gameCode={code} joinUrl={joinUrl} onClose={() => setShowModal(false)} />
+        <RoomCodeModal
+          gameCode={code}
+          joinUrl={joinUrl}
+          theme={theme}
+          onClose={() => setShowModal(false)}
+        />
       )}
     </div>
   );

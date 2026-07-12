@@ -3,14 +3,18 @@ import { useScrollLock } from '../hooks/useScrollLock';
 import { createPortal } from 'react-dom';
 import QRCode from 'react-qr-code';
 import { cn } from '../utils/cn';
+import { DEFAULT_THEME, type GameTheme } from '../games';
 
 interface RoomCodeModalProps {
   gameCode: string;
   joinUrl: string;
   onClose: () => void;
+  /** Falls back to the default (dark blue) palette. */
+  theme?: GameTheme;
 }
 
-export default function RoomCodeModal({ gameCode, joinUrl, onClose }: RoomCodeModalProps) {
+export default function RoomCodeModal({ gameCode, joinUrl, onClose, theme }: RoomCodeModalProps) {
+  const t = theme ?? DEFAULT_THEME;
   useScrollLock();
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
@@ -66,16 +70,14 @@ export default function RoomCodeModal({ gameCode, joinUrl, onClose }: RoomCodeMo
       onClick={onClose}
     >
       <div
-        className={cn(
-          'w-full max-w-xs rounded-xl shadow-2xl p-5 space-y-4 bg-brodin-panel border border-brodin-primary/30 text-gray-100'
-        )}
+        className={cn('w-full max-w-xs rounded-xl shadow-2xl p-5 space-y-4 border', t.panel)}
         onClick={e => e.stopPropagation()}
       >
         <div className="text-center">
-          <p className="text-xs font-semibold uppercase tracking-widest mb-0.5 text-gray-400">
+          <p className={cn('text-xs font-semibold uppercase tracking-widest mb-0.5', t.muted)}>
             Room Code
           </p>
-          <p className="text-3xl font-mono font-bold tracking-widest text-brodin-accent">
+          <p className={cn('text-3xl font-mono font-bold tracking-widest', t.code)}>
             {gameCode}
           </p>
         </div>
@@ -91,13 +93,13 @@ export default function RoomCodeModal({ gameCode, joinUrl, onClose }: RoomCodeMo
         <div className="space-y-2">
           <button
             onClick={() => copy(joinUrl, 'url')}
-            className="w-full px-3 py-2 rounded-md text-sm font-semibold border transition-colors bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700"
+            className={cn('w-full px-3 py-2 rounded-md text-sm font-semibold transition-colors', t.accent)}
           >
             {copiedUrl ? '✓ Copied!' : 'Copy Join URL'}
           </button>
           <button
             onClick={() => copy(gameCode, 'code')}
-            className="w-full px-3 py-2 rounded-md text-sm font-semibold border transition-colors bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700"
+            className={cn('w-full px-3 py-2 rounded-md text-sm font-semibold border transition-opacity hover:opacity-80', t.field)}
           >
             {copiedCode ? '✓ Copied!' : 'Copy Code'}
           </button>
@@ -105,7 +107,7 @@ export default function RoomCodeModal({ gameCode, joinUrl, onClose }: RoomCodeMo
 
         <button
           onClick={onClose}
-          className="w-full text-center text-xs text-gray-500 hover:text-gray-300 underline"
+          className={cn('w-full text-center text-xs underline hover:opacity-80', t.muted)}
         >
           Close
         </button>

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { PlayerInfo } from '../types';
+import type { GameTheme } from '../games';
 import RoomCodeModal from './RoomCodeModal';
 import PlayerNote from './PlayerNote';
 
@@ -12,11 +13,15 @@ export interface LobbyProps {
   isDisplay?: boolean;
   isConnected: boolean;
   onStartGame?: () => void;
+  // Only used by lobbies that render their own header row (see
+  // GameConfig.lobby). The shared lobby leaves Quit to PageLayout.
+  onQuit?: () => void;
+  theme?: GameTheme;
 }
 
 const INK = '#2b2f74';
 
-export default function Lobby({ code, title, minPlayers, roster, isHost, isConnected, onStartGame }: LobbyProps) {
+export default function Lobby({ code, title, minPlayers, roster, isHost, isConnected, onStartGame, theme }: LobbyProps) {
   const [showModal, setShowModal] = useState(false);
   const joinUrl = `${window.location.origin}${window.location.pathname}#/join?code=${code}`;
 
@@ -95,7 +100,9 @@ export default function Lobby({ code, title, minPlayers, roster, isHost, isConne
         )}
       </footer>
 
-      {showModal && <RoomCodeModal gameCode={code} joinUrl={joinUrl} onClose={() => setShowModal(false)} />}
+      {showModal && (
+        <RoomCodeModal gameCode={code} joinUrl={joinUrl} theme={theme} onClose={() => setShowModal(false)} />
+      )}
     </div>
   );
 }

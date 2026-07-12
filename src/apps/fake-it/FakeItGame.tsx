@@ -10,7 +10,7 @@ import {
   TURN_DURATION_MS,
   VOTE_DURATION_MS,
   DRAWING_COLORS,
-  TOPICS,
+  pickTopic,
   STATE_REQUEST_RETRY_INTERVAL_MS,
   STATE_REQUEST_MAX_ATTEMPTS,
   PAYOUT_CORRECT_VOTE,
@@ -33,6 +33,7 @@ interface FakeItSnapshot {
   roleRevealEndTimestamp: number | null;
   turnEndTimestamp: number | null;
   voteEndTimestamp: number | null;
+  usedTopicNames: string[];
 }
 
 const CONFETTI_COLORS = ['#f9749f', '#03d1b9', '#facc15'];
@@ -59,6 +60,8 @@ export default function FakeItGame({
   const [phase, setPhase] = useState<FakeItPhase>(restored?.gamePhase ?? 'starting');
   const [imposterId, setImposterId] = useState<string>(restored?.imposterId ?? '');
   const [topic, setTopic] = useState<Topic | null>(restored?.topic ?? null);
+  // Host-only: topics already played this game, so rounds don't repeat a word.
+  const [usedTopicNames, setUsedTopicNames] = useState<string[]>(restored?.usedTopicNames ?? []);
   const [drawerIndex, setDrawerIndex] = useState<number>(restored?.drawerIndex ?? 0);
   const [drawingRound, setDrawingRound] = useState<number>(restored?.drawingRound ?? 1);
   const [lines, setLines] = useState<Line[]>(restored?.lines ?? []);
@@ -96,6 +99,7 @@ export default function FakeItGame({
       roleRevealEndTimestamp,
       turnEndTimestamp,
       voteEndTimestamp,
+      usedTopicNames,
     };
     sessionStorage.setItem(`fake-it-snap-${code}`, JSON.stringify(snapshot));
   }, [
@@ -109,6 +113,7 @@ export default function FakeItGame({
     votes,
     scores,
     roundPoints,
+    usedTopicNames,
     roleRevealEndTimestamp,
     turnEndTimestamp,
     voteEndTimestamp,
@@ -293,7 +298,8 @@ export default function FakeItGame({
 
   // Host: Start next round/reset state
   function handleNextRound() {
-    const randomTopic = TOPICS[Math.floor(Math.random() * TOPICS.length)];
+    const { topic: randomTopic, usedNames } = pickTopic(usedTopicNames);
+    setUsedTopicNames(usedNames);
     const randomImposter = roster[Math.floor(Math.random() * roster.length)];
     const revealEnd = Date.now() + ROLE_REVEAL_DURATION_MS;
 
@@ -356,7 +362,7 @@ export default function FakeItGame({
       const activePlayers = roster;
       if (activePlayers.length === 0) return;
 
-      const randomTopic = TOPICS[Math.floor(Math.random() * TOPICS.length)];
+      const { topic: randomTopic, usedNames } = pickTopic(usedTopicNames);
       const randomImposter = activePlayers[Math.floor(Math.random() * activePlayers.length)];
 
       const initialScores = { ...scores };
@@ -372,6 +378,7 @@ export default function FakeItGame({
       setPhase('role-reveal');
       setImposterId(randomImposter.id);
       setTopic(randomTopic);
+      setUsedTopicNames(usedNames);
       setDrawerIndex(0);
       setDrawingRound(1);
       setLines([]);
