@@ -20,7 +20,9 @@ export interface Topic {
 export interface GameState {
   phase: FakeItPhase;
   imposterId: string;
-  topic: Topic | null; // Null for the imposter so they don't see it!
+  // Broadcast to everyone, imposter included — the clients hide the word from
+  // them at render time (they still get the category to bluff from).
+  topic: Topic | null;
   drawerIndex: number;
   drawingRound: number;
   lines: Line[];

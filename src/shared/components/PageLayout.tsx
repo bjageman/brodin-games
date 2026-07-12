@@ -26,6 +26,11 @@ export default function PageLayout({
   footerClassName,
   children,
 }: PageLayoutProps) {
+  // A page whose content owns its own header (Fake It's lobby, say) passes none
+  // of these. Rendering the chrome anyway leaves an empty band and a stray
+  // divider above the real header.
+  const hasHeader = Boolean(title || titleContent || backHref || onQuit);
+
   return (
     <div
       className={cn(
@@ -33,6 +38,7 @@ export default function PageLayout({
         bgClassName ?? "bg-brodin-bg"
       )}
     >
+      {hasHeader && (
       <header className="relative flex flex-col items-center justify-center pb-3 w-full pt-6">
         <div className="relative flex justify-center items-center w-full min-h-[36px] px-4">
           {backHref && (
@@ -66,6 +72,7 @@ export default function PageLayout({
           <div className="flex-1 h-px bg-current opacity-30" />
         </div>
       </header>
+      )}
 
       <div className={cn(contentClassName ?? "flex-1 flex flex-col pt-6 px-4 pb-4")}>
         {children}

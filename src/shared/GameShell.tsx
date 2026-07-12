@@ -8,10 +8,10 @@ import {
   HOST_ROUTE_KEY,
   JOIN_ROUTE_KEY,
 } from './utils/sessionSnapshot';
-import { JOIN_MAX_ATTEMPTS, JOIN_RETRY_INTERVAL_MS, DEBUG_MODE } from './constants';
+import { JOIN_MAX_ATTEMPTS, JOIN_RETRY_INTERVAL_MS, GAME_START_RESENDS, GAME_START_RESEND_INTERVAL_MS, DEBUG_MODE } from './constants';
 import type { Envelope, JoinAckPayload, JoinRequestPayload, PlayerInfo, RosterUpdatePayload } from './types';
 import Lobby from './components/Lobby';
-import { GAMES_REGISTRY } from './games';
+import { GAMES_REGISTRY, DEFAULT_THEME } from './games';
 import DebugWidget, { type DebugAction } from './components/DebugWidget';
 import PageLayout from './components/PageLayout';
 import QuitConfirmModal from './components/QuitConfirmModal';
@@ -39,6 +39,11 @@ export interface GamePlayProps {
   onRegisterMessageHandler: (handler: (envelope: Envelope) => void) => void;
   onQuit: () => void;
   onRegisterDebugActions?: (actions: DebugAction[], currentPhaseName: string) => void;
+  // Lets a game repaint the page chrome as its phase changes (Fake It's play
+  // screens are dark, its vote/results screens are light). Pass Tailwind
+  // classes — background and text colour. Games that ignore this keep the
+  // default in-game background.
+  onGameBgChange?: (bgClassName: string | null) => void;
 }
 
 interface GameShellProps {
@@ -80,6 +85,8 @@ export default function GameShell({
   const minPlayers = gameConfig?.minPlayers ?? 3;
   const maxPlayers = gameConfig?.maxPlayers ?? 12;
   const GamePlay = gameConfig?.gamePlay;
+  const LobbyView = gameConfig?.lobby ?? Lobby;
+  const theme = gameConfig?.theme ?? DEFAULT_THEME;
   const onIdlePrefetch = gameConfig?.onIdlePrefetch;
 
   // Host is the roster authority, so it seeds itself directly rather than
@@ -96,6 +103,12 @@ export default function GameShell({
   // Active game debug state
   const [activeGameDebugActions, setActiveGameDebugActions] = useState<DebugAction[]>([]);
   const [activeGameDebugPhase, setActiveGameDebugPhase] = useState<string>('');
+  // Set by the active game (see GamePlayProps.onGameBgChange). Tagged with the
+  // game that set it so one game's palette can't bleed into another's.
+  const [gameBg, setGameBg] = useState<{ gameId: string | null; className: string | null }>({
+    gameId: null,
+    className: null,
+  });
 
   // Quit confirm state
   const [showQuitConfirm, setShowQuitConfirm] = useState(false);
@@ -281,7 +294,16 @@ export default function GameShell({
 
   function startGame() {
     if (phaseRef.current !== 'lobby') return;
+    // ntfy is best-effort: a just-connected client can miss a single game-start
+    // and get stranded in the lobby. Re-broadcast a few times — every client
+    // guards on its own lobby phase, so the repeats are harmless no-ops for
+    // anyone who already advanced.
     sendMessage({ type: 'game-start', timestamp: Date.now(), payload: {} });
+    let resends = 0;
+    const interval = setInterval(() => {
+      sendMessage({ type: 'game-start', timestamp: Date.now(), payload: {} });
+      if (++resends >= GAME_START_RESENDS) clearInterval(interval);
+    }, GAME_START_RESEND_INTERVAL_MS);
     setFreshStart(true);
     setPhase('in-game');
   }
@@ -296,12 +318,21 @@ export default function GameShell({
 
 
 
-  const getLayoutProps = () => {
+  const getLayoutProps = (): {
+    title: string | undefined;
+    bgClassName: string;
+    headerClassName?: string;
+    dividerClassName: string;
+    ownsHeader?: boolean;
+  } => {
     if (phase === 'lobby') {
       return {
         title: undefined, // Lobby has its own custom Room Code header layout
-        bgClassName: 'bg-[#6d97ee] text-[#2b2f74]',
+        bgClassName: theme.lobbyBg,
         dividerClassName: 'text-[#2b2f74] bg-current opacity-30 h-0', // Hide page layout divider in lobby
+        // A game-supplied lobby draws its own header row (title + room code +
+        // Quit), so PageLayout must not stack a second one above it.
+        ownsHeader: Boolean(gameConfig?.lobby),
       };
     }
     if (phase === 'joining' || phase === 'join') {
@@ -311,21 +342,34 @@ export default function GameShell({
         dividerClassName: 'text-brodin-primary',
       };
     }
+    // Only games that paint their own in-game background (Fake It) get the
+    // themed header. The others still play on dark navy, where the theme's
+    // near-black heading would be invisible — they keep the old brodin chrome
+    // until they're redesigned.
+    const ownBg = gameBg.gameId === gameId ? gameBg.className : null;
+
     return {
       title: isHost ? title : 'Playing...',
-      bgClassName: 'bg-brodin-bg',
-      dividerClassName: 'text-brodin-primary',
+      bgClassName: ownBg ?? 'bg-brodin-bg',
+      headerClassName: ownBg ? theme.heading : undefined,
+      dividerClassName: ownBg ? theme.heading : 'text-brodin-primary',
     };
   };
 
   const layoutProps = getLayoutProps();
 
+  const quitFromShell =
+    phase === 'joining' || phase === 'join' || layoutProps.ownsHeader
+      ? undefined
+      : () => setShowQuitConfirm(true);
+
   return (
     <PageLayout
       title={layoutProps.title}
       bgClassName={layoutProps.bgClassName}
+      headerClassName={layoutProps.headerClassName}
       dividerClassName={layoutProps.dividerClassName}
-      onQuit={phase === 'joining' || phase === 'join' ? undefined : () => setShowQuitConfirm(true)}
+      onQuit={quitFromShell}
     >
       <div className="w-full flex-grow flex flex-col items-center pt-2">
         {phase === 'joining' && (
@@ -343,7 +387,7 @@ export default function GameShell({
         )}
 
         {phase === 'lobby' && (
-          <Lobby
+          <LobbyView
             code={code}
             title={title}
             minPlayers={minPlayers}
@@ -351,6 +395,8 @@ export default function GameShell({
             isHost={isHost}
             isConnected={isConnected}
             onStartGame={startGame}
+            onQuit={() => setShowQuitConfirm(true)}
+            theme={theme}
           />
         )}
 
@@ -371,6 +417,7 @@ export default function GameShell({
               setActiveGameDebugActions(actions);
               setActiveGameDebugPhase(gamePhase);
             }}
+            onGameBgChange={(className) => setGameBg({ gameId, className })}
           />
         )}
 

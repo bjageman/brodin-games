@@ -8,6 +8,10 @@ export default {
     extend: {
       fontFamily: {
         display: ['Poppins', 'system-ui', 'sans-serif'],
+        // Fake It's gallery look: a high-contrast serif for headings, a marker
+        // script for the names painted on the lobby easels.
+        serifDisplay: ['"Playfair Display"', 'Georgia', 'serif'],
+        script: ['Caveat', 'cursive'],
       },
       colors: {
         // Shared app palette, aligned with the bento homepage: navy surfaces,
@@ -31,6 +35,32 @@ export default {
           cream: '#feefc8',
           pin: '#ed6c72',
         },
+        // Homepage palette, sampled directly from the Canva mockup
+        // (Design Docs/Home Page). Cards alternate cyan/pink.
+        home: {
+          cyan: '#9bf6ff',
+          pink: '#e86eca',
+          featured: '#f6d7e9',
+          play: '#38b6ff',
+          star: '#ffd700',
+          ink: '#0d0d0d',
+        },
+        // Fake It palette, sampled from the Canva mockups
+        // (Design Docs/Fake It To Make It). The mockups export with no page
+        // background, so `dark`/`light` below are ours: the play screens
+        // (prompt / drawing / round totals) use light type and need `dark`,
+        // while the lobby / vote / final screens use brown type on `light`.
+        fakeit: {
+          dark: '#17100d',
+          light: '#ffffff',
+          bar: '#573b2f',   // dark brown top bar on the play screens
+          panel: '#d6b4a0',  // tan prompt / payout panel
+          button: '#c18d5c', // vote + primary buttons
+          ink: '#ae7d5c',    // brown headings
+          money: '#0c1a3b',  // navy currency figures
+          easel: '#f6a554',  // easel wood
+          easelDark: '#bf7337',
+        },
       },
       keyframes: {
         shake: {
@@ -38,9 +68,21 @@ export default {
           '25%': { transform: 'translateX(-4px)' },
           '75%': { transform: 'translateX(4px)' },
         },
+        // Fake It role reveal: the two halves draw back like stage curtains,
+        // holding closed for a beat before they part.
+        curtainLeft: {
+          '0%, 18%': { transform: 'translateX(0)' },
+          '100%': { transform: 'translateX(-100%)' },
+        },
+        curtainRight: {
+          '0%, 18%': { transform: 'translateX(0)' },
+          '100%': { transform: 'translateX(100%)' },
+        },
       },
       animation: {
         shake: 'shake 0.3s ease-in-out',
+        curtainLeft: 'curtainLeft 1.6s cubic-bezier(0.7, 0, 0.3, 1) forwards',
+        curtainRight: 'curtainRight 1.6s cubic-bezier(0.7, 0, 0.3, 1) forwards',
       },
     },
   },

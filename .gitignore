@@ -31,3 +31,6 @@ dist-ssr
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+
+# Design source (Canva exports) — art used at runtime lives in public/games/
+Design Docs/

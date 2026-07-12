@@ -1,8 +1,68 @@
 import { type ComponentType } from 'react';
 import MemoRandomGame from '../apps/memo-random/MemoRandomGame';
 import FakeItGame from '../apps/fake-it/FakeItGame';
+import FakeItLobby from '../apps/fake-it/components/FakeItLobby';
+import BombDisarmGame from '../apps/bomb-disarm/BombDisarmGame';
 import { loadDictionary } from '../apps/memo-random/utils/dictionary';
 import type { GamePlayProps } from './GameShell';
+import type { LobbyProps } from './components/Lobby';
+
+/**
+ * Palette for the chrome *around* a game — the host's create-room page, the
+ * room-code modal, the lobby. Without this every game wore the same dark blue,
+ * so Fake It's warm gallery look broke the moment you opened the join modal.
+ */
+export interface GameTheme {
+  /** Lobby page background + text. */
+  lobbyBg: string;
+  /** Host "create room" page background + text. */
+  pageBg: string;
+  /** Card / modal surface. */
+  panel: string;
+  /** Text input surface. */
+  field: string;
+  /** Primary button. */
+  accent: string;
+  /** Room-code characters. */
+  code: string;
+  /** Secondary / helper text. */
+  muted: string;
+  /** Page title + divider. */
+  heading: string;
+}
+
+/**
+ * Matches the homepage: white page, cyan surfaces, the "PLAY NOW" blue for
+ * primary actions, near-black ink. Coming off a bright homepage into dark navy
+ * chrome was a jarring seam, so this is what a game gets unless it says
+ * otherwise.
+ *
+ * Note this themes the chrome *around* a game (create-room page, lobby,
+ * room-code modal). The in-game screens still run on the game's own background
+ * — Memo-Random and Bomb Disarm remain dark — so `heading` is only applied
+ * in-game when a game supplies a matching background of its own.
+ */
+export const DEFAULT_THEME: GameTheme = {
+  lobbyBg: 'bg-home-cyan text-home-ink',
+  pageBg: 'bg-white text-home-ink',
+  panel: 'bg-home-cyan border-home-ink/15 text-home-ink',
+  field: 'bg-white border-home-ink/25 text-home-ink focus:border-home-play',
+  accent: 'bg-home-play hover:brightness-95 text-white',
+  code: 'text-home-ink',
+  muted: 'text-home-ink/70',
+  heading: 'text-home-ink',
+};
+
+const FAKE_IT_THEME: GameTheme = {
+  lobbyBg: 'bg-fakeit-light text-fakeit-ink',
+  pageBg: 'bg-fakeit-light text-fakeit-ink',
+  panel: 'bg-fakeit-panel border-fakeit-ink/40 text-fakeit-dark',
+  field: 'bg-white border-fakeit-ink/40 text-fakeit-dark focus:border-fakeit-button',
+  accent: 'bg-fakeit-button hover:bg-fakeit-ink text-white',
+  code: 'text-fakeit-dark',
+  muted: 'text-fakeit-dark/70',
+  heading: 'text-fakeit-ink',
+};
 
 export interface GameConfig {
   id: string;
@@ -10,6 +70,10 @@ export interface GameConfig {
   minPlayers: number;
   maxPlayers: number;
   gamePlay: ComponentType<GamePlayProps>;
+  /** Overrides the shared lobby. Games without one get the default lobby. */
+  lobby?: ComponentType<LobbyProps>;
+  /** Colours the chrome around the game. Falls back to DEFAULT_THEME. */
+  theme?: GameTheme;
   onIdlePrefetch?: () => void;
 }
 
@@ -28,5 +92,14 @@ export const GAMES_REGISTRY: Record<string, GameConfig> = {
     minPlayers: 3,
     maxPlayers: 12,
     gamePlay: FakeItGame,
+    lobby: FakeItLobby,
+    theme: FAKE_IT_THEME,
+  },
+  'bomb-disarm': {
+    id: 'bomb-disarm',
+    title: 'Bomb Disarm',
+    minPlayers: 3,
+    maxPlayers: 10,
+    gamePlay: BombDisarmGame,
   },
 };
