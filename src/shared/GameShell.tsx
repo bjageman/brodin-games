@@ -318,7 +318,13 @@ export default function GameShell({
 
 
 
-  const getLayoutProps = () => {
+  const getLayoutProps = (): {
+    title: string | undefined;
+    bgClassName: string;
+    headerClassName?: string;
+    dividerClassName: string;
+    ownsHeader?: boolean;
+  } => {
     if (phase === 'lobby') {
       return {
         title: undefined, // Lobby has its own custom Room Code header layout
@@ -339,7 +345,10 @@ export default function GameShell({
     return {
       title: isHost ? title : 'Playing...',
       bgClassName: (gameBg.gameId === gameId ? gameBg.className : null) ?? 'bg-brodin-bg',
-      dividerClassName: 'text-brodin-primary',
+      // Without these the title falls back to PageLayout's cyan brodin-accent
+      // and the divider to brodin pink, whatever the game's palette is.
+      headerClassName: theme.heading,
+      dividerClassName: theme.heading,
     };
   };
 
@@ -354,6 +363,7 @@ export default function GameShell({
     <PageLayout
       title={layoutProps.title}
       bgClassName={layoutProps.bgClassName}
+      headerClassName={layoutProps.headerClassName}
       dividerClassName={layoutProps.dividerClassName}
       onQuit={quitFromShell}
     >
