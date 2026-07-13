@@ -11,6 +11,8 @@ import {
   CARDS_PER_PLAYER,
   MEMORIZE_DURATION_MS,
   ROLE_REVEAL_DURATION_MS,
+  RESULT_REVEAL_DELAY_MS,
+  ROUNDS,
   WIRE_WIN_THRESHOLD,
   STATE_REQUEST_RETRY_INTERVAL_MS,
   STATE_REQUEST_MAX_ATTEMPTS,
@@ -59,16 +61,20 @@ export default function BombDisarmGame({
   const [memorizeEndTimestamp, setMemorizeEndTimestamp] = useState<number | null>(restored?.memorizeEndTimestamp ?? null);
   const [winner, setWinner] = useState<Winner | null>(restored?.winner ?? null);
   const [lastReveal, setLastReveal] = useState<LastReveal | null>(restored?.lastReveal ?? null);
+  const [round, setRound] = useState<number>(restored?.round ?? 1);
+  const [revealsThisRound, setRevealsThisRound] = useState<number>(restored?.revealsThisRound ?? 0);
+  const [pendingWinner, setPendingWinner] = useState<Winner | null>(restored?.pendingWinner ?? null);
 
   // ---- Persist a snapshot for refresh-resume ----
   useEffect(() => {
     const bomb: GameState = {
       phase, roles, hands, activePlayerId, wiresRevealed, turn,
       roleRevealEndTimestamp, memorizeEndTimestamp, winner, lastReveal,
+      round, revealsThisRound, pendingWinner,
     };
     const current = loadSnapshot<Record<string, unknown>>(gameSnapshotKey(code)) ?? {};
     saveSnapshot(gameSnapshotKey(code), { ...current, bomb });
-  }, [code, phase, roles, hands, activePlayerId, wiresRevealed, turn, roleRevealEndTimestamp, memorizeEndTimestamp, winner, lastReveal]);
+  }, [code, phase, roles, hands, activePlayerId, wiresRevealed, turn, roleRevealEndTimestamp, memorizeEndTimestamp, winner, lastReveal, round, revealsThisRound, pendingWinner]);
 
   // ---- Timers ----
   const { msRemaining: roleMs, expired: roleExpired } = useCountdown(roleRevealEndTimestamp);
@@ -81,9 +87,15 @@ export default function BombDisarmGame({
     const fullState: GameState = {
       phase, roles, hands, activePlayerId, wiresRevealed, turn,
       roleRevealEndTimestamp, memorizeEndTimestamp, winner, lastReveal,
+      round, revealsThisRound, pendingWinner,
       ...fields,
     };
     sendMessage({ type: 'bomb-state-update', timestamp: Date.now(), payload: fullState });
+  }
+
+  function publish(state: GameState) {
+    applyState(state);
+    sendMessage({ type: 'bomb-state-update', timestamp: Date.now(), payload: state });
   }
 
   // ---- Host: does anyone other than `pid` still have an unrevealed card? ----
@@ -95,6 +107,7 @@ export default function BombDisarmGame({
   function resolveReveal(ownerId: string, cardIndex: number) {
     const hand = hands[ownerId];
     if (!hand || cardIndex < 0 || cardIndex >= hand.length || hand[cardIndex].revealed) return;
+    if (pendingWinner) return;
 
     const card = hand[cardIndex];
     const nextHands = {
@@ -103,17 +116,30 @@ export default function BombDisarmGame({
     };
     const ownerName = roster.find((p) => p.id === ownerId)?.name ?? '?';
     const reveal: LastReveal = { targetId: ownerId, targetName: ownerName, cardIndex, type: card.type };
-    const nextTurn = turn + 1;
     const nextWires = wiresRevealed + (card.type === 'wire' ? 1 : 0);
+    const nextReveals = revealsThisRound + 1;
+
+    const base: GameState = {
+      phase: 'table', roles, hands: nextHands, activePlayerId,
+      wiresRevealed: nextWires, turn: turn + 1,
+      roleRevealEndTimestamp: null, memorizeEndTimestamp: null,
+      winner: null, lastReveal: reveal,
+      round, revealsThisRound: nextReveals, pendingWinner: null,
+    };
 
     const finish = (won: Winner) => {
-      setHands(nextHands); setLastReveal(reveal); setTurn(nextTurn); setWiresRevealed(nextWires);
-      setWinner(won); setPhase('results');
-      broadcastState({ hands: nextHands, lastReveal: reveal, turn: nextTurn, wiresRevealed: nextWires, winner: won, phase: 'results' });
+      const held: GameState = { ...base, pendingWinner: won };
+      publish(held);
+      setTimeout(() => publish({ ...held, phase: 'results', winner: won }), RESULT_REVEAL_DELAY_MS);
     };
 
     if (card.type === 'explode') return finish('rebels');
     if (nextWires >= WIRE_WIN_THRESHOLD) return finish('peacekeepers');
+
+    if (nextReveals >= roster.length) {
+      if (round >= ROUNDS) return finish('rebels');
+      return endRound(base, ownerId);
+    }
 
     // Turn passes to the owner of the tapped phone. If they have no one left to
     // tap, hand off to anyone who does; if the whole table is stuck, the bomb
@@ -125,8 +151,27 @@ export default function BombDisarmGame({
       nextActive = fallback.id;
     }
 
-    setHands(nextHands); setLastReveal(reveal); setTurn(nextTurn); setWiresRevealed(nextWires); setActivePlayerId(nextActive);
-    broadcastState({ hands: nextHands, lastReveal: reveal, turn: nextTurn, wiresRevealed: nextWires, activePlayerId: nextActive });
+    publish({ ...base, activePlayerId: nextActive });
+  }
+
+  // ---- Host: drop the revealed cards, reshuffle the rest, redeal, re-memorize ----
+  function endRound(base: GameState, lastOwnerId: string) {
+    const leftovers = shuffle(
+      roster.flatMap((p) => (base.hands[p.id] ?? []).filter((c) => !c.revealed))
+    );
+    const nextHands: Record<string, Card[]> = {};
+    roster.forEach((p) => { nextHands[p.id] = []; });
+    leftovers.forEach((card, i) => { nextHands[roster[i % roster.length].id].push(card); });
+
+    publish({
+      ...base,
+      phase: 'memorize',
+      hands: nextHands,
+      round: base.round + 1,
+      revealsThisRound: 0,
+      activePlayerId: lastOwnerId,
+      memorizeEndTimestamp: Date.now() + MEMORIZE_DURATION_MS,
+    });
   }
 
   // ---- Host: validate an incoming tap, then resolve it ----
@@ -171,6 +216,9 @@ export default function BombDisarmGame({
       memorizeEndTimestamp: null,
       winner: null,
       lastReveal: null,
+      round: 1,
+      revealsThisRound: 0,
+      pendingWinner: null,
     };
   }
 
@@ -179,6 +227,7 @@ export default function BombDisarmGame({
     setWiresRevealed(s.wiresRevealed); setTurn(s.turn);
     setRoleRevealEndTimestamp(s.roleRevealEndTimestamp); setMemorizeEndTimestamp(s.memorizeEndTimestamp);
     setWinner(s.winner); setLastReveal(s.lastReveal);
+    setRound(s.round); setRevealsThisRound(s.revealsThisRound); setPendingWinner(s.pendingWinner);
   }
 
   // ---- Host: initialize the game on a fresh start ----
@@ -186,7 +235,6 @@ export default function BombDisarmGame({
     if (isHost && (phase === 'starting' || freshStart)) {
       if (roster.length === 0) return;
       const s = dealGame();
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       applyState(s);
       sendMessage({ type: 'bomb-state-update', timestamp: Date.now(), payload: s });
     }
@@ -206,7 +254,9 @@ export default function BombDisarmGame({
     // be turned into "the bomb is the third card".
     const shuffledHands: Record<string, Card[]> = {};
     Object.entries(hands).forEach(([pid, hand]) => { shuffledHands[pid] = shuffle(hand); });
-    const firstPicker = roster[Math.floor(Math.random() * roster.length)]?.id ?? '';
+    // Rounds 2 and 3 open with whoever's card was flipped last; round 1 is random.
+    const carried = roster.some((p) => p.id === activePlayerId) ? activePlayerId : '';
+    const firstPicker = carried || roster[Math.floor(Math.random() * roster.length)]?.id || '';
     setPhase('table'); setHands(shuffledHands); setActivePlayerId(firstPicker); setMemorizeEndTimestamp(null);
     broadcastState({ phase: 'table', hands: shuffledHands, activePlayerId: firstPicker, memorizeEndTimestamp: null });
   }
@@ -245,7 +295,7 @@ export default function BombDisarmGame({
 
   // ---- Client: tap a card on my own phone (someone reached over and tapped it) ----
   function tapCard(cardIndex: number) {
-    if (phase !== 'table' || winner || playerId === activePlayerId) return;
+    if (phase !== 'table' || winner || pendingWinner || playerId === activePlayerId) return;
     if (hands[playerId]?.[cardIndex]?.revealed) return;
     if (isHost) {
       handleReveal(playerId, cardIndex, turn);
@@ -320,7 +370,7 @@ export default function BombDisarmGame({
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHost, roster, phase, roles, hands, activePlayerId, wiresRevealed, turn, winner, roleRevealEndTimestamp, memorizeEndTimestamp, lastReveal]);
+  }, [isHost, roster, phase, roles, hands, activePlayerId, wiresRevealed, turn, winner, roleRevealEndTimestamp, memorizeEndTimestamp, lastReveal, round, revealsThisRound, pendingWinner]);
 
   // ---- Register debug actions ----
   useEffect(() => {
@@ -359,6 +409,8 @@ export default function BombDisarmGame({
             seconds={memoSec}
             isDisplay={isDisplay}
             isHost={isHost}
+            round={round}
+            wiresRevealed={wiresRevealed}
             onReady={goToTable}
             onQuit={onQuit}
           />
@@ -374,6 +426,10 @@ export default function BombDisarmGame({
             wiresRevealed={wiresRevealed}
             lastReveal={lastReveal}
             isDisplay={isDisplay}
+            round={round}
+            revealsThisRound={revealsThisRound}
+            revealsPerRound={roster.length}
+            pendingWinner={pendingWinner}
             onTap={tapCard}
             onQuit={onQuit}
           />
