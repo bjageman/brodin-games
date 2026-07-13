@@ -59,9 +59,8 @@ export function HandGrid({ hand, faceUp, tappable, onTap }: { hand: Card[]; face
   );
 }
 
-// Every phone only renders its owner's hand, so a game-ending flip on someone
-// else's phone would otherwise be invisible. This is what the table looks at
-// for RESULT_REVEAL_DELAY_MS before the verdict.
+// Each phone only renders its own hand, so a losing flip on someone else's
+// phone would otherwise be invisible to everyone but its owner.
 export function VerdictOverlay({ reveal, winner }: { reveal: LastReveal | null; winner: Winner }) {
   if (!reveal) return null;
   const m = CARD_META[reveal.type];

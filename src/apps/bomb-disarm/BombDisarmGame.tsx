@@ -127,7 +127,6 @@ export default function BombDisarmGame({
       round, revealsThisRound: nextReveals, pendingWinner: null,
     };
 
-    // The deciding card sits face-up for a beat before the verdict lands.
     const finish = (won: Winner) => {
       const held: GameState = { ...base, pendingWinner: won };
       publish(held);
