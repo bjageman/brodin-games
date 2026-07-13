@@ -1,10 +1,10 @@
 export const CARDS_PER_PLAYER = 6;
+export const ROUNDS = 3;
 
-export const ROLE_REVEAL_DURATION_MS = 6000;   // show your team before the deal
-export const MEMORIZE_DURATION_MS = 60000;     // 60s to study your hand before it flips down
+export const ROLE_REVEAL_DURATION_MS = 6000;
+export const MEMORIZE_DURATION_MS = 60000;
+export const RESULT_REVEAL_DELAY_MS = 5000;
 
-// Peacekeepers always win at exactly 6 cut wires, regardless of player count
-// (big decks carry 8 wire cards, but only 6 are ever needed to disarm).
 export const WIRE_WIN_THRESHOLD = 6;
 
 // A client that missed the host's one-shot state broadcast (its message handler
@@ -12,7 +12,10 @@ export const WIRE_WIN_THRESHOLD = 6;
 export const STATE_REQUEST_RETRY_INTERVAL_MS = 1000;
 export const STATE_REQUEST_MAX_ATTEMPTS = 10;
 
-// Deck: explode + wire + enough blanks that every player gets exactly 6 cards.
+// Three rounds only reveal half the deck, so it must carry more wires than the
+// 6 you need. At 12 the odds of cutting 6 hold at 63-69% for any player count.
+export const WIRES_IN_DECK = 12;
+
 export function deckCompositionFor(playerCount: number): {
   explode: number;
   wire: number;
@@ -21,7 +24,7 @@ export function deckCompositionFor(playerCount: number): {
 } {
   const total = playerCount * CARDS_PER_PLAYER;
   const explode = playerCount <= 7 ? 1 : 2;
-  const wire = playerCount <= 7 ? 6 : 8;
+  const wire = WIRES_IN_DECK;
   const blank = total - explode - wire;
   return { explode, wire, blank, total };
 }

@@ -2,16 +2,17 @@ import { cn } from '../../../shared/utils/cn';
 import WaitingForHost from '../../../shared/components/WaitingForHost';
 import type { GamePlayProps } from '../../../shared/GameShell';
 import type { Card, CardType, LastReveal, Role, Winner } from '../types';
-import { WIRE_WIN_THRESHOLD } from '../constants';
+import { ROUNDS, WIRE_WIN_THRESHOLD } from '../constants';
+
+const CARD_META: Record<CardType, { icon: string; label: string; cls: string }> = {
+  explode: { icon: '💥', label: 'BOMB', cls: 'from-red-500/30 to-brodin-panel border-red-500 text-red-300' },
+  wire: { icon: '✂️', label: 'Cut Wire', cls: 'from-emerald-500/25 to-brodin-panel border-emerald-500 text-emerald-300' },
+  blank: { icon: '▢', label: 'Blank', cls: 'from-white/5 to-brodin-panel border-white/10 text-gray-400' },
+};
 
 export function CardFace({ card, faceUp, onTap, tappable }: { card: Card; faceUp: boolean; onTap?: () => void; tappable?: boolean }) {
   const shown = faceUp || card.revealed;
-  const meta: Record<CardType, { icon: string; label: string; cls: string }> = {
-    explode: { icon: '💥', label: 'BOMB', cls: 'from-red-500/30 to-brodin-panel border-red-500 text-red-300' },
-    wire: { icon: '✂️', label: 'Cut Wire', cls: 'from-emerald-500/25 to-brodin-panel border-emerald-500 text-emerald-300' },
-    blank: { icon: '▢', label: 'Blank', cls: 'from-white/5 to-brodin-panel border-white/10 text-gray-400' },
-  };
-  const m = meta[card.type];
+  const m = CARD_META[card.type];
   return (
     <button
       type="button"
@@ -22,6 +23,7 @@ export function CardFace({ card, faceUp, onTap, tappable }: { card: Card; faceUp
         shown
           ? cn('bg-gradient-to-br', m.cls)
           : 'bg-gradient-to-br from-brodin-panel to-brodin-field border-white/10 text-white/70',
+        card.revealed && !faceUp && 'animate-cardFlip',
         tappable && 'hover:scale-[1.03] active:scale-95 cursor-pointer shadow-lg shadow-black/30 ring-2 ring-brodin-accent/40',
         !tappable && !shown && 'opacity-90'
       )}
@@ -40,7 +42,10 @@ export function CardFace({ card, faceUp, onTap, tappable }: { card: Card; faceUp
 
 export function HandGrid({ hand, faceUp, tappable, onTap }: { hand: Card[]; faceUp: boolean; tappable: boolean; onTap?: (i: number) => void }) {
   return (
-    <div className="grid grid-cols-6 grid-rows-1 gap-2 sm:gap-3 w-full max-w-5xl mx-auto">
+    <div
+      className="grid grid-rows-1 gap-2 sm:gap-3 w-full max-w-5xl mx-auto"
+      style={{ gridTemplateColumns: `repeat(${Math.max(hand.length, 1)}, minmax(0, 1fr))` }}
+    >
       {hand.map((card, i) => (
         <CardFace
           key={i}
@@ -50,6 +55,42 @@ export function HandGrid({ hand, faceUp, tappable, onTap }: { hand: Card[]; face
           onTap={onTap ? () => onTap(i) : undefined}
         />
       ))}
+    </div>
+  );
+}
+
+// Every phone only renders its owner's hand, so a game-ending flip on someone
+// else's phone would otherwise be invisible. This is what the table looks at
+// for RESULT_REVEAL_DELAY_MS before the verdict.
+export function VerdictOverlay({ reveal, winner }: { reveal: LastReveal | null; winner: Winner }) {
+  if (!reveal) return null;
+  const m = CARD_META[reveal.type];
+  const rebelsWon = winner === 'rebels';
+  return (
+    <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-gray-950/80 backdrop-blur-sm">
+      <div
+        className={cn(
+          'animate-cardFlip w-28 sm:w-36 aspect-[3/4] rounded-2xl border-2 bg-gradient-to-br flex flex-col items-center justify-center gap-1 shadow-2xl',
+          m.cls
+        )}
+      >
+        <span className="text-4xl sm:text-5xl">{m.icon}</span>
+        <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest">{m.label}</span>
+      </div>
+      <div className="animate-verdictIn text-center space-y-1">
+        <p className="text-sm font-bold text-gray-300">
+          {reveal.type === 'explode' ? (
+            <>💥 Bomb revealed on <span className="text-white">{reveal.targetName}</span></>
+          ) : winner === 'peacekeepers' ? (
+            <>✂️ Final wire cut on <span className="text-white">{reveal.targetName}</span></>
+          ) : (
+            <>Out of rounds — the bomb was never disarmed</>
+          )}
+        </p>
+        <p className={cn('font-display text-2xl font-black uppercase tracking-widest', rebelsWon ? 'text-bento-pink' : 'text-brodin-accent')}>
+          {rebelsWon ? 'Rebels Win' : 'Peacekeepers Win'}
+        </p>
+      </div>
     </div>
   );
 }
@@ -108,7 +149,24 @@ export function RoleReveal({ role, isDisplay, seconds }: { role: Role | undefine
   );
 }
 
-function StatusBar({ wiresRevealed, lastReveal, subtitle }: { wiresRevealed: number; lastReveal: LastReveal | null; subtitle: string }) {
+function RoundPips({ round, revealsThisRound, revealsPerRound }: { round: number; revealsThisRound: number; revealsPerRound: number }) {
+  const left = revealsPerRound - revealsThisRound;
+  return (
+    <div className="flex items-center gap-2 shrink-0">
+      <span className="text-xs font-black uppercase tracking-widest text-brodin-gold">
+        Round {round}/{ROUNDS}
+      </span>
+      <span className="text-xs font-semibold text-gray-400">
+        {left} {left === 1 ? 'pick' : 'picks'} left
+      </span>
+    </div>
+  );
+}
+
+function StatusBar({ wiresRevealed, lastReveal, subtitle, round, revealsThisRound, revealsPerRound }: {
+  wiresRevealed: number; lastReveal: LastReveal | null; subtitle: string;
+  round: number; revealsThisRound: number; revealsPerRound: number;
+}) {
   return (
     <div className="w-full flex items-center justify-between gap-3 px-4 py-2 bg-brodin-panel/70 backdrop-blur rounded-2xl border border-white/5">
       <div className="flex items-center gap-1.5">
@@ -117,6 +175,7 @@ function StatusBar({ wiresRevealed, lastReveal, subtitle }: { wiresRevealed: num
         ))}
         <span className="ml-2 text-xs font-bold text-emerald-300">{wiresRevealed}/{WIRE_WIN_THRESHOLD} wires</span>
       </div>
+      <RoundPips round={round} revealsThisRound={revealsThisRound} revealsPerRound={revealsPerRound} />
       <p className="text-xs font-semibold text-gray-300 truncate">
         {lastReveal
           ? lastReveal.type === 'explode'
@@ -128,27 +187,30 @@ function StatusBar({ wiresRevealed, lastReveal, subtitle }: { wiresRevealed: num
   );
 }
 
-export function MemorizeView({ role, hand, seconds, isDisplay, isHost, onReady, onQuit }: {
+export function MemorizeView({ role, hand, seconds, isDisplay, isHost, round, wiresRevealed, onReady, onQuit }: {
   role: Role | undefined; hand: Card[]; seconds: number; isDisplay: boolean;
-  isHost: boolean; onReady: () => void; onQuit: () => void;
+  isHost: boolean; round: number; wiresRevealed: number; onReady: () => void; onQuit: () => void;
 }) {
   return (
     <div className="flex flex-col h-full w-full p-3 sm:p-5 gap-3">
       <div className="flex items-center justify-between gap-3">
         <RoleBadge role={role} />
+        <span className="text-xs font-black uppercase tracking-widest text-brodin-gold">
+          Round {round}/{ROUNDS} · {wiresRevealed}/{WIRE_WIN_THRESHOLD} wires
+        </span>
         <div className={cn('font-mono font-black text-lg', seconds <= 10 ? 'text-bento-pink animate-pulse' : 'text-brodin-gold')}>{seconds}s</div>
         <button onClick={onQuit} className="text-[11px] text-gray-400 underline">Quit</button>
       </div>
       <p className="text-center text-xs uppercase tracking-widest text-gray-400 font-bold">
-        Memorize your hand — it flips face-down and shuffles when the table is dealt
+        {round === 1
+          ? 'Memorize your hand — it flips face-down and shuffles when the table is dealt'
+          : 'Fresh deal — the revealed cards are gone. Memorize what you were dealt'}
       </p>
       <div className="flex-1 flex items-center justify-center">
         {isDisplay
           ? <p className="text-sm text-gray-400">Players are memorizing their hands…</p>
           : <HandGrid hand={hand} faceUp tappable={false} />}
       </div>
-      {/* The timer is now just a ceiling — the host closes the step as soon as
-          the table says they're done, rather than everyone waiting it out. */}
       {isHost && (
         <div className="flex justify-center">
           <button
@@ -164,15 +226,26 @@ export function MemorizeView({ role, hand, seconds, isDisplay, isHost, onReady, 
 }
 
 export function TableView({
-  hand, isMyTurn, activeName, wiresRevealed, lastReveal, isDisplay, onTap, onQuit,
+  hand, isMyTurn, activeName, wiresRevealed, lastReveal, isDisplay,
+  round, revealsThisRound, revealsPerRound, pendingWinner, onTap, onQuit,
 }: {
   hand: Card[]; isMyTurn: boolean; activeName: string; wiresRevealed: number; lastReveal: LastReveal | null;
-  isDisplay: boolean; onTap: (i: number) => void; onQuit: () => void;
+  isDisplay: boolean; round: number; revealsThisRound: number; revealsPerRound: number;
+  pendingWinner: Winner | null; onTap: (i: number) => void; onQuit: () => void;
 }) {
   return (
-    <div className="flex flex-col h-full w-full p-3 sm:p-5 gap-3">
+    <div className="relative flex flex-col h-full w-full p-3 sm:p-5 gap-3">
       <div className="flex items-center gap-3">
-        <div className="flex-1"><StatusBar wiresRevealed={wiresRevealed} lastReveal={lastReveal} subtitle="Cards are face-down on the table" /></div>
+        <div className="flex-1">
+          <StatusBar
+            wiresRevealed={wiresRevealed}
+            lastReveal={lastReveal}
+            subtitle="Cards are face-down on the table"
+            round={round}
+            revealsThisRound={revealsThisRound}
+            revealsPerRound={revealsPerRound}
+          />
+        </div>
         <button onClick={onQuit} className="text-[11px] text-gray-400 underline shrink-0">Quit</button>
       </div>
 
@@ -191,8 +264,8 @@ export function TableView({
           <p className="text-sm text-gray-400">Watching the table…</p>
         ) : (
           <div className="relative w-full">
-            <HandGrid hand={hand} faceUp={false} tappable={!isMyTurn} onTap={onTap} />
-            {isMyTurn && (
+            <HandGrid hand={hand} faceUp={false} tappable={!isMyTurn && !pendingWinner} onTap={onTap} />
+            {isMyTurn && !pendingWinner && (
               <div className="absolute inset-0 rounded-2xl bg-gray-950/40 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
                 <span className="bg-brodin-panel/90 px-4 py-2 rounded-xl border border-white/10 text-xs text-gray-200 font-bold">🔒 Your own cards are locked</span>
               </div>
@@ -200,6 +273,8 @@ export function TableView({
           </div>
         )}
       </div>
+
+      {pendingWinner && <VerdictOverlay reveal={lastReveal} winner={pendingWinner} />}
     </div>
   );
 }

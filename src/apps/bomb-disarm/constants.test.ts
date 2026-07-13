@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { CARDS_PER_PLAYER, deckCompositionFor, rebelCountFor } from './constants';
+import { CARDS_PER_PLAYER, WIRES_IN_DECK, WIRE_WIN_THRESHOLD, deckCompositionFor, rebelCountFor } from './constants';
 
 describe('deckCompositionFor', () => {
   for (let n = 3; n <= 10; n++) {
@@ -11,20 +11,25 @@ describe('deckCompositionFor', () => {
     });
   }
 
-  it('uses 1 explode + 6 wires for 3-7 players', () => {
-    for (let n = 3; n <= 7; n++) {
-      const { explode, wire } = deckCompositionFor(n);
-      expect(explode).toBe(1);
-      expect(wire).toBe(6);
+  it('uses 1 explode for 3-7 players and 2 for 8-10', () => {
+    for (let n = 3; n <= 7; n++) expect(deckCompositionFor(n).explode).toBe(1);
+    for (let n = 8; n <= 10; n++) expect(deckCompositionFor(n).explode).toBe(2);
+  });
+
+  it('carries WIRES_IN_DECK wires at every player count', () => {
+    for (let n = 3; n <= 10; n++) expect(deckCompositionFor(n).wire).toBe(WIRES_IN_DECK);
+  });
+
+  // Three rounds only reveal half the deck, so a deck holding exactly
+  // WIRE_WIN_THRESHOLD wires would make the peacekeepers' win a ~1% fluke.
+  it('holds more wires than the peacekeepers need to cut', () => {
+    for (let n = 3; n <= 10; n++) {
+      expect(deckCompositionFor(n).wire).toBeGreaterThan(WIRE_WIN_THRESHOLD);
     }
   });
 
-  it('uses 2 explode + 8 wires for 8-10 players', () => {
-    for (let n = 8; n <= 10; n++) {
-      const { explode, wire } = deckCompositionFor(n);
-      expect(explode).toBe(2);
-      expect(wire).toBe(8);
-    }
+  it('still leaves room for the blanks', () => {
+    for (let n = 3; n <= 10; n++) expect(deckCompositionFor(n).blank).toBeGreaterThan(0);
   });
 });
 

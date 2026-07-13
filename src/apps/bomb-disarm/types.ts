@@ -22,6 +22,10 @@ export interface LastReveal {
 
 export interface GameState {
   phase: BombPhase;
+  round: number;
+  revealsThisRound: number;
+  // Holds the verdict while the winning card sits face-up; `winner` lands after.
+  pendingWinner: Winner | null;
   // Both roles and hands are broadcast in full (ntfy is a shared channel, same
   // as memo-random's round-2 assignments) — the UI only ever renders the slice
   // a given device is allowed to see. Not cheat-proof against devtools; fine
