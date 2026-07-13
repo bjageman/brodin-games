@@ -117,8 +117,14 @@ function GameCard({ game }: { game: Game }) {
 }
 
 function Spotlight({ game }: { game: Game }) {
+  // The whole card is the link — art, title and blurb included. PLAY NOW is a
+  // span, not a nested <a>, so the click target is the card rather than just
+  // the pill inside it.
   return (
-    <div className="flex flex-col gap-4 overflow-hidden rounded-3xl bg-home-featured p-5 sm:flex-row sm:items-center sm:gap-6">
+    <a
+      href={game.href}
+      className="group flex flex-col gap-4 overflow-hidden rounded-3xl bg-home-featured p-5 transition-transform hover:scale-[1.01] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-home-ink sm:flex-row sm:items-center sm:gap-6"
+    >
       <div className="flex h-40 shrink-0 items-center justify-center sm:h-48 sm:w-1/2">
         <img src={game.art} alt="" className="max-h-full max-w-full object-contain" />
       </div>
@@ -127,14 +133,11 @@ function Spotlight({ game }: { game: Game }) {
         <h3 className="font-display text-xl font-bold text-home-ink">{game.title}</h3>
         <p className="mt-2 text-sm leading-snug text-home-ink/80">{game.description}</p>
 
-        <a
-          href={game.href}
-          className="mt-5 inline-flex items-center justify-center rounded-full bg-home-play px-8 py-3 font-display text-base font-bold tracking-wide text-white transition-transform hover:scale-[1.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-home-ink"
-        >
+        <span className="mt-5 inline-flex items-center justify-center rounded-full bg-home-play px-8 py-3 font-display text-base font-bold tracking-wide text-white transition-transform group-hover:scale-[1.03]">
           PLAY NOW
-        </a>
+        </span>
       </div>
-    </div>
+    </a>
   );
 }
 
