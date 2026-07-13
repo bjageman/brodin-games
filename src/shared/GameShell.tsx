@@ -316,8 +316,7 @@ export default function GameShell({
     window.location.hash = '#/';
   };
 
-  // Everyone on the roster who isn't me. A display host isn't on the roster at
-  // all, so it has no seat of its own to subtract.
+  // A display host isn't on the roster, so it has no seat of its own to subtract.
   const otherPlayerCount = Math.max(0, roster.length - (isHost && isDisplay ? 0 : 1));
 
   const quit = () => {
@@ -327,8 +326,6 @@ export default function GameShell({
     goToMainMenu();
   };
 
-  // The confirm only exists to warn that quitting ends the game for the others.
-  // With nobody else here there's nothing to warn about, so just leave.
   const requestQuit = () => {
     if (otherPlayerCount === 0) quit();
     else setShowQuitConfirm(true);

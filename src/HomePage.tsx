@@ -117,9 +117,6 @@ function GameCard({ game }: { game: Game }) {
 }
 
 function Spotlight({ game }: { game: Game }) {
-  // The whole card is the link — art, title and blurb included. PLAY NOW is a
-  // span, not a nested <a>, so the click target is the card rather than just
-  // the pill inside it.
   return (
     <a
       href={game.href}
