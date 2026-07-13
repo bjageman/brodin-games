@@ -298,9 +298,8 @@ export function useMemoRandomDebug(ctx: MemoDebugCtx) {
       });
     }
 
-    // The '-waiting' phases matter as much as the round itself: the host's own
-    // phase flips there the moment it submits, and the whole point of these
-    // actions is to answer for the players (bots included) who haven't yet.
+    // The host's phase flips to '-waiting' the moment it submits, which is
+    // exactly when it still needs to answer for everyone who hasn't.
     if (phase === 'round1' || phase === 'round1-waiting') {
       actionsList.push({
         label: '🤖 Simulate Words for Others',
