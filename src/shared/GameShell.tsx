@@ -316,6 +316,21 @@ export default function GameShell({
     window.location.hash = '#/';
   };
 
+  // A display host isn't on the roster, so it has no seat of its own to subtract.
+  const otherPlayerCount = Math.max(0, roster.length - (isHost && isDisplay ? 0 : 1));
+
+  const quit = () => {
+    if (!isHost) {
+      sendMessage({ type: 'leave-lobby', playerId, timestamp: Date.now(), payload: {} });
+    }
+    goToMainMenu();
+  };
+
+  const requestQuit = () => {
+    if (otherPlayerCount === 0) quit();
+    else setShowQuitConfirm(true);
+  };
+
 
 
   const getLayoutProps = (): {
@@ -361,7 +376,7 @@ export default function GameShell({
   const quitFromShell =
     phase === 'joining' || phase === 'join' || layoutProps.ownsHeader
       ? undefined
-      : () => setShowQuitConfirm(true);
+      : requestQuit;
 
   return (
     <PageLayout
@@ -395,7 +410,7 @@ export default function GameShell({
             isHost={isHost}
             isConnected={isConnected}
             onStartGame={startGame}
-            onQuit={() => setShowQuitConfirm(true)}
+            onQuit={requestQuit}
             theme={theme}
           />
         )}
@@ -455,13 +470,10 @@ export default function GameShell({
 
       {showQuitConfirm && (
         <QuitConfirmModal
-          playerCount={Math.max(0, roster.length - (isHost && isDisplay ? 0 : 1))}
+          playerCount={otherPlayerCount}
           onConfirm={() => {
             setShowQuitConfirm(false);
-            if (!isHost) {
-              sendMessage({ type: 'leave-lobby', playerId, timestamp: Date.now(), payload: {} });
-            }
-            goToMainMenu();
+            quit();
           }}
           onCancel={() => setShowQuitConfirm(false)}
         />
