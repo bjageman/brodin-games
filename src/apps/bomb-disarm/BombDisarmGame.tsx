@@ -268,6 +268,8 @@ export default function BombDisarmGame({
       goToTable();
     } else if (action === 'reveal-wire' && phase === 'table' && !winner) {
       revealFirstOfType('wire');
+    } else if (action === 'reveal-blank' && phase === 'table' && !winner) {
+      revealFirstOfType('blank');
     } else if (action === 'reveal-bomb' && phase === 'table' && !winner) {
       revealFirstOfType('explode');
     }
@@ -294,6 +296,7 @@ export default function BombDisarmGame({
     if (phase === 'memorize') list.push({ label: '⏭️ Skip to Table', onClick: () => triggerAction('skip-memorize'), variant: 'warning' });
     if (phase === 'table' && !winner) {
       list.push({ label: '✂️ Reveal a Cut Wire', onClick: () => triggerAction('reveal-wire'), variant: 'primary' });
+      list.push({ label: '▢ Reveal a Blank', onClick: () => triggerAction('reveal-blank'), variant: 'secondary' });
       list.push({ label: '💥 Reveal the Bomb', onClick: () => triggerAction('reveal-bomb'), variant: 'danger' });
     }
     return list;
@@ -350,7 +353,15 @@ export default function BombDisarmGame({
 
       {phase === 'memorize' && (
         <LandscapeStage>
-          <MemorizeView role={myRole} hand={myHand} seconds={memoSec} isDisplay={isDisplay} onQuit={onQuit} />
+          <MemorizeView
+            role={myRole}
+            hand={myHand}
+            seconds={memoSec}
+            isDisplay={isDisplay}
+            isHost={isHost}
+            onReady={goToTable}
+            onQuit={onQuit}
+          />
         </LandscapeStage>
       )}
 

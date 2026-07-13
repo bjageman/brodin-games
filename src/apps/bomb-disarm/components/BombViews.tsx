@@ -128,7 +128,10 @@ function StatusBar({ wiresRevealed, lastReveal, subtitle }: { wiresRevealed: num
   );
 }
 
-export function MemorizeView({ role, hand, seconds, isDisplay, onQuit }: { role: Role | undefined; hand: Card[]; seconds: number; isDisplay: boolean; onQuit: () => void }) {
+export function MemorizeView({ role, hand, seconds, isDisplay, isHost, onReady, onQuit }: {
+  role: Role | undefined; hand: Card[]; seconds: number; isDisplay: boolean;
+  isHost: boolean; onReady: () => void; onQuit: () => void;
+}) {
   return (
     <div className="flex flex-col h-full w-full p-3 sm:p-5 gap-3">
       <div className="flex items-center justify-between gap-3">
@@ -137,13 +140,23 @@ export function MemorizeView({ role, hand, seconds, isDisplay, onQuit }: { role:
         <button onClick={onQuit} className="text-[11px] text-gray-400 underline">Quit</button>
       </div>
       <p className="text-center text-xs uppercase tracking-widest text-gray-400 font-bold">
-        Memorize your hand — it flips face-down and shuffles when the timer ends
+        Memorize your hand — it flips face-down and shuffles when the table is dealt
       </p>
       <div className="flex-1 flex items-center justify-center">
         {isDisplay
           ? <p className="text-sm text-gray-400">Players are memorizing their hands…</p>
           : <HandGrid hand={hand} faceUp tappable={false} />}
       </div>
+      {isHost && (
+        <div className="flex justify-center">
+          <button
+            onClick={onReady}
+            className="rounded-full bg-brodin-primary hover:bg-brodin-primaryDark px-6 py-2 font-display text-sm font-black uppercase tracking-wider text-white shadow-lg shadow-brodin-primary/20 transition-colors"
+          >
+            Everyone's Ready — Deal the Table
+          </button>
+        </div>
+      )}
     </div>
   );
 }
