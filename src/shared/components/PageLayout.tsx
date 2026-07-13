@@ -1,6 +1,9 @@
 import type { ReactNode } from 'react';
 import { cn } from '../utils/cn';
 
+const CHROME_BUTTON =
+  'rounded-full border-2 px-3.5 py-1 text-sm font-bold transition-colors';
+
 interface PageLayoutProps {
   title?: string;
   titleContent?: ReactNode;
@@ -31,6 +34,12 @@ export default function PageLayout({
   // divider above the real header.
   const hasHeader = Boolean(title || titleContent || backHref || onQuit);
 
+  // headerClassName carries the readable ink colour for a game that paints its
+  // own background; grey-on-dark would vanish there.
+  const chromeTone = headerClassName
+    ? cn('border-current hover:opacity-70', headerClassName)
+    : 'border-gray-500 text-gray-200 hover:border-red-400 hover:bg-red-500/10 hover:text-red-300';
+
   return (
     <div
       className={cn(
@@ -42,7 +51,7 @@ export default function PageLayout({
       <header className="relative flex flex-col items-center justify-center pb-3 w-full pt-6">
         <div className="relative flex justify-center items-center w-full min-h-[36px] px-4">
           {backHref && (
-            <a href={backHref} className="absolute left-4 text-sm text-gray-400 hover:text-gray-100">
+            <a href={backHref} className={cn('absolute left-4', CHROME_BUTTON, chromeTone)}>
               ← Back
             </a>
           )}
@@ -50,7 +59,7 @@ export default function PageLayout({
             <button
               type="button"
               onClick={onQuit}
-              className="absolute left-4 text-sm font-semibold text-gray-400 hover:text-red-400 transition-colors"
+              className={cn('absolute left-4', CHROME_BUTTON, chromeTone)}
             >
               Quit
             </button>

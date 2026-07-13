@@ -16,10 +16,15 @@ const CANVAS_BOX = {
 
 function Easel({ name }: { name: string }) {
   // Long names have to shrink or they run off the canvas.
-  const size = name.length > 12 ? 'text-lg' : name.length > 8 ? 'text-xl' : 'text-2xl';
+  const size =
+    name.length > 12
+      ? 'text-sm sm:text-lg'
+      : name.length > 8
+        ? 'text-base sm:text-xl'
+        : 'text-lg sm:text-2xl';
 
   return (
-    <div className="relative mx-auto w-full max-w-[160px]">
+    <div className="relative mx-auto w-full max-w-[104px] sm:max-w-[160px]">
       <img src={EASEL_ART} alt="" className="w-full" />
       <div
         className="absolute flex items-center justify-center overflow-hidden px-1"
@@ -62,7 +67,7 @@ export default function FakeItLobby({
           {onQuit && (
             <button
               onClick={onQuit}
-              className="font-display text-sm font-semibold text-fakeit-ink/70 transition-colors hover:text-fakeit-ink"
+              className="rounded-full border-2 border-fakeit-ink px-3.5 py-1 font-display text-sm font-bold text-fakeit-ink transition-colors hover:bg-fakeit-ink hover:text-white"
             >
               Quit
             </button>
@@ -96,7 +101,7 @@ export default function FakeItLobby({
             Waiting for players to connect...
           </p>
         ) : (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4">
             {roster.map((player) => (
               <Easel key={player.id} name={player.name} />
             ))}
