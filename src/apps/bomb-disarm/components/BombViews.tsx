@@ -147,8 +147,6 @@ export function MemorizeView({ role, hand, seconds, isDisplay, isHost, onReady, 
           ? <p className="text-sm text-gray-400">Players are memorizing their hands…</p>
           : <HandGrid hand={hand} faceUp tappable={false} />}
       </div>
-      {/* The timer is now just a ceiling — the host closes the step as soon as
-          the table says they're done, rather than everyone waiting it out. */}
       {isHost && (
         <div className="flex justify-center">
           <button
