@@ -1,9 +1,6 @@
 import type { ReactNode } from 'react';
 import { cn } from '../utils/cn';
 
-// Back and Quit used to be bare grey text and read as decoration rather than
-// controls. They're pills now — the tone follows the header, since a page that
-// paints its own light background (Fake It) needs ink, not grey-on-dark.
 const CHROME_BUTTON =
   'rounded-full border-2 px-3.5 py-1 text-sm font-bold transition-colors';
 
@@ -37,8 +34,8 @@ export default function PageLayout({
   // divider above the real header.
   const hasHeader = Boolean(title || titleContent || backHref || onQuit);
 
-  // headerClassName is only set by a game that paints its own background, and
-  // it already carries that theme's readable ink colour.
+  // headerClassName carries the readable ink colour for a game that paints its
+  // own background; grey-on-dark would vanish there.
   const chromeTone = headerClassName
     ? cn('border-current hover:opacity-70', headerClassName)
     : 'border-gray-500 text-gray-200 hover:border-red-400 hover:bg-red-500/10 hover:text-red-300';

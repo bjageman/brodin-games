@@ -15,8 +15,7 @@ const CANVAS_BOX = {
 };
 
 function Easel({ name }: { name: string }) {
-  // Long names have to shrink or they run off the canvas, and every size steps
-  // down again on mobile, where three easels share a phone's width.
+  // Long names have to shrink or they run off the canvas.
   const size =
     name.length > 12
       ? 'text-sm sm:text-lg'
