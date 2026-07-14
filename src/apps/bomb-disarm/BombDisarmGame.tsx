@@ -17,6 +17,7 @@ import {
   STATE_REQUEST_RETRY_INTERVAL_MS,
   STATE_REQUEST_MAX_ATTEMPTS,
   deckCompositionFor,
+  knownRebelCountFor,
   rebelCountFor,
 } from './constants';
 import LandscapeStage from './components/LandscapeStage';
@@ -48,6 +49,7 @@ export default function BombDisarmGame({
   onRegisterMessageHandler,
   onQuit,
   onRegisterDebugActions,
+  onGameBgChange,
 }: GamePlayProps) {
   const restored = freshStart ? null : loadSnapshot<BombSnapshot>(gameSnapshotKey(code))?.bomb ?? null;
 
@@ -383,11 +385,17 @@ export default function BombDisarmGame({
     if (phase === 'results') confetti({ particleCount: 150, spread: 80, origin: { y: 0.4 }, colors: CONFETTI_COLORS });
   }, [phase]);
 
+  useEffect(() => {
+    onGameBgChange?.('bg-bomb-bg');
+    return () => onGameBgChange?.(null);
+  }, [onGameBgChange]);
+
   // ============================ RENDER ============================
   const myRole = roles[playerId];
   const myHand = hands[playerId] ?? [];
   const isMyTurn = phase === 'table' && activePlayerId === playerId;
   const activeName = roster.find((p) => p.id === activePlayerId)?.name ?? '';
+  const rebelCount = knownRebelCountFor(roster.length);
 
   return (
     <div className="w-full flex-1 flex flex-col items-center">
@@ -411,6 +419,8 @@ export default function BombDisarmGame({
             isHost={isHost}
             round={round}
             wiresRevealed={wiresRevealed}
+            playerCount={roster.length}
+            rebelCount={rebelCount}
             onReady={goToTable}
             onQuit={onQuit}
           />
@@ -430,6 +440,8 @@ export default function BombDisarmGame({
             revealsThisRound={revealsThisRound}
             revealsPerRound={roster.length}
             pendingWinner={pendingWinner}
+            playerCount={roster.length}
+            rebelCount={rebelCount}
             onTap={tapCard}
             onQuit={onQuit}
           />

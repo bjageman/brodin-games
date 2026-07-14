@@ -1,6 +1,14 @@
 export type BombPhase = 'starting' | 'role-reveal' | 'memorize' | 'table' | 'results';
 
-export type CardType = 'blank' | 'wire' | 'explode';
+export type SpecialCardType =
+  | 'silence'
+  | 'interrogate'
+  | 'rogue-agent'
+  | 'user-manual'
+  | 'crossed-wires'
+  | 'repair-kit';
+
+export type CardType = 'blank' | 'wire' | 'explode' | SpecialCardType;
 
 export type Role = 'rebel' | 'peacekeeper';
 

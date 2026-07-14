@@ -36,3 +36,10 @@ export function rebelCountFor(playerCount: number): number {
   if (playerCount <= 7) return 2;
   return Math.random() < 0.5 ? 2 : 3;
 }
+
+// What the table's team counter is allowed to print. Below 8 the count is fixed
+// by the player count anyway; at 8-10 it's randomised, so null means "show the
+// range" rather than handing the rebels their own headcount.
+export function knownRebelCountFor(playerCount: number): number | null {
+  return playerCount <= 7 ? rebelCountFor(playerCount) : null;
+}
