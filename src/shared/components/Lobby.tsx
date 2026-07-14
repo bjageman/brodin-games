@@ -1,9 +1,17 @@
-import { useState } from 'react';
+import { useState, type ComponentType } from 'react';
 import type { PlayerInfo } from '../types';
 import { DEFAULT_THEME, type GameTheme } from '../games';
 import { cn } from '../utils/cn';
 import RoomCodeModal from './RoomCodeModal';
 import PlayerNote from './PlayerNote';
+
+// Host-only pre-game options a game can hang off the shared lobby (see
+// GameConfig.lobbyExtra). Whatever it collects is the host's to keep — the host
+// deals, so its choices reach the table inside the game state it broadcasts.
+export interface LobbyExtraProps {
+  code: string;
+  roster: PlayerInfo[];
+}
 
 export interface LobbyProps {
   code: string;
@@ -18,9 +26,10 @@ export interface LobbyProps {
   // GameConfig.lobby). The shared lobby leaves Quit to PageLayout.
   onQuit?: () => void;
   theme?: GameTheme;
+  lobbyExtra?: ComponentType<LobbyExtraProps>;
 }
 
-export default function Lobby({ code, title, minPlayers, roster, isHost, isConnected, onStartGame, theme }: LobbyProps) {
+export default function Lobby({ code, title, minPlayers, roster, isHost, isConnected, onStartGame, theme, lobbyExtra: LobbyExtra }: LobbyProps) {
   const [showModal, setShowModal] = useState(false);
   const joinUrl = `${window.location.origin}${window.location.pathname}#/join?code=${code}`;
   const t = theme ?? DEFAULT_THEME;
@@ -69,6 +78,8 @@ export default function Lobby({ code, title, minPlayers, roster, isHost, isConne
           )}
         </div>
       </div>
+
+      {isHost && LobbyExtra && <LobbyExtra code={code} roster={roster} />}
 
       {/* Footer controls */}
       <footer className="flex flex-col items-center gap-3 px-4 pb-8 pt-2">

@@ -412,6 +412,7 @@ export default function GameShell({
             onStartGame={startGame}
             onQuit={requestQuit}
             theme={theme}
+            lobbyExtra={gameConfig?.lobbyExtra}
           />
         )}
 
