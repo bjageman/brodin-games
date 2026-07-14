@@ -50,6 +50,20 @@ export default {
         // background, so `dark`/`light` below are ours: the play screens
         // (prompt / drawing / round totals) use light type and need `dark`,
         // while the lobby / vote / final screens use brown type on `light`.
+        // Bomb Disarm palette, sampled from the Canva mockup
+        // (Design Docs/Bomb Defuse/Cards Landscape.png).
+        bomb: {
+          bg: '#262f71',
+          board: '#2d3782',
+          card: '#665adb',
+          cardEdge: '#4b3fc0',
+          face: '#9a95dd',
+          bolt: '#fcec79',
+          boltEdge: '#e0952c',
+          wire: '#1d97ad',
+          ink: '#1a1f4d',
+          rebel: '#f9749f',
+        },
         fakeit: {
           dark: '#17100d',
           light: '#ffffff',

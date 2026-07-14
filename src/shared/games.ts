@@ -64,6 +64,17 @@ const FAKE_IT_THEME: GameTheme = {
   heading: 'text-fakeit-ink',
 };
 
+const BOMB_THEME: GameTheme = {
+  lobbyBg: 'bg-bomb-bg text-white',
+  pageBg: 'bg-bomb-bg text-white',
+  panel: 'bg-bomb-board border-white/15 text-white',
+  field: 'bg-bomb-bg border-white/25 text-white focus:border-bomb-bolt',
+  accent: 'bg-bomb-bolt hover:brightness-95 text-bomb-ink',
+  code: 'text-bomb-bolt',
+  muted: 'text-white/70',
+  heading: 'text-white',
+};
+
 export interface GameConfig {
   id: string;
   title: string;
@@ -101,5 +112,6 @@ export const GAMES_REGISTRY: Record<string, GameConfig> = {
     minPlayers: 3,
     maxPlayers: 10,
     gamePlay: BombDisarmGame,
+    theme: BOMB_THEME,
   },
 };
