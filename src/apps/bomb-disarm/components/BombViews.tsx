@@ -1,11 +1,13 @@
 import { cn } from '../../../shared/utils/cn';
 import WaitingForHost from '../../../shared/components/WaitingForHost';
+import { useCountdown } from '../../../shared/hooks/useCountdown';
 import type { GamePlayProps } from '../../../shared/GameShell';
-import type { Card, LastReveal, Role, Winner } from '../types';
+import type { Card, EffectChoice, GameState, LastReveal, Role, Winner } from '../types';
 import { CARD_META } from '../cards';
 import { ROUNDS, WIRE_WIN_THRESHOLD } from '../constants';
 import { CardArt, LightningBolt } from './BombArt';
 import { BoardFrame, BombCard, HandRow, TeamCounts, WiresPanel } from './BombBoard';
+import { EffectPrompt, EffectWaiting, PeekOverlay } from './BombEffects';
 
 function RoleBadge({ role }: { role: Role | undefined }) {
   if (!role) return null;
@@ -143,26 +145,32 @@ export function MemorizeView({
 
 export function TableView({
   hand, isMyTurn, activeName, wiresRevealed, lastReveal, isDisplay,
-  round, revealsThisRound, revealsPerRound, pendingWinner, playerCount, rebelCount, onTap, onQuit,
+  round, revealsThisRound, revealsPerRound, pendingWinner, playerCount, rebelCount,
+  state, playerId, roster, onChooseEffect, onTap, onQuit,
 }: {
   hand: Card[]; isMyTurn: boolean; activeName: string; wiresRevealed: number; lastReveal: LastReveal | null;
   isDisplay: boolean; round: number; revealsThisRound: number; revealsPerRound: number;
   pendingWinner: Winner | null; playerCount: number; rebelCount: number | null;
+  state: GameState; playerId: string; roster: GamePlayProps['roster'];
+  onChooseEffect: (choice: EffectChoice) => void;
   onTap: (i: number) => void; onQuit: () => void;
 }) {
   const picksLeft = revealsPerRound - revealsThisRound;
+  const { pendingEffect, peek, effectNote, rogueAgentId } = state;
+  const { msRemaining: peekMs } = useCountdown(peek?.endTimestamp ?? null);
+
+  const status = effectNote
+    ?? (lastReveal ? `Last: ${CARD_META[lastReveal.type].title} on ${lastReveal.targetName}` : 'Cards are face-down on the table');
+
   return (
     <BoardFrame onQuit={onQuit}>
       <div className="flex h-full flex-col p-3">
         <div className="flex shrink-0 items-center justify-between gap-3 text-[10px] font-bold uppercase tracking-widest sm:text-xs">
           <span className="text-bomb-bolt">
             Round {round}/{ROUNDS} · {picksLeft} {picksLeft === 1 ? 'pick' : 'picks'} left
+            {rogueAgentId && ' · 🕶️ Rogue Agent'}
           </span>
-          <span className="truncate text-gray-300">
-            {lastReveal
-              ? `Last: ${CARD_META[lastReveal.type].title} on ${lastReveal.targetName}`
-              : 'Cards are face-down on the table'}
-          </span>
+          <span className="truncate text-gray-300">{status}</span>
         </div>
 
         <div className="relative h-[58%] shrink-0 py-2">
@@ -202,6 +210,16 @@ export function TableView({
           </div>
         </div>
       </div>
+
+      {peek && !pendingWinner && (
+        <PeekOverlay type={peek.type} ownerName={peek.ownerName} seconds={Math.ceil(peekMs / 1000)} />
+      )}
+
+      {pendingEffect && !pendingWinner && !isDisplay && (
+        pendingEffect.actorId === playerId
+          ? <EffectPrompt effect={pendingEffect} state={state} roster={roster} onChoose={onChooseEffect} />
+          : <EffectWaiting effect={pendingEffect} actorName={roster.find((p) => p.id === pendingEffect.actorId)?.name ?? '?'} />
+      )}
 
       {pendingWinner && <VerdictOverlay reveal={lastReveal} winner={pendingWinner} />}
     </BoardFrame>

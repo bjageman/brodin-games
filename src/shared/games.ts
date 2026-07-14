@@ -3,9 +3,10 @@ import MemoRandomGame from '../apps/memo-random/MemoRandomGame';
 import FakeItGame from '../apps/fake-it/FakeItGame';
 import FakeItLobby from '../apps/fake-it/components/FakeItLobby';
 import BombDisarmGame from '../apps/bomb-disarm/BombDisarmGame';
+import BombLobbySettings from '../apps/bomb-disarm/components/BombLobbySettings';
 import { loadDictionary } from '../apps/memo-random/utils/dictionary';
 import type { GamePlayProps } from './GameShell';
-import type { LobbyProps } from './components/Lobby';
+import type { LobbyExtraProps, LobbyProps } from './components/Lobby';
 
 /**
  * Palette for the chrome *around* a game — the host's create-room page, the
@@ -83,6 +84,8 @@ export interface GameConfig {
   gamePlay: ComponentType<GamePlayProps>;
   /** Overrides the shared lobby. Games without one get the default lobby. */
   lobby?: ComponentType<LobbyProps>;
+  /** Host-only pre-game options, rendered inside the shared lobby. */
+  lobbyExtra?: ComponentType<LobbyExtraProps>;
   /** Colours the chrome around the game. Falls back to DEFAULT_THEME. */
   theme?: GameTheme;
   onIdlePrefetch?: () => void;
@@ -112,6 +115,7 @@ export const GAMES_REGISTRY: Record<string, GameConfig> = {
     minPlayers: 3,
     maxPlayers: 10,
     gamePlay: BombDisarmGame,
+    lobbyExtra: BombLobbySettings,
     theme: BOMB_THEME,
   },
 };

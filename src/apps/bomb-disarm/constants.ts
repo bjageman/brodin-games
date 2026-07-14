@@ -4,6 +4,8 @@ export const ROUNDS = 3;
 export const ROLE_REVEAL_DURATION_MS = 6000;
 export const MEMORIZE_DURATION_MS = 60000;
 export const RESULT_REVEAL_DELAY_MS = 5000;
+// How long a User Manual holds a card face-up for the table before it turns back.
+export const PEEK_DURATION_MS = 5000;
 
 export const WIRE_WIN_THRESHOLD = 6;
 
@@ -16,17 +18,31 @@ export const STATE_REQUEST_MAX_ATTEMPTS = 10;
 // 6 you need. At 12 the odds of cutting 6 hold at 63-69% for any player count.
 export const WIRES_IN_DECK = 12;
 
-export function deckCompositionFor(playerCount: number): {
+export function deckCompositionFor(
+  playerCount: number,
+  specialCount = 0,
+): {
   explode: number;
   wire: number;
+  special: number;
   blank: number;
   total: number;
 } {
   const total = playerCount * CARDS_PER_PLAYER;
   const explode = playerCount <= 7 ? 1 : 2;
   const wire = WIRES_IN_DECK;
-  const blank = total - explode - wire;
-  return { explode, wire, blank, total };
+  const special = Math.min(specialCount, maxSpecialsFor(playerCount));
+  const blank = total - explode - wire - special;
+  return { explode, wire, special, blank, total };
+}
+
+// Specials are cut out of the blanks, so a small table can't hold all six: a
+// 3-player deck is 18 cards and 13 of them are already the bomb and the wires.
+// One blank is always left behind so the deck never turns into all-consequences.
+export function maxSpecialsFor(playerCount: number): number {
+  const total = playerCount * CARDS_PER_PLAYER;
+  const explode = playerCount <= 7 ? 1 : 2;
+  return Math.max(0, total - explode - WIRES_IN_DECK - 1);
 }
 
 // Rebels: 1 for 3-4 players, 2 for 5-7, and a hidden 2-or-3 for 8-10 so the
