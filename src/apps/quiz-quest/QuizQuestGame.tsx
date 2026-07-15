@@ -3,6 +3,7 @@ import { loadSnapshot, saveSnapshot, gameSnapshotKey } from '../../shared/utils/
 import type { Envelope } from '../../shared/types';
 import type { GamePlayProps } from '../../shared/GameShell';
 import type { GameState } from './types';
+import PartyCard from './components/PartyCard';
 
 interface QuizSnapshot {
   quiz: GameState;
@@ -64,13 +65,8 @@ export default function QuizQuestGame({
             The Party Assembles
           </h2>
           <div className="grid w-full max-w-2xl grid-cols-2 gap-3 sm:grid-cols-3">
-            {roster.map((p) => (
-              <div key={p.id} className="rounded-lg border-2 border-quiz-gold bg-quiz-stone p-3">
-                <p className="truncate font-display text-sm font-bold uppercase tracking-wide">{p.name}</p>
-                <div className="mt-2 h-3 w-full rounded-full bg-quiz-hpTrack">
-                  <div className="h-3 w-full rounded-full bg-quiz-hp" />
-                </div>
-              </div>
+            {roster.map((p, i) => (
+              <PartyCard key={p.id} name={p.name} index={i} />
             ))}
           </div>
           <p className="max-w-md text-center text-sm text-quiz-ink/70">
