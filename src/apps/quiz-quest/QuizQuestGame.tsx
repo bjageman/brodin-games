@@ -134,8 +134,8 @@ export default function QuizQuestGame({
       )}
 
       {phase === 'party' && (
-        <div className="flex w-full flex-1 flex-col items-center justify-center gap-6 px-4 py-10">
-          <h2 className="font-display text-2xl font-extrabold uppercase tracking-wide text-quiz-gold">
+        <div className="flex w-full flex-1 flex-col items-center justify-center gap-6 px-4 py-10 font-pixel">
+          <h2 className="font-pixelBlock text-2xl uppercase text-quiz-gold [text-shadow:2px_2px_0_#000]">
             The Party Assembles
           </h2>
           <div className="grid w-full max-w-2xl grid-cols-2 gap-3 sm:grid-cols-3">
@@ -146,7 +146,7 @@ export default function QuizQuestGame({
           {isHost ? (
             <button
               onClick={startDungeon}
-              className="rounded-full bg-quiz-gold px-8 py-3 font-display text-sm font-black uppercase tracking-wider text-quiz-bg transition-transform hover:scale-[1.03]"
+              className="border-2 border-quiz-gold bg-quiz-gold px-8 py-3 font-pixelBlock text-sm uppercase text-quiz-bg transition-colors hover:bg-quiz-goldDark hover:text-quiz-ink"
             >
               Enter the Dungeon
             </button>
@@ -155,7 +155,7 @@ export default function QuizQuestGame({
           )}
           <button
             onClick={() => setMenuOpen(true)}
-            className="rounded-full border-2 border-quiz-gold px-6 py-2 font-display text-xs font-bold uppercase tracking-wider text-quiz-gold transition-colors hover:bg-quiz-gold hover:text-quiz-ink"
+            className="border-2 border-quiz-gold px-6 py-2 font-pixelBlock text-xs uppercase text-quiz-gold transition-colors hover:bg-quiz-gold hover:text-quiz-bg"
           >
             Menu
           </button>
@@ -173,11 +173,20 @@ export default function QuizQuestGame({
           answeredCount={Object.keys(answers).length}
           secondsLeft={roundSec}
           onAnswer={chooseAnswer}
+          onMenu={() => setMenuOpen(true)}
         />
       )}
 
       {phase === 'reveal' && room && lastReveal && (
-        <RevealView room={room} reveal={lastReveal} roster={roster} players={players} playerId={playerId} />
+        <RevealView
+          room={room}
+          dungeonLength={state.dungeonLength}
+          reveal={lastReveal}
+          roster={roster}
+          players={players}
+          playerId={playerId}
+          onMenu={() => setMenuOpen(true)}
+        />
       )}
 
       {phase === 'game-over' && (

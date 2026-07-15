@@ -12,6 +12,11 @@ export default {
         // script for the names painted on the lobby easels.
         serifDisplay: ['"Playfair Display"', 'Georgia', 'serif'],
         script: ['Caveat', 'cursive'],
+        // Quiz Quest's retro dungeon-crawler type system: Silkscreen is the
+        // chunky blocky-uppercase display face (names, labels, the question),
+        // Pixelify Sans the more readable pixel face for answer/body text.
+        pixel: ['"Pixelify Sans"', 'ui-monospace', 'monospace'],
+        pixelBlock: ['Silkscreen', 'ui-monospace', 'monospace'],
       },
       colors: {
         // Shared app palette, aligned with the bento homepage: navy surfaces,
@@ -111,12 +116,25 @@ export default {
           '0%': { transform: 'scale(0.7)', opacity: '0' },
           '100%': { transform: 'scale(1)', opacity: '1' },
         },
+        // Quiz Quest: the monster bobs in place, and torch/ember light breathes.
+        monsterFloat: {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-8px)' },
+        },
+        torchFlicker: {
+          '0%, 100%': { opacity: '0.85' },
+          '25%': { opacity: '1' },
+          '50%': { opacity: '0.7' },
+          '75%': { opacity: '0.95' },
+        },
       },
       animation: {
         shake: 'shake 0.3s ease-in-out',
         curtainLeft: 'curtainLeft 1.6s cubic-bezier(0.7, 0, 0.3, 1) forwards',
         curtainRight: 'curtainRight 1.6s cubic-bezier(0.7, 0, 0.3, 1) forwards',
         verdictIn: 'verdictIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1)',
+        monsterFloat: 'monsterFloat 3.5s ease-in-out infinite',
+        torchFlicker: 'torchFlicker 1.8s ease-in-out infinite',
       },
     },
   },

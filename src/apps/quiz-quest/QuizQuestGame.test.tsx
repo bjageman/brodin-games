@@ -40,6 +40,7 @@ describe('QuizQuestGame', () => {
     // even once freshStart's one-shot kickoff effect re-runs on the phase change.
     act(() => { vi.advanceTimersByTime(0); });
     expect(screen.queryByText('The Party Assembles')).not.toBeInTheDocument();
-    expect(screen.getByText(/Room 1\//)).toBeInTheDocument();
+    // We're on the question screen (the answer prompt only renders there).
+    expect(screen.getByText(/Choose your answer/i)).toBeInTheDocument();
   });
 });

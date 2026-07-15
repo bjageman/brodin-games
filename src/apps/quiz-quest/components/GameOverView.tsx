@@ -15,13 +15,13 @@ export default function GameOverView({
   const winnerNames = roster.filter((p) => winnerIds.includes(p.id)).map((p) => p.name);
 
   return (
-    <div className="mx-auto flex w-full max-w-md flex-col items-center gap-6 px-4 py-10 text-center">
+    <div className="mx-auto flex w-full max-w-md flex-col items-center gap-6 px-4 py-10 text-center font-pixel">
       <span className="text-5xl">🏆</span>
       <div>
-        <h2 className="font-display text-2xl font-extrabold uppercase tracking-wide text-quiz-gold">
+        <h2 className="font-pixelBlock text-2xl uppercase text-quiz-gold [text-shadow:2px_2px_0_#000]">
           The Boss Falls!
         </h2>
-        <p className="mt-1 text-sm text-quiz-ink/70">
+        <p className="mt-2 text-sm text-quiz-ink/70">
           {winnerNames.length > 1 ? `${winnerNames.join(' & ')} tie for the win` : `${winnerNames[0]} wins the run`}
         </p>
       </div>
@@ -31,8 +31,8 @@ export default function GameOverView({
           <div
             key={p.id}
             className={cn(
-              'flex items-center justify-between rounded-lg border-2 px-4 py-2 text-sm font-bold',
-              winnerIds.includes(p.id) ? 'border-quiz-gold bg-quiz-gold/15 text-quiz-gold' : 'border-quiz-gold/30 text-quiz-ink'
+              'flex items-center justify-between border-2 px-4 py-2 text-sm font-semibold',
+              winnerIds.includes(p.id) ? 'border-quiz-gold bg-quiz-gold/15 text-quiz-gold' : 'border-quiz-goldDark text-quiz-ink'
             )}
           >
             <span className="truncate">{i + 1}. {p.name}</span>
@@ -44,7 +44,7 @@ export default function GameOverView({
       {isHost ? (
         <button
           onClick={onQuit}
-          className="w-full rounded-full bg-quiz-gold py-3 font-display text-sm font-black uppercase tracking-wider text-quiz-bg transition-transform hover:scale-[1.02]"
+          className="w-full border-2 border-quiz-gold bg-quiz-gold py-3 font-pixelBlock text-sm uppercase text-quiz-bg transition-colors hover:bg-quiz-goldDark hover:text-quiz-ink"
         >
           Back to Lobby
         </button>
