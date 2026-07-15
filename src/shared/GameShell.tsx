@@ -457,8 +457,16 @@ export default function GameShell({
             onRegisterMessageHandler={(handler) => { gameMessageHandlerRef.current = handler; }}
             onQuit={goToMainMenu}
             onRegisterDebugActions={(actions, gamePhase) => {
-              setActiveGameDebugActions(actions);
-              setActiveGameDebugPhase(gamePhase);
+              setActiveGameDebugActions((prev) => {
+                if (
+                  prev.length === actions.length &&
+                  prev.every((act, idx) => act.label === actions[idx].label && act.variant === actions[idx].variant)
+                ) {
+                  return prev;
+                }
+                return actions;
+              });
+              setActiveGameDebugPhase((prev) => (prev === gamePhase ? prev : gamePhase));
             }}
             onGameBgChange={(className) => setGameBg({ gameId, className })}
           />

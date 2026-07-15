@@ -67,8 +67,24 @@ const FALLBACK_WORDS = JSON.parse(
 );
 
 function ntfyBaseUrl() {
-  const domain = NTFY_SERVER_URL.replace(/^(https?:\/\/)/, '');
-  const protocol = domain.startsWith('localhost') || domain.startsWith('127.0.0.1') ? 'http' : 'https';
+  const domain = NTFY_SERVER_URL.replace(/^(https?:\/\/|wss?:\/\/)/, '');
+  
+  let protocol = 'https';
+  if (NTFY_SERVER_URL.startsWith('http://') || NTFY_SERVER_URL.startsWith('ws://')) {
+    protocol = 'http';
+  } else if (NTFY_SERVER_URL.startsWith('https://') || NTFY_SERVER_URL.startsWith('wss://')) {
+    protocol = 'https';
+  } else {
+    const isLocal =
+      domain.startsWith('localhost') ||
+      domain.startsWith('127.0.0.1') ||
+      domain.startsWith('192.168.') ||
+      domain.startsWith('10.') ||
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(domain) ||
+      domain.endsWith('.local') ||
+      domain.includes('.local:');
+    protocol = isLocal ? 'http' : 'https';
+  }
   return `${protocol}://${domain}`;
 }
 
