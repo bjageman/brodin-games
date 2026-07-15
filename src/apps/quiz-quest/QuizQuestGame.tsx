@@ -33,7 +33,6 @@ export default function QuizQuestGame({
   const restored = freshStart ? null : loadSnapshot<QuizSnapshot>(gameSnapshotKey(code))?.quiz ?? null;
   const [state, setState] = useState<GameState>({ ...EMPTY, ...restored });
   const [menuOpen, setMenuOpen] = useState(false);
-
   const { phase, room, players, answers, roundEndTimestamp, lastReveal, winnerIds } = state;
 
   useEffect(() => {
