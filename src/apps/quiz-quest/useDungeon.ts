@@ -1,5 +1,8 @@
 import type { PlayerInfo } from '../../shared/types';
-import { ANSWER_DURATION_MS, CORRECT_ANSWER_DAMAGE, REVEAL_DURATION_MS, STARTING_HP, WRONG_ANSWER_DAMAGE } from './constants';
+import {
+  ANSWER_DURATION_MS, BOSS_ANSWER_DURATION_MS, BOSS_CORRECT_ANSWER_SCORE, CORRECT_ANSWER_DAMAGE,
+  REVEAL_DURATION_MS, REVIVE_HP, STARTING_HP, WRONG_ANSWER_DAMAGE,
+} from './constants';
 import { buildRoom, DUNGEON_LENGTH, pickQuestion } from './dungeon';
 import type { ActiveRoom, GameState, PlayerCombat } from './types';
 
@@ -7,6 +10,14 @@ interface DungeonDeps {
   roster: PlayerInfo[];
   state: GameState;
   publish: (next: GameState) => void;
+}
+
+function reviveGhosts(players: Record<string, PlayerCombat>): Record<string, PlayerCombat> {
+  const revived: Record<string, PlayerCombat> = {};
+  for (const [id, p] of Object.entries(players)) {
+    revived[id] = p.isGhost ? { ...p, hp: REVIVE_HP, isGhost: false } : p;
+  }
+  return revived;
 }
 
 // The room-loop reducer: start the dungeon, collect simultaneous answers,
@@ -19,7 +30,7 @@ export function useDungeon({ roster, state, publish }: DungeonDeps) {
       phase: 'question',
       room,
       answers: {},
-      roundEndTimestamp: Date.now() + ANSWER_DURATION_MS,
+      roundEndTimestamp: Date.now() + (room.isBoss ? BOSS_ANSWER_DURATION_MS : ANSWER_DURATION_MS),
       revealEndTimestamp: null,
       lastReveal: null,
     };
@@ -28,7 +39,7 @@ export function useDungeon({ roster, state, publish }: DungeonDeps) {
   // ---- Host: the party leaves the assembly screen and the first room deals ----
   function startDungeon() {
     const players: Record<string, PlayerCombat> = {};
-    roster.forEach((p) => { players[p.id] = { hp: STARTING_HP, score: 0 }; });
+    roster.forEach((p) => { players[p.id] = { hp: STARTING_HP, score: 0, isGhost: false }; });
 
     const room = buildRoom(0, roster.length, []);
     publish(askQuestion({
@@ -70,13 +81,17 @@ export function useDungeon({ roster, state, publish }: DungeonDeps) {
     const nextPlayers: Record<string, PlayerCombat> = { ...base.players };
 
     roster.forEach((p) => {
-      const current = nextPlayers[p.id] ?? { hp: 0, score: 0 };
+      const current = nextPlayers[p.id] ?? { hp: 0, score: 0, isGhost: true };
       if (base.answers[p.id] === correctIndex) {
-        monsterDamage += CORRECT_ANSWER_DAMAGE;
-        nextPlayers[p.id] = { ...current, score: current.score + 1 };
-      } else {
+        const gained = room.isBoss ? BOSS_CORRECT_ANSWER_SCORE : 1;
+        nextPlayers[p.id] = { ...current, score: current.score + gained };
+        // Ghosts keep answering for points, but they're out of the fight —
+        // their correct answers no longer land on the monster.
+        if (!current.isGhost) monsterDamage += CORRECT_ANSWER_DAMAGE;
+      } else if (!current.isGhost) {
+        const nextHp = Math.max(0, current.hp - WRONG_ANSWER_DAMAGE);
         damageDealt[p.id] = WRONG_ANSWER_DAMAGE;
-        nextPlayers[p.id] = { ...current, hp: Math.max(0, current.hp - WRONG_ANSWER_DAMAGE) };
+        nextPlayers[p.id] = { ...current, hp: nextHp, isGhost: nextHp <= 0 };
       }
     });
 
@@ -116,8 +131,13 @@ export function useDungeon({ roster, state, publish }: DungeonDeps) {
       return publish({ ...base, phase: 'game-over', room: null, winnerIds, revealEndTimestamp: null });
     }
 
+    // The party presses on — clearing a room drags any ghosts back to their feet.
+    const revivedPlayers = reviveGhosts(base.players);
     const nextRoom = buildRoom(room.index + 1, roster.length, base.askedQuestionIds);
-    return publish(askQuestion({ ...base, askedQuestionIds: [...base.askedQuestionIds, nextRoom.question.id] }, nextRoom));
+    return publish(askQuestion(
+      { ...base, players: revivedPlayers, askedQuestionIds: [...base.askedQuestionIds, nextRoom.question.id] },
+      nextRoom,
+    ));
   }
 
   // ---- Host: the reveal window ran out — advance to the next room/question ----

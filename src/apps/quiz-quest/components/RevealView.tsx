@@ -1,13 +1,14 @@
 import { cn } from '../../../shared/utils/cn';
 import type { PlayerInfo } from '../../../shared/types';
-import type { ActiveRoom, RoundResult } from '../types';
+import type { ActiveRoom, PlayerCombat, RoundResult } from '../types';
 
 const ANSWER_LETTERS = ['A', 'B', 'C', 'D'];
 
-export default function RevealView({ room, reveal, roster }: {
+export default function RevealView({ room, reveal, roster, players }: {
   room: ActiveRoom;
   reveal: RoundResult;
   roster: PlayerInfo[];
+  players: Record<string, PlayerCombat>;
 }) {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-4 py-6">
@@ -29,18 +30,21 @@ export default function RevealView({ room, reveal, roster }: {
         {roster.map((p) => {
           const chosen = reveal.answers[p.id];
           const wasCorrect = chosen === reveal.correctIndex;
+          const isGhost = players[p.id]?.isGhost ?? false;
           return (
             <div
               key={p.id}
               className={cn(
                 'flex items-center justify-between rounded-lg border-2 px-3 py-2 text-sm font-bold',
-                wasCorrect ? 'border-quiz-hp/60 bg-quiz-hp/10' : 'border-quiz-danger/60 bg-quiz-danger/10'
+                isGhost ? 'border-quiz-ink/20 bg-quiz-ink/5 opacity-70 grayscale'
+                  : wasCorrect ? 'border-quiz-hp/60 bg-quiz-hp/10' : 'border-quiz-danger/60 bg-quiz-danger/10'
               )}
             >
-              <span className="truncate text-quiz-ink">{p.name}</span>
+              <span className="truncate text-quiz-ink">{isGhost && '👻 '}{p.name}</span>
               <span className={wasCorrect ? 'text-quiz-hp' : 'text-quiz-danger'}>
                 {wasCorrect ? '✓ Correct' : chosen === undefined ? '— No answer' : `✗ ${ANSWER_LETTERS[chosen]}`}
-                {!wasCorrect && ` (−${reveal.damageDealt[p.id] ?? 0} HP)`}
+                {!wasCorrect && (players[p.id]?.hp ?? 0) === 0 && (reveal.damageDealt[p.id] ?? 0) > 0 && ' — turned into a ghost!'}
+                {!wasCorrect && !isGhost && ` (−${reveal.damageDealt[p.id] ?? 0} HP)`}
               </span>
             </div>
           );

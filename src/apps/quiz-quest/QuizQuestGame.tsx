@@ -154,7 +154,7 @@ export default function QuizQuestGame({
       )}
 
       {phase === 'reveal' && room && lastReveal && (
-        <RevealView room={room} reveal={lastReveal} roster={roster} />
+        <RevealView room={room} reveal={lastReveal} roster={roster} players={players} />
       )}
 
       {phase === 'game-over' && (

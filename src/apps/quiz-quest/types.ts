@@ -4,10 +4,13 @@ export type QuizPhase = 'starting' | 'party' | 'question' | 'reveal' | 'game-ove
 
 export interface PlayerCombat {
   hp: number;
-  // Correct answers landed so far — the whole party's win/lose is shared
-  // (did the boss go down?), but this decides who wins among the survivors.
-  // Exact scoring beyond "count of correct answers" is still open (#82).
+  // Correct answers landed so far (see #82 for the boss-room bonus) — the
+  // whole party's win/lose is shared (did the boss go down?), but this
+  // decides who wins among the survivors.
   score: number;
+  // Hit 0 HP: they keep answering and scoring but no longer land damage on
+  // the monster. Revived to 1 HP whenever the party clears a room (#80).
+  isGhost: boolean;
 }
 
 export interface ActiveRoom {
