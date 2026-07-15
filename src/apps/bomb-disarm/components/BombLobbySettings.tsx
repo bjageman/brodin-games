@@ -63,7 +63,7 @@ function Picker<T extends string>({ title, hint, options, selected, cap, playerC
                   {opt.label}
                 </span>
                 <span className={cn(
-                  'mt-0.5 block text-[10px] font-semibold leading-snug',
+                  'mt-1 block text-xs font-semibold leading-snug sm:text-sm',
                   on ? 'text-bomb-ink' : 'text-white/45'
                 )}>
                   {opt.description}
@@ -116,7 +116,7 @@ export default function BombLobbySettings({ code, roster }: LobbyExtraProps) {
 
       <Picker
         title="Special Roles"
-        hint="they take a peacekeeper's seat"
+        hint="each takes a rebel's or peacekeeper's seat"
         unit="in play"
         playerCount={playerCount}
         cap={maxSpecialRolesFor(playerCount)}
