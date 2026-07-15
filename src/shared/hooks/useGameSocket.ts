@@ -45,8 +45,8 @@ function resolveNtfyEndpoints(serverUrl: string): { domain: string; wsProtocol: 
   // Strip protocol prefix if provided in env
   const domain = serverUrl.replace(/^(https?:\/\/|wss?:\/\/)/, '');
   
-  let wsProtocol = 'wss';
-  let httpProtocol = 'https';
+  let wsProtocol: string;
+  let httpProtocol: string;
 
   if (serverUrl.startsWith('http://') || serverUrl.startsWith('ws://')) {
     wsProtocol = 'ws';
