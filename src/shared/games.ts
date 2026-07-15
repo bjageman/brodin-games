@@ -6,6 +6,7 @@ import BombDisarmGame from '../apps/bomb-disarm/BombDisarmGame';
 import BombLobbySettings from '../apps/bomb-disarm/components/BombLobbySettings';
 import BombBadge from '../apps/bomb-disarm/components/BombBadge';
 import QuizQuestGame from '../apps/quiz-quest/QuizQuestGame';
+import QuizTag from '../apps/quiz-quest/components/QuizTag';
 import { loadDictionary } from '../apps/memo-random/utils/dictionary';
 import type { GamePlayProps } from './GameShell';
 import type { LobbyExtraProps, LobbyProps, PlayerTagProps } from './components/Lobby';
@@ -142,6 +143,7 @@ export const GAMES_REGISTRY: Record<string, GameConfig> = {
     minPlayers: 1,
     maxPlayers: 6,
     gamePlay: QuizQuestGame,
+    playerTag: QuizTag,
     theme: QUIZ_THEME,
   },
 };
