@@ -91,17 +91,14 @@ export default function DrawingCanvas({
       onMouseUp={endDrawing}
       onMouseLeave={endDrawing}
       onTouchStart={(e) => {
-        if (!canDraw) return;
         const touch = e.touches[0];
         startDrawing(touch.clientX, touch.clientY);
       }}
       onTouchMove={(e) => {
-        if (!canDraw) return;
         const touch = e.touches[0];
         draw(touch.clientX, touch.clientY);
       }}
       onTouchEnd={(e) => {
-        if (!canDraw) return;
         e.preventDefault();
         endDrawing();
       }}
