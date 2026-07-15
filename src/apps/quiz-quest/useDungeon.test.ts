@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { useDungeon } from './useDungeon';
-import { REVEAL_DURATION_MS, STARTING_HP } from './constants';
+import { BOSS_ANSWER_DURATION_MS, BOSS_CORRECT_ANSWER_SCORE, REVEAL_DURATION_MS, REVIVE_HP, STARTING_HP } from './constants';
 import { DUNGEON_LENGTH } from './dungeon';
 import type { GameState } from './types';
 import type { PlayerInfo } from '../../shared/types';
@@ -145,6 +145,77 @@ describe('useDungeon', () => {
     expect(state.phase).toBe('game-over');
     expect(state.winnerIds).toEqual(['a']);
     expect(state.players.a.score).toBeGreaterThan(state.players.b.score);
+  });
+
+  it('turns a player into a ghost at 0 HP, and revives them once the room clears', () => {
+    // Room 0, 2 players -> monster starts at 2 HP. Each room re-rolls its
+    // question, so the correct index is re-read from state every round.
+    const h = makeHarness();
+    h.startDungeon();
+
+    // Round 1: both wrong — no monster damage yet, Bob takes his first hit.
+    let correct = h.getState().room!.question.correctIndex;
+    h.submitAnswer('a', (correct + 1) % 4);
+    h.submitAnswer('b', (correct + 1) % 4);
+    h.tick(REVEAL_DURATION_MS);
+    expect(h.getState().room!.monsterHp).toBe(2);
+
+    // Round 2: Alice lands one hit on the monster, Bob takes his second.
+    correct = h.getState().room!.question.correctIndex;
+    h.submitAnswer('a', correct);
+    h.submitAnswer('b', (correct + 1) % 4);
+    h.tick(REVEAL_DURATION_MS);
+    expect(h.getState().room!.monsterHp).toBe(1);
+    expect(h.getState().players.b.hp).toBe(1);
+
+    // Round 3: Bob takes his third hit and drops to 0 HP — a ghost, monster still up.
+    correct = h.getState().room!.question.correctIndex;
+    h.submitAnswer('a', (correct + 1) % 4);
+    h.submitAnswer('b', (correct + 1) % 4);
+    let state = h.getState();
+    expect(state.room!.monsterHp).toBe(1); // still alive, room hasn't cleared
+    expect(state.players.b.hp).toBe(0);
+    expect(state.players.b.isGhost).toBe(true);
+    h.tick(REVEAL_DURATION_MS);
+
+    // Round 4: Alice finishes the monster; ghost-Bob answers correctly too —
+    // his correct answer should score but not land on the monster.
+    correct = h.getState().room!.question.correctIndex;
+    h.submitAnswer('a', correct);
+    h.submitAnswer('b', correct);
+    state = h.getState();
+    expect(state.lastReveal?.monsterDamage).toBe(1); // only Alice's hit counts
+    expect(state.players.b.score).toBe(1); // Bob still scores as a ghost
+    expect(state.room!.monsterHp).toBe(0);
+
+    // Clearing the room drags Bob back to his feet.
+    h.tick(REVEAL_DURATION_MS);
+    state = h.getState();
+    expect(state.room!.index).toBe(1);
+    expect(state.players.b.isGhost).toBe(false);
+    expect(state.players.b.hp).toBe(REVIVE_HP);
+  });
+
+  it('gives the boss room a shorter timer and double points per correct answer', () => {
+    const h = makeHarness();
+    h.startDungeon();
+
+    // Clear every regular room with both players answering correctly.
+    while (!h.getState().room!.isBoss) {
+      const correct = h.getState().room!.question.correctIndex;
+      h.submitAnswer('a', correct);
+      h.submitAnswer('b', correct);
+      h.tick(REVEAL_DURATION_MS);
+    }
+
+    const state = h.getState();
+    expect(state.roundEndTimestamp! - Date.now()).toBe(BOSS_ANSWER_DURATION_MS);
+
+    const scoreBefore = state.players.a.score;
+    const correct = state.room!.question.correctIndex;
+    h.submitAnswer('a', correct);
+    h.submitAnswer('b', correct);
+    expect(h.getState().players.a.score).toBe(scoreBefore + BOSS_CORRECT_ANSWER_SCORE);
   });
 
   it('resolves with whatever was submitted once the timer runs out', () => {
