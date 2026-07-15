@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import type { PlayerInfo } from '../../shared/types';
-import type { GameState, Prompt, PromptMatchup, Round3State } from './types';
+import type { Prompt, PromptMatchup, Round3State } from './types';
 import { getRoundPrompts } from './constants';
 
 export interface HostRoundSetup {

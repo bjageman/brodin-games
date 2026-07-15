@@ -14,7 +14,6 @@ interface JokeFactoryViewsProps {
   answersSubmitted: boolean;
   onSubmitAnswers: (answers: Record<string, string>) => void;
   submissionCount: number;
-  onQuit: () => void;
   
   // Voting and Results props
   matchups: PromptMatchup[];
@@ -24,7 +23,6 @@ interface JokeFactoryViewsProps {
   myVote: string | null; // left/right in R1/R2, targetPlayerId in R3
   onSubmitVote: (choice: string) => void;
   scores: Record<string, number>;
-  roundPoints: Record<string, number>;
   handleNextRound: () => void;
   endGame: () => void;
   round3Data: Round3State | null;
@@ -42,7 +40,6 @@ export default function JokeFactoryViews({
   answersSubmitted,
   onSubmitAnswers,
   submissionCount,
-  onQuit,
   
   matchups,
   currentMatchIndex,
@@ -51,7 +48,6 @@ export default function JokeFactoryViews({
   myVote,
   onSubmitVote,
   scores,
-  roundPoints,
   handleNextRound,
   endGame,
   round3Data,
@@ -206,8 +202,6 @@ export default function JokeFactoryViews({
           ) : (
             // Round 3: Multi-answer Vote
             round3Data && (() => {
-              const hasAnswered = round3Data.answers[playerId] !== undefined;
-              
               if (myVote) {
                 return (
                   <div className="bg-indigo-900/40 border border-white/10 rounded-3xl p-8 text-center space-y-3">
@@ -224,7 +218,7 @@ export default function JokeFactoryViews({
                   <p className="text-xs text-yellow-400/60 font-bold uppercase tracking-wider text-center mb-1">
                     Vote for the funniest punchline (you cannot vote for your own!)
                   </p>
-                  {shuffledR3Answers.map((ans, idx) => {
+                  {shuffledR3Answers.map((ans) => {
                     const isOwn = ans.playerId === playerId;
                     return (
                       <button

@@ -108,8 +108,12 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
   // Play result sound effects (Success/Failure)
   useEffect(() => {
     if (phase === 'matchup-results' && matchResult) {
-      const isWinner = matchResult.winnerPlayerId === playerId;
-      const isLoser = matchResult.loserPlayerId === playerId;
+      const isWinner =
+        (matchResult.leftVotes > matchResult.rightVotes && matchResult.left.playerId === playerId) ||
+        (matchResult.rightVotes > matchResult.leftVotes && matchResult.right.playerId === playerId);
+      const isLoser =
+        (matchResult.leftVotes > matchResult.rightVotes && matchResult.right.playerId === playerId) ||
+        (matchResult.rightVotes > matchResult.leftVotes && matchResult.left.playerId === playerId);
       if (isWinner) {
         audioManager.playSuccess();
       } else if (isLoser) {
