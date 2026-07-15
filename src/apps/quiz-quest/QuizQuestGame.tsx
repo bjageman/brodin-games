@@ -1,24 +1,40 @@
 import { useEffect, useState } from 'react';
 import { loadSnapshot, saveSnapshot, gameSnapshotKey } from '../../shared/utils/sessionSnapshot';
+import { useCountdown } from '../../shared/hooks/useCountdown';
 import type { Envelope } from '../../shared/types';
 import type { GamePlayProps } from '../../shared/GameShell';
 import type { GameState } from './types';
+import { useDungeon } from './useDungeon';
 import PartyCard from './components/PartyCard';
+import MenuOverlay from './components/MenuOverlay';
+import QuestionView from './components/QuestionView';
+import RevealView from './components/RevealView';
+import GameOverView from './components/GameOverView';
 
 interface QuizSnapshot {
   quiz: GameState;
 }
 
-const EMPTY: GameState = { phase: 'starting' };
+const EMPTY: GameState = {
+  phase: 'starting',
+  dungeonLength: 0,
+  room: null,
+  players: {},
+  answers: {},
+  roundEndTimestamp: null,
+  lastReveal: null,
+  askedQuestionIds: [],
+  winnerIds: [],
+};
 
-// Scaffolding only: gets the game hostable/joinable with a working lobby and
-// party roster. The room loop (question, monster, HP, scoring) is a follow-up
-// once the open design questions on #76 are settled.
 export default function QuizQuestGame({
-  code, roster, isHost, freshStart, sendMessage, onRegisterMessageHandler, onQuit, onGameBgChange,
+  code, playerId, roster, isHost, freshStart, sendMessage, onRegisterMessageHandler, onQuit, onGameBgChange,
 }: GamePlayProps) {
   const restored = freshStart ? null : loadSnapshot<QuizSnapshot>(gameSnapshotKey(code))?.quiz ?? null;
   const [state, setState] = useState<GameState>({ ...EMPTY, ...restored });
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const { phase, room, players, answers, roundEndTimestamp, lastReveal, winnerIds } = state;
 
   useEffect(() => {
     const current = loadSnapshot<Record<string, unknown>>(gameSnapshotKey(code)) ?? {};
@@ -30,14 +46,25 @@ export default function QuizQuestGame({
     sendMessage({ type: 'quiz-state-update', timestamp: Date.now(), payload: next });
   }
 
+  const { startDungeon, submitAnswer, timeoutRound } = useDungeon({ roster, state, publish });
+
   // ---- Host: once the party has joined, move past the loading spinner ----
   useEffect(() => {
     if (isHost && (state.phase === 'starting' || freshStart) && roster.length > 0) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      publish({ phase: 'party' });
+      publish({ ...EMPTY, phase: 'party' });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHost, freshStart, roster.length]);
+
+  // ---- The answer window's countdown, and the host reaction once it ends ----
+  const { msRemaining: roundMs, expired: roundExpired } = useCountdown(roundEndTimestamp);
+  useEffect(() => {
+    if (isHost && phase === 'question' && roundEndTimestamp && roundExpired) {
+      timeoutRound();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHost, phase, roundEndTimestamp, roundExpired]);
 
   useEffect(() => {
     onRegisterMessageHandler((envelope: Envelope) => {
@@ -45,6 +72,8 @@ export default function QuizQuestGame({
         setState({ ...EMPTY, ...(envelope.payload as GameState) });
       } else if (envelope.type === 'quiz-request-state' && isHost) {
         if (state.phase !== 'starting') publish(state);
+      } else if (envelope.type === 'quiz-answer' && isHost) {
+        submitAnswer(envelope.playerId, (envelope.payload as { choiceIndex: number }).choiceIndex);
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -55,12 +84,25 @@ export default function QuizQuestGame({
     return () => onGameBgChange?.(null);
   }, [onGameBgChange]);
 
+  // ---- Client: pick an answer ----
+  function chooseAnswer(index: number) {
+    if (phase !== 'question' || answers[playerId] !== undefined) return;
+    if (isHost) submitAnswer(playerId, index);
+    else sendMessage({ type: 'quiz-answer', playerId, timestamp: Date.now(), payload: { choiceIndex: index } });
+  }
+
+  const roundSec = Math.ceil(roundMs / 1000);
+
   return (
-    <div className="w-full flex-1 flex flex-col items-center justify-center gap-6 px-4 py-10 text-quiz-ink">
-      {state.phase === 'starting' ? (
-        <div className="w-12 h-12 border-4 border-quiz-gold border-t-transparent rounded-full animate-spin" />
-      ) : (
-        <>
+    <div className="w-full flex-1 flex flex-col items-center text-quiz-ink">
+      {phase === 'starting' && (
+        <div className="flex flex-1 items-center justify-center py-20">
+          <div className="w-12 h-12 border-4 border-quiz-gold border-t-transparent rounded-full animate-spin" />
+        </div>
+      )}
+
+      {phase === 'party' && (
+        <div className="flex w-full flex-1 flex-col items-center justify-center gap-6 px-4 py-10">
           <h2 className="font-display text-2xl font-extrabold uppercase tracking-wide text-quiz-gold">
             The Party Assembles
           </h2>
@@ -69,16 +111,49 @@ export default function QuizQuestGame({
               <PartyCard key={p.id} name={p.name} index={i} />
             ))}
           </div>
-          <p className="max-w-md text-center text-sm text-quiz-ink/70">
-            The dungeon is still being built — rooms, monsters, and trivia are coming soon.
-          </p>
+          {isHost ? (
+            <button
+              onClick={startDungeon}
+              className="rounded-full bg-quiz-gold px-8 py-3 font-display text-sm font-black uppercase tracking-wider text-quiz-bg transition-transform hover:scale-[1.03]"
+            >
+              Enter the Dungeon
+            </button>
+          ) : (
+            <p className="text-sm text-quiz-ink/70">Waiting for the host to start…</p>
+          )}
           <button
-            onClick={onQuit}
+            onClick={() => setMenuOpen(true)}
             className="rounded-full border-2 border-quiz-gold px-6 py-2 font-display text-xs font-bold uppercase tracking-wider text-quiz-gold transition-colors hover:bg-quiz-gold hover:text-quiz-ink"
           >
-            Quit
+            Menu
           </button>
-        </>
+        </div>
+      )}
+
+      {phase === 'question' && room && (
+        <QuestionView
+          room={room}
+          dungeonLength={state.dungeonLength}
+          roster={roster}
+          players={players}
+          playerId={playerId}
+          myAnswer={answers[playerId]}
+          answeredCount={Object.keys(answers).length}
+          secondsLeft={roundSec}
+          onAnswer={chooseAnswer}
+        />
+      )}
+
+      {phase === 'reveal' && room && lastReveal && (
+        <RevealView room={room} reveal={lastReveal} roster={roster} />
+      )}
+
+      {phase === 'game-over' && (
+        <GameOverView players={players} roster={roster} winnerIds={winnerIds} isHost={isHost} onQuit={onQuit} />
+      )}
+
+      {menuOpen && (
+        <MenuOverlay code={code} playerCount={roster.length} onQuit={onQuit} onClose={() => setMenuOpen(false)} />
       )}
     </div>
   );
