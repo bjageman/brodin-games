@@ -19,10 +19,19 @@ export default function HostPage() {
   const [isDisplay, setIsDisplay] = useState(() => restored?.isDisplay ?? false);
   const [code] = useState(() => restored?.code ?? generateGameCode());
   const [playerId] = useState(() => {
-    const saved = sessionStorage.getItem('brodin-player-id');
+    let saved: string | null = null;
+    try {
+      saved = sessionStorage.getItem('brodin-player-id');
+    } catch {
+      // ignore
+    }
     if (saved) return saved;
     const id = 'p-' + Math.random().toString(36).substring(2, 9);
-    sessionStorage.setItem('brodin-player-id', id);
+    try {
+      sessionStorage.setItem('brodin-player-id', id);
+    } catch {
+      // ignore
+    }
     return id;
   });
 

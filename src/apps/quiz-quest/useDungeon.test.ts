@@ -13,6 +13,7 @@ const EMPTY: GameState = {
   players: {},
   answers: {},
   roundEndTimestamp: null,
+  revealEndTimestamp: null,
   lastReveal: null,
   askedQuestionIds: [],
   winnerIds: [],
