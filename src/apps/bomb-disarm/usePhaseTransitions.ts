@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import type { PlayerInfo } from '../../shared/types';
 import {
   MEMORIZE_DURATION_MS, ROLE_REVEAL_DURATION_MS, STATE_REQUEST_MAX_ATTEMPTS, STATE_REQUEST_RETRY_INTERVAL_MS,
@@ -38,7 +38,7 @@ export function usePhaseTransitions(deps: PhaseTransitionsDeps) {
     emptyState, sendMessage, setState, patch,
   } = deps;
 
-  function dealGame(): GameState {
+  const dealGame = useCallback((): GameState => {
     const ids = roster.map((p) => p.id);
     const { roles: nextRoles, specialRoles: nextSpecialRoles, leftoverRole: nextLeftoverRole } = assignRoles(
       ids,
@@ -56,13 +56,13 @@ export function usePhaseTransitions(deps: PhaseTransitionsDeps) {
       hands: dealHands(ids, deck),
       roleRevealEndTimestamp: Date.now() + ROLE_REVEAL_DURATION_MS,
     };
-  }
+  }, [code, roster, emptyState]);
 
-  function goToMemorize() {
+  const goToMemorize = useCallback(() => {
     patch({ phase: 'memorize', roleRevealEndTimestamp: null, memorizeEndTimestamp: Date.now() + MEMORIZE_DURATION_MS });
-  }
+  }, [patch]);
 
-  function goToTable() {
+  const goToTable = useCallback(() => {
     // Flip every hand face-down and shuffle its order so the 60s of study can't
     // be turned into "the bomb is the third card".
     const shuffledHands: GameState['hands'] = {};
@@ -71,7 +71,7 @@ export function usePhaseTransitions(deps: PhaseTransitionsDeps) {
     const carried = roster.some((p) => p.id === activePlayerId) ? activePlayerId : '';
     const firstPicker = carried || roster[Math.floor(Math.random() * roster.length)]?.id || '';
     patch({ phase: 'table', hands: shuffledHands, activePlayerId: firstPicker, memorizeEndTimestamp: null });
-  }
+  }, [hands, roster, activePlayerId, patch]);
 
   // ---- Host: initialize the game on a fresh start ----
   useEffect(() => {
@@ -81,24 +81,21 @@ export function usePhaseTransitions(deps: PhaseTransitionsDeps) {
       setState(s);
       sendMessage({ type: 'bomb-state-update', timestamp: Date.now(), payload: s });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHost, freshStart, roster.length]);
+  }, [isHost, freshStart, roster.length, dealGame, phase, sendMessage, setState]);
 
   // ---- Host transition: Role Reveal -> Memorize ----
   useEffect(() => {
     if (isHost && phase === 'role-reveal' && roleRevealEndTimestamp && roleExpired) {
       goToMemorize();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHost, phase, roleRevealEndTimestamp, roleExpired]);
+  }, [isHost, phase, roleRevealEndTimestamp, roleExpired, goToMemorize]);
 
   // ---- Host transition: Memorize -> Table ----
   useEffect(() => {
     if (isHost && phase === 'memorize' && memorizeEndTimestamp && memoExpired) {
       goToTable();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHost, phase, memorizeEndTimestamp, memoExpired]);
+  }, [isHost, phase, memorizeEndTimestamp, memoExpired, goToTable]);
 
   // ---- Client: recover from a missed initial broadcast (mirrors fake-it) ----
   useEffect(() => {

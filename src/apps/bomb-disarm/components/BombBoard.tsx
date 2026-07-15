@@ -21,9 +21,8 @@ export function BombCard({ card, faceUp, tappable, maxWidth, onTap }: {
   const [flipped, setFlipped] = useState(false);
   useEffect(() => {
     if (!shown) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setFlipped(false);
-      return;
+      const raf = requestAnimationFrame(() => setFlipped(false));
+      return () => cancelAnimationFrame(raf);
     }
     const raf = requestAnimationFrame(() => setFlipped(true));
     return () => cancelAnimationFrame(raf);
