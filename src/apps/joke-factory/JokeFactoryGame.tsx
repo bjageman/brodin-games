@@ -29,7 +29,6 @@ export default function JokeFactoryGame({
   playerId,
   isHost,
   roster,
-  isConnected,
   sendMessage,
   freshStart,
   onRegisterMessageHandler,
@@ -77,7 +76,7 @@ export default function JokeFactoryGame({
   useEffect(() => { roundPointsRef.current = roundPoints; }, [roundPoints]);
 
   // Timers using useCountdown
-  const { msRemaining: revealMs, expired: revealExpired } = useCountdown(revealEndTimestamp);
+  const { expired: revealExpired } = useCountdown(revealEndTimestamp);
   const { msRemaining: writingMs, expired: writingExpired } = useCountdown(writingEndTimestamp);
   const { msRemaining: votingMs, expired: votingExpired } = useCountdown(votingEndTimestamp);
   const { msRemaining: resultsMs, expired: resultsExpired } = useCountdown(resultsEndTimestamp);
