@@ -34,6 +34,17 @@ describe('deckCompositionFor', () => {
   it('still leaves room for the blanks', () => {
     for (let n = 3; n <= 10; n++) expect(deckCompositionFor(n).blank).toBeGreaterThan(0);
   });
+
+  // A Folk Hero can only save once, so without a second bomb the rest of the
+  // game would have nothing left to threaten the table with.
+  it('adds an extra bomb when the Folk Hero is in play', () => {
+    for (let n = 3; n <= 10; n++) {
+      const plain = deckCompositionFor(n);
+      const withHero = deckCompositionFor(n, 0, true);
+      expect(withHero.explode).toBe(plain.explode + 1);
+      expect(withHero.total).toBe(plain.total);
+    }
+  });
 });
 
 describe('teamCountLabels', () => {

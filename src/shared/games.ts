@@ -4,10 +4,11 @@ import FakeItGame from '../apps/fake-it/FakeItGame';
 import FakeItLobby from '../apps/fake-it/components/FakeItLobby';
 import BombDisarmGame from '../apps/bomb-disarm/BombDisarmGame';
 import BombLobbySettings from '../apps/bomb-disarm/components/BombLobbySettings';
+import BombBadge from '../apps/bomb-disarm/components/BombBadge';
 import QuizQuestGame from '../apps/quiz-quest/QuizQuestGame';
 import { loadDictionary } from '../apps/memo-random/utils/dictionary';
 import type { GamePlayProps } from './GameShell';
-import type { LobbyExtraProps, LobbyProps } from './components/Lobby';
+import type { LobbyExtraProps, LobbyProps, PlayerTagProps } from './components/Lobby';
 
 /**
  * Palette for the chrome *around* a game — the host's create-room page, the
@@ -98,6 +99,8 @@ export interface GameConfig {
   lobby?: ComponentType<LobbyProps>;
   /** Host-only pre-game options, rendered inside the shared lobby. */
   lobbyExtra?: ComponentType<LobbyExtraProps>;
+  /** Overrides the sticky-note player tag in the shared lobby's roster grid. */
+  playerTag?: ComponentType<PlayerTagProps>;
   /** Colours the chrome around the game. Falls back to DEFAULT_THEME. */
   theme?: GameTheme;
   onIdlePrefetch?: () => void;
@@ -128,6 +131,7 @@ export const GAMES_REGISTRY: Record<string, GameConfig> = {
     maxPlayers: 10,
     gamePlay: BombDisarmGame,
     lobbyExtra: BombLobbySettings,
+    playerTag: BombBadge,
     theme: BOMB_THEME,
   },
   'quiz-quest': {

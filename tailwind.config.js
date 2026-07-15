@@ -107,11 +107,6 @@ export default {
           '0%, 18%': { transform: 'translateX(0)' },
           '100%': { transform: 'translateX(100%)' },
         },
-        cardFlip: {
-          '0%': { transform: 'rotateY(90deg) scale(0.92)', opacity: '0.4' },
-          '60%': { transform: 'rotateY(-8deg) scale(1.04)', opacity: '1' },
-          '100%': { transform: 'rotateY(0) scale(1)', opacity: '1' },
-        },
         verdictIn: {
           '0%': { transform: 'scale(0.7)', opacity: '0' },
           '100%': { transform: 'scale(1)', opacity: '1' },
@@ -121,7 +116,6 @@ export default {
         shake: 'shake 0.3s ease-in-out',
         curtainLeft: 'curtainLeft 1.6s cubic-bezier(0.7, 0, 0.3, 1) forwards',
         curtainRight: 'curtainRight 1.6s cubic-bezier(0.7, 0, 0.3, 1) forwards',
-        cardFlip: 'cardFlip 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
         verdictIn: 'verdictIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1)',
       },
     },

@@ -1,7 +1,7 @@
 import { gameSnapshotKey, loadSnapshot, saveSnapshot } from '../../shared/utils/sessionSnapshot';
 import { SPECIAL_CARD_TYPES } from './cards';
 import { maxSpecialsFor } from './constants';
-import { SPECIAL_ROLES, maxSpecialRolesFor } from './roles';
+import { SPECIAL_ROLES } from './roles';
 import type { SpecialCardType, SpecialRole } from './types';
 
 const CARDS_KEY = 'bombSpecials';
@@ -32,6 +32,9 @@ export function specialsForDeal(code: string, playerCount: number): SpecialCardT
   return loadSpecials(code).slice(0, maxSpecialsFor(playerCount));
 }
 
-export function specialRolesForDeal(code: string, playerCount: number): SpecialRole[] {
-  return loadSpecialRoles(code).slice(0, maxSpecialRolesFor(playerCount));
+// Unlike the special cards (a single shared budget), the rebel and peacekeeper
+// special-role seats are two separate budgets — assignRoles caps each one against
+// the actual roster at deal time, so there's nothing to slice here.
+export function specialRolesForDeal(code: string): SpecialRole[] {
+  return loadSpecialRoles(code);
 }
