@@ -1,4 +1,5 @@
-import { useState, FormEvent } from 'react';
+import { useState } from 'react';
+import type { FormEvent } from 'react';
 import { cn } from '../../../shared/utils/cn';
 import type { PlayerInfo } from '../../../shared/types';
 import type { FakeItPhase, Line, Point, Topic } from '../types';

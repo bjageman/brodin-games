@@ -1,4 +1,5 @@
-import { useState, useRef, MouseEvent as ReactMouseEvent, TouchEvent as ReactTouchEvent } from 'react';
+import { useState, useRef } from 'react';
+import type { MouseEvent as ReactMouseEvent, TouchEvent as ReactTouchEvent } from 'react';
 import type { LobbyProps } from '../../../shared/components/Lobby';
 import RoomCodeModal from '../../../shared/components/RoomCodeModal';
 
