@@ -19,10 +19,19 @@ export default function JoinPage() {
   const [name, setName] = useState(() => localStorage.getItem('brodin-name') || '');
   const [joined, setJoined] = useState(() => restored?.joined ?? false);
   const [playerId] = useState(() => {
-    const saved = sessionStorage.getItem('brodin-player-id');
+    let saved: string | null = null;
+    try {
+      saved = sessionStorage.getItem('brodin-player-id');
+    } catch {
+      // ignore
+    }
     if (saved) return saved;
     const id = 'p-' + Math.random().toString(36).substring(2, 9);
-    sessionStorage.setItem('brodin-player-id', id);
+    try {
+      sessionStorage.setItem('brodin-player-id', id);
+    } catch {
+      // ignore
+    }
     return id;
   });
 

@@ -387,6 +387,27 @@ export default function BombDisarmGame({
     return () => clearTimeout(timer);
   }, [isHost, peek, peekExpired, advanceTurn, state, lastReveal]);
 
+  // ---- Host: recover from a refresh during the winner reveal delay ----
+  useEffect(() => {
+    if (isHost && phase === 'table' && pendingWinner && !winner) {
+      const timer = setTimeout(() => {
+        publish({ ...state, phase: 'results', winner: pendingWinner });
+      }, RESULT_REVEAL_DELAY_MS);
+      return () => clearTimeout(timer);
+    }
+  }, [isHost, phase, pendingWinner, winner, publish, state]);
+
+  // ---- Host: recover from a refresh during the round summary delay ----
+  useEffect(() => {
+    if (isHost && phase === 'table' && state.roundSummary) {
+      const timer = setTimeout(() => {
+        const lastOwnerId = state.lastReveal?.targetId ?? '';
+        endRound({ ...state, roundSummary: null }, lastOwnerId);
+      }, ROUND_SUMMARY_DELAY_MS);
+      return () => clearTimeout(timer);
+    }
+  }, [isHost, phase, state.roundSummary, state.lastReveal, endRound, state]);
+
   // ---- Host: validate an incoming tap, then resolve it ----
   function handleReveal(senderId: string | undefined, cardIndex: number, actedTurn: number) {
     if (phase !== 'table' || winner) return;

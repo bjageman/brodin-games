@@ -22,6 +22,7 @@ const EMPTY: GameState = {
   players: {},
   answers: {},
   roundEndTimestamp: null,
+  revealEndTimestamp: null,
   lastReveal: null,
   askedQuestionIds: [],
   winnerIds: [],
@@ -45,7 +46,7 @@ export default function QuizQuestGame({
     sendMessage({ type: 'quiz-state-update', timestamp: Date.now(), payload: next });
   }, [sendMessage]);
 
-  const { startDungeon, submitAnswer, timeoutRound } = useDungeon({ roster, state, publish });
+  const { startDungeon, submitAnswer, timeoutRound, timeoutReveal } = useDungeon({ roster, state, publish });
 
   // ---- Host: once the party has joined, move past the loading spinner ----
   useEffect(() => {
@@ -65,6 +66,15 @@ export default function QuizQuestGame({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHost, phase, roundEndTimestamp, roundExpired]);
+
+  // ---- The reveal window's countdown, and the host reaction once it ends ----
+  const { expired: revealExpired } = useCountdown(state.revealEndTimestamp);
+  useEffect(() => {
+    if (isHost && phase === 'reveal' && state.revealEndTimestamp && revealExpired) {
+      timeoutReveal();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHost, phase, state.revealEndTimestamp, revealExpired]);
 
   useEffect(() => {
     onRegisterMessageHandler((envelope: Envelope) => {
