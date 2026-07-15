@@ -7,6 +7,7 @@ import BombLobbySettings from '../apps/bomb-disarm/components/BombLobbySettings'
 import BombBadge from '../apps/bomb-disarm/components/BombBadge';
 import QuizQuestGame from '../apps/quiz-quest/QuizQuestGame';
 import QuizTag from '../apps/quiz-quest/components/QuizTag';
+import JokeFactoryGame from '../apps/joke-factory/JokeFactoryGame';
 import { loadDictionary } from '../apps/memo-random/utils/dictionary';
 import type { GamePlayProps } from './GameShell';
 import type { LobbyExtraProps, LobbyProps, PlayerTagProps } from './components/Lobby';
@@ -78,7 +79,6 @@ const BOMB_THEME: GameTheme = {
   muted: 'text-white/70',
   heading: 'text-white',
 };
-
 const QUIZ_THEME: GameTheme = {
   lobbyBg: 'bg-quiz-bg text-quiz-ink',
   pageBg: 'bg-quiz-bg text-quiz-ink',
@@ -88,6 +88,17 @@ const QUIZ_THEME: GameTheme = {
   code: 'text-quiz-gold',
   muted: 'text-quiz-ink/70',
   heading: 'text-quiz-ink',
+};
+
+const JOKE_THEME: GameTheme = {
+  lobbyBg: 'bg-indigo-950 text-white',
+  pageBg: 'bg-indigo-950 text-white',
+  panel: 'bg-indigo-900 border-yellow-400/40 text-white shadow-xl',
+  field: 'bg-indigo-950 border-white/20 text-white focus:border-yellow-400',
+  accent: 'bg-yellow-500 hover:bg-yellow-600 text-indigo-950 font-bold',
+  code: 'text-yellow-400',
+  muted: 'text-white/70',
+  heading: 'text-yellow-400',
 };
 
 export interface GameConfig {
@@ -145,5 +156,13 @@ export const GAMES_REGISTRY: Record<string, GameConfig> = {
     gamePlay: QuizQuestGame,
     playerTag: QuizTag,
     theme: QUIZ_THEME,
+  },
+  'joke-factory': {
+    id: 'joke-factory',
+    title: 'Joke Factory',
+    minPlayers: 3,
+    maxPlayers: 8,
+    gamePlay: JokeFactoryGame,
+    theme: JOKE_THEME,
   },
 };

@@ -4,6 +4,7 @@ import { useCountdown } from '../../shared/hooks/useCountdown';
 import type { Envelope } from '../../shared/types';
 import type { GamePlayProps } from '../../shared/GameShell';
 import type { FakeItPhase, GameState, Line, Topic, Point } from './types';
+import { isFuzzyMatch } from './utils/fuzzyMatch';
 import { DEBUG_MODE } from '../../shared/constants';
 import {
   ROLE_REVEAL_DURATION_MS,
@@ -33,6 +34,7 @@ interface FakeItSnapshot {
   roleRevealEndTimestamp: number | null;
   turnEndTimestamp: number | null;
   voteEndTimestamp: number | null;
+  guessEndTimestamp: number | null;
   usedTopicNames: string[];
 }
 
@@ -40,7 +42,7 @@ const CONFETTI_COLORS = ['#f9749f', '#03d1b9', '#facc15'];
 
 // Phases the mockups draw on a dark stage: the prompt reveal, the drawing
 // easel, and the round payout. Lobby / vote / final tally are light.
-const DARK_PHASES = new Set<FakeItPhase>(['starting', 'role-reveal', 'drawing', 'results']);
+const DARK_PHASES = new Set<FakeItPhase>(['starting', 'role-reveal', 'drawing', 'guessing', 'results']);
 
 export default function FakeItGame({
   code,
@@ -72,6 +74,7 @@ export default function FakeItGame({
   const [roleRevealEndTimestamp, setRoleRevealEndTimestamp] = useState<number | null>(restored?.roleRevealEndTimestamp ?? null);
   const [turnEndTimestamp, setTurnEndTimestamp] = useState<number | null>(restored?.turnEndTimestamp ?? null);
   const [voteEndTimestamp, setVoteEndTimestamp] = useState<number | null>(restored?.voteEndTimestamp ?? null);
+  const [guessEndTimestamp, setGuessEndTimestamp] = useState<number | null>(restored?.guessEndTimestamp ?? null);
 
 
   const [myVote, setMyVote] = useState<string | null>(null);
@@ -111,6 +114,7 @@ export default function FakeItGame({
       roleRevealEndTimestamp,
       turnEndTimestamp,
       voteEndTimestamp,
+      guessEndTimestamp,
       usedTopicNames,
     };
     sessionStorage.setItem(`fake-it-snap-${code}`, JSON.stringify(snapshot));
@@ -129,16 +133,19 @@ export default function FakeItGame({
     roleRevealEndTimestamp,
     turnEndTimestamp,
     voteEndTimestamp,
+    guessEndTimestamp,
   ]);
 
   // Timers using useCountdown
   const { msRemaining: revealMs, expired: revealExpired } = useCountdown(roleRevealEndTimestamp);
   const { msRemaining: turnMs, expired: turnExpired } = useCountdown(turnEndTimestamp);
   const { msRemaining: voteMs, expired: voteExpired } = useCountdown(voteEndTimestamp);
+  const { msRemaining: guessMs, expired: guessExpired } = useCountdown(guessEndTimestamp);
 
   const revealSec = Math.ceil(revealMs / 1000);
   const turnSec = Math.ceil(turnMs / 1000);
   const voteSec = Math.ceil(voteMs / 1000);
+  const guessSec = Math.ceil(guessMs / 1000);
 
   // Get color for a player index
   function getPlayerColor(pId: string) {
@@ -161,6 +168,7 @@ export default function FakeItGame({
       roleRevealEndTimestamp,
       turnEndTimestamp,
       voteEndTimestamp,
+      guessEndTimestamp,
       ...fields,
     };
     sendMessage({
@@ -269,22 +277,33 @@ export default function FakeItGame({
     const maxVotes = Math.max(...Object.values(voteCounts), 0);
     const votedOutIds = Object.keys(voteCounts).filter((id) => voteCounts[id] === maxVotes && maxVotes > 0);
 
-    const imposterCaught = votedOutIds.includes(imposterId);
+    const imposterCaught = votedOutIds.length === 1 && votedOutIds[0] === imposterId;
 
+    if (maxVotes > 0 && imposterCaught) {
+      // Imposter is caught: they get a chance to guess!
+      const endTimestamp = Date.now() + 10000;
+      setPhase('guessing');
+      applyVotes(finalVotes);
+      setVoteEndTimestamp(null);
+      setGuessEndTimestamp(endTimestamp);
+
+      broadcastState({
+        phase: 'guessing',
+        votes: finalVotes,
+        voteEndTimestamp: null,
+        guessEndTimestamp: endTimestamp,
+      });
+      return;
+    }
+
+    // Imposter escaped or nobody voted: go straight to results
     const newRoundPoints: Record<string, number> = {};
     roster.forEach((p) => {
       newRoundPoints[p.id] = 0;
     });
 
-    if (imposterCaught) {
-      // Artists won! Everyone who fingered the imposter gets paid.
-      Object.entries(finalVotes).forEach(([voterId, votedId]) => {
-        if (votedId === imposterId) {
-          newRoundPoints[voterId] = PAYOUT_CORRECT_VOTE;
-        }
-      });
-    } else {
-      // Imposter slipped through and collects the bigger purse.
+    if (maxVotes > 0) {
+      // Imposter escaped!
       newRoundPoints[imposterId] = PAYOUT_IMPOSTER_ESCAPED;
     }
 
@@ -298,6 +317,7 @@ export default function FakeItGame({
     setScores(nextScores);
     setRoundPoints(newRoundPoints);
     setVoteEndTimestamp(null);
+    setGuessEndTimestamp(null);
 
     broadcastState({
       phase: 'results',
@@ -305,6 +325,46 @@ export default function FakeItGame({
       scores: nextScores,
       roundPoints: newRoundPoints,
       voteEndTimestamp: null,
+      guessEndTimestamp: null,
+    });
+  }
+
+  // Host: process the imposter's guess
+  function handleImposterGuess(guessText: string | null) {
+    const correct = guessText ? isFuzzyMatch(guessText, topic?.name || '') : false;
+    const newRoundPoints: Record<string, number> = {};
+    roster.forEach((p) => {
+      newRoundPoints[p.id] = 0;
+    });
+
+    if (correct) {
+      // Imposter guessed correctly! They win the round.
+      newRoundPoints[imposterId] = PAYOUT_IMPOSTER_ESCAPED;
+    } else {
+      // Imposter failed! Artists win.
+      // Everyone who voted for the imposter gets paid.
+      Object.entries(votes).forEach(([voterId, votedId]) => {
+        if (votedId === imposterId) {
+          newRoundPoints[voterId] = PAYOUT_CORRECT_VOTE;
+        }
+      });
+    }
+
+    const nextScores = { ...scores };
+    roster.forEach((p) => {
+      nextScores[p.id] = (nextScores[p.id] || 0) + (newRoundPoints[p.id] || 0);
+    });
+
+    setPhase('results');
+    setScores(nextScores);
+    setRoundPoints(newRoundPoints);
+    setGuessEndTimestamp(null);
+
+    broadcastState({
+      phase: 'results',
+      scores: nextScores,
+      roundPoints: newRoundPoints,
+      guessEndTimestamp: null,
     });
   }
 
@@ -326,6 +386,7 @@ export default function FakeItGame({
     setRoleRevealEndTimestamp(revealEnd);
     setTurnEndTimestamp(null);
     setVoteEndTimestamp(null);
+    setGuessEndTimestamp(null);
 
     broadcastState({
       phase: 'role-reveal',
@@ -339,6 +400,7 @@ export default function FakeItGame({
       roleRevealEndTimestamp: revealEnd,
       turnEndTimestamp: null,
       voteEndTimestamp: null,
+      guessEndTimestamp: null,
     });
   }
 
@@ -408,6 +470,7 @@ export default function FakeItGame({
       setRoleRevealEndTimestamp(revealEnd);
       setTurnEndTimestamp(null);
       setVoteEndTimestamp(null);
+      setGuessEndTimestamp(null);
 
       // Broadcast immediately
       const newState: GameState = {
@@ -423,6 +486,7 @@ export default function FakeItGame({
         roleRevealEndTimestamp: revealEnd,
         turnEndTimestamp: null,
         voteEndTimestamp: null,
+        guessEndTimestamp: null,
       };
 
       sendMessage({
@@ -487,6 +551,14 @@ export default function FakeItGame({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHost, phase, voteEndTimestamp, voteExpired]);
 
+  // Host transition: Guessing Timeout
+  useEffect(() => {
+    if (isHost && phase === 'guessing' && guessEndTimestamp && guessExpired) {
+      handleImposterGuess(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHost, phase, guessEndTimestamp, guessExpired]);
+
   // Message Handler Registration
   useEffect(() => {
     onRegisterMessageHandler((envelope: Envelope) => {
@@ -507,6 +579,7 @@ export default function FakeItGame({
           setRoleRevealEndTimestamp(state.roleRevealEndTimestamp);
           setTurnEndTimestamp(state.turnEndTimestamp);
           setVoteEndTimestamp(state.voteEndTimestamp);
+          setGuessEndTimestamp(state.guessEndTimestamp);
         }
       } else if (type === 'debug-host-action') {
         if (isHost) {
@@ -520,6 +593,9 @@ export default function FakeItGame({
         } else if (type === 'submit-vote') {
           const votePayload = payload as { targetId: string };
           handleClientSubmitVote(senderId, votePayload.targetId);
+        } else if (type === 'submit-guess') {
+          const guessPayload = payload as { guess: string };
+          handleImposterGuess(guessPayload.guess);
         } else if (type === 'fake-it-request-state') {
           // A client missed the one-shot initial broadcast (or reconnected) and
           // is stuck on the loading screen — re-send the current full state.
@@ -532,7 +608,7 @@ export default function FakeItGame({
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHost, roster, drawerIndex, drawingRound, lines, votes, scores, roundPoints, phase, imposterId, topic, isTimerPaused]);
+  }, [isHost, roster, drawerIndex, drawingRound, lines, votes, scores, roundPoints, phase, imposterId, topic, isTimerPaused, guessEndTimestamp]);
 
   // Confetti trigger on Leaderboard mounting
   useEffect(() => {
@@ -558,6 +634,16 @@ export default function FakeItGame({
         : 'bg-fakeit-light text-fakeit-ink'
     );
   }, [phase, onGameBgChange]);
+
+  // Client: Submit imposter guess
+  function handleGuessSubmit(guessText: string) {
+    sendMessage({
+      type: 'submit-guess',
+      playerId,
+      timestamp: Date.now(),
+      payload: { guess: guessText },
+    });
+  }
 
   // Is it my turn to draw?
   const isMyTurn = phase === 'drawing' && roster[drawerIndex]?.id === playerId;
@@ -592,6 +678,8 @@ export default function FakeItGame({
       endGame={endGame}
       playAgain={playAgain}
       onQuit={onQuit}
+      guessSec={guessSec}
+      handleGuessSubmit={handleGuessSubmit}
     />
   );
 }

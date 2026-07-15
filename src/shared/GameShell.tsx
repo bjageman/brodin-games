@@ -145,6 +145,23 @@ export default function GameShell({
       if (fromId && payload?.name) hostReceiveJoinRequest(fromId, payload.name);
     }
 
+    if (isHost && envelope.type === 'update-avatar') {
+      const payload = envelope.payload as { avatar: string };
+      const fromId = envelope.playerId;
+      if (fromId && payload?.avatar) {
+        const nextRoster = rosterRef.current.map((p) =>
+          p.id === fromId ? { ...p, avatar: payload.avatar } : p
+        );
+        rosterRef.current = nextRoster;
+        setRoster(nextRoster);
+        sendMessage({
+          type: 'roster-update',
+          timestamp: Date.now(),
+          payload: { players: nextRoster },
+        });
+      }
+    }
+
     if (envelope.type === 'join-ack') {
       if (envelope.playerId === playerId && phaseRef.current === 'joining') {
         const payload = envelope.payload as JoinAckPayload;
@@ -408,12 +425,15 @@ export default function GameShell({
             minPlayers={minPlayers}
             roster={roster}
             isHost={isHost}
+            isDisplay={isDisplay}
             isConnected={isConnected}
             onStartGame={startGame}
             onQuit={requestQuit}
             theme={theme}
             lobbyExtra={gameConfig?.lobbyExtra}
             playerTag={gameConfig?.playerTag}
+            playerId={playerId}
+            sendMessage={sendMessage}
           />
         )}
 

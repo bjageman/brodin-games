@@ -1,3 +1,4 @@
+import { useState, FormEvent } from 'react';
 import { cn } from '../../../shared/utils/cn';
 import type { PlayerInfo } from '../../../shared/types';
 import type { FakeItPhase, Line, Point, Topic } from '../types';
@@ -31,6 +32,49 @@ interface FakeItScreensProps {
   endGame: () => void;
   playAgain: () => void;
   onQuit: () => void;
+  guessSec?: number;
+  handleGuessSubmit?: (guess: string) => void;
+}
+
+function GuessInput({ onSubmit }: { onSubmit: (guess: string) => void }) {
+  const [guess, setGuess] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    if (!guess.trim() || submitted) return;
+    setSubmitted(true);
+    onSubmit(guess);
+  };
+
+  if (submitted) {
+    return (
+      <p className="rounded-lg bg-fakeit-panel px-4 py-3 text-center text-sm text-fakeit-dark w-full">
+        Guess submitted! Waiting for host...
+      </p>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex w-full gap-2">
+      <input
+        type="text"
+        value={guess}
+        onChange={(e) => setGuess(e.target.value)}
+        placeholder="Enter the word..."
+        autoFocus
+        required
+        className="flex-1 rounded-full border-2 border-white/20 bg-white/10 px-4 py-2 text-white placeholder-white/40 focus:border-white focus:outline-none"
+      />
+      <button
+        type="submit"
+        disabled={!guess.trim()}
+        className="rounded-full bg-emerald-500 px-6 py-2 font-display text-sm font-bold text-white transition-transform hover:scale-105 active:scale-95 disabled:scale-100 disabled:opacity-50"
+      >
+        Submit
+      </button>
+    </form>
+  );
 }
 
 /** The imposter is shown the category but never the word itself. */
@@ -78,6 +122,7 @@ export default function FakeItScreens({
   roster, playerId, imposterId, getPlayerColor, turnSec, turnMs, voteSec, lines,
   isMyTurn, handleDrawEnd, myVote, handleVoteSubmit, votes, scores, roundPoints,
   isHost, handleNextRound, endGame, playAgain, onQuit,
+  guessSec = 10, handleGuessSubmit = () => {},
 }: FakeItScreensProps) {
   const drawer = roster[drawerIndex];
   const imposter = roster.find((p) => p.id === imposterId);
@@ -264,6 +309,38 @@ export default function FakeItScreens({
               </span>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Imposter Guessing */}
+      {phase === 'guessing' && (
+        <div className="mx-auto flex w-full max-w-xl flex-col items-center gap-5 px-4 pb-8 text-white">
+          <Paper className="mt-2 bg-fakeit-dark border-fakeit-ink">
+            <DrawingCanvas lines={lines} canDraw={false} onDrawEnd={() => {}} className="h-full w-full" />
+          </Paper>
+
+          <div className="w-full text-center">
+            <h3 className="font-serifDisplay text-3xl font-bold text-white mb-2">
+              {isImposter ? "You've been caught!" : "The Imposter is guessing..."}
+            </h3>
+            <p className="text-sm text-white/80">
+              {isImposter
+                ? "Can you guess the topic word to win the round?"
+                : "They have 10 seconds to guess the correct word."}
+            </p>
+            <div className="mt-4 flex items-center justify-center gap-3">
+              <span className="font-mono text-xl font-bold text-emerald-400">{guessSec}s remaining</span>
+            </div>
+          </div>
+
+          {isImposter ? (
+            <GuessInput onSubmit={handleGuessSubmit} />
+          ) : (
+            <div className="flex flex-col items-center py-6 animate-pulse">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-400 border-t-transparent mb-3" />
+              <p className="text-sm text-white/60">Waiting for guess...</p>
+            </div>
+          )}
         </div>
       )}
 

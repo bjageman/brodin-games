@@ -1,4 +1,4 @@
-export type FakeItPhase = 'starting' | 'role-reveal' | 'drawing' | 'voting' | 'results' | 'leaderboard';
+export type FakeItPhase = 'starting' | 'role-reveal' | 'drawing' | 'voting' | 'guessing' | 'results' | 'leaderboard';
 
 export interface Point {
   x: number;
@@ -32,4 +32,5 @@ export interface GameState {
   roleRevealEndTimestamp: number | null;
   turnEndTimestamp: number | null;
   voteEndTimestamp: number | null;
+  guessEndTimestamp: number | null;
 }

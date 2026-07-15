@@ -34,6 +34,8 @@ export interface LobbyProps {
   lobbyExtra?: ComponentType<LobbyExtraProps>;
   /** Overrides the sticky-note player tag (see GameConfig.playerTag). */
   playerTag?: ComponentType<PlayerTagProps>;
+  playerId?: string;
+  sendMessage?: (payload: unknown) => Promise<void>;
 }
 
 export default function Lobby({
