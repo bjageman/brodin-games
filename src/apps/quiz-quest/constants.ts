@@ -2,7 +2,7 @@ export const STARTING_HP = 3;
 // The party panel always shows this many slots so the roster reads as a fixed
 // set of seats — filled with a hero or left as an open space. Kept in sync
 // with quiz-quest's maxPlayers in the games registry.
-export const PARTY_SLOTS = 8;
+export const PARTY_SLOTS = 6;
 // A wrong answer costs a flat amount of HP; Room/Monster effects (not yet
 // built — see #79 follow-up) will multiply/modify this.
 export const WRONG_ANSWER_DAMAGE = 1;
