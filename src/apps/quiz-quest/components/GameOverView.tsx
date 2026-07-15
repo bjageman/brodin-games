@@ -3,26 +3,35 @@ import type { PlayerInfo } from '../../../shared/types';
 import type { PlayerCombat } from '../types';
 
 export default function GameOverView({
-  players, roster, winnerIds, isHost, onQuit,
+  players, roster, winnerIds, partyWiped, isHost, onQuit,
 }: {
   players: Record<string, PlayerCombat>;
   roster: PlayerInfo[];
   winnerIds: string[];
+  partyWiped: boolean;
   isHost: boolean;
   onQuit: () => void;
 }) {
   const ranked = [...roster].sort((a, b) => (players[b.id]?.score ?? 0) - (players[a.id]?.score ?? 0));
   const winnerNames = roster.filter((p) => winnerIds.includes(p.id)).map((p) => p.name);
+  const winLine = winnerNames.length > 1
+    ? `${winnerNames.join(' & ')} tie on points`
+    : `${winnerNames[0]} tops the scoreboard`;
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col items-center gap-6 px-4 py-10 text-center font-pixel">
-      <span className="text-5xl">🏆</span>
+      <span className="text-5xl">{partyWiped ? '💀' : '🏆'}</span>
       <div>
-        <h2 className="font-pixelBlock text-2xl uppercase text-quiz-gold [text-shadow:2px_2px_0_#000]">
-          The Boss Falls!
+        <h2
+          className={cn(
+            'font-pixelBlock text-2xl uppercase [text-shadow:2px_2px_0_#000]',
+            partyWiped ? 'text-quiz-danger' : 'text-quiz-gold'
+          )}
+        >
+          {partyWiped ? 'The Party Falls' : 'The Boss Falls!'}
         </h2>
         <p className="mt-2 text-sm text-quiz-ink/70">
-          {winnerNames.length > 1 ? `${winnerNames.join(' & ')} tie for the win` : `${winnerNames[0]} wins the run`}
+          {partyWiped ? `Wiped out — ${winLine}` : `${winLine} — victory!`}
         </p>
       </div>
 
