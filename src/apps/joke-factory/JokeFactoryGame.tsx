@@ -593,7 +593,7 @@ export default function JokeFactoryGame({
       onRegisterDebugActions(getDebugActions(), phase);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, isTimerPaused, promptsRef.current, matchupsRef.current, currentMatchIndexRef.current, round3Data, round, onRegisterDebugActions]);
+  }, [phase, isTimerPaused, playerPrompts, matchups, currentMatchIndex, round3Data, round, onRegisterDebugActions]);
 
   // Message Handler Registration
   useEffect(() => {
