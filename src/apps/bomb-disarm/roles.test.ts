@@ -7,7 +7,8 @@ function stateWith(fields: Partial<GameState>): GameState {
     phase: 'results', round: 3, revealsThisRound: 0, pendingWinner: null, pendingEffect: null,
     peek: null, rogueAgentId: null, deckAdditions: [], effectNote: null,
     roles: {}, specialRoles: {}, revealedRoleIds: [], folkHeroSpent: false, opportunistTeam: null,
-    pendingRescue: null, endReason: null, hands: {}, activePlayerId: '', wiresRevealed: 0, turn: 0,
+    leftoverRole: null, pendingRescue: null, endReason: null, smokeActive: false, roundSummary: null,
+    hands: {}, activePlayerId: '', wiresRevealed: 0, turn: 0,
     roleRevealEndTimestamp: null, memorizeEndTimestamp: null, winner: null, lastReveal: null,
     ...fields,
   };
@@ -188,5 +189,23 @@ describe('assignRoles', () => {
         expect(Object.values(specialRoles)).not.toContain('procrastinator');
       }
     }
+  });
+
+  describe('leftoverRole', () => {
+    it('is null below 8 players — there is no hidden rebel count to leave over', () => {
+      for (let n = 3; n < 8; n++) {
+        const players = Array.from({ length: n }, (_, i) => `p${i}`);
+        expect(assignRoles(players, []).leftoverRole).toBeNull();
+      }
+    });
+
+    it('is always the opposite of whichever side the hidden draw landed on', () => {
+      const players = Array.from({ length: 9 }, (_, i) => `p${i}`);
+      for (let i = 0; i < 100; i++) {
+        const { roles, leftoverRole } = assignRoles(players, []);
+        const rebelCount = Object.values(roles).filter((r) => r === 'rebel').length;
+        expect(leftoverRole).toBe(rebelCount === 3 ? 'peacekeeper' : 'rebel');
+      }
+    });
   });
 });

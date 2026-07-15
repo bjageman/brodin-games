@@ -6,6 +6,9 @@ export const MEMORIZE_DURATION_MS = 60000;
 export const RESULT_REVEAL_DELAY_MS = 5000;
 // How long a User Manual holds a card face-up for the table before it turns back.
 export const PEEK_DURATION_MS = 5000;
+// How long the anonymous round tally sits after a Smoke Bomb round, before the
+// next round deals.
+export const ROUND_SUMMARY_DELAY_MS = 4000;
 
 export const WIRE_WIN_THRESHOLD = 6;
 

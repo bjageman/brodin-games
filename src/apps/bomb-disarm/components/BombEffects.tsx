@@ -185,6 +185,39 @@ export function EffectPrompt({ effect, state, roster, onChoose }: {
           />
         </>
       )}
+
+      {effect.type === 'double-agent' && (
+        <>
+          <p className="text-center text-xs text-gray-300 sm:text-sm">
+            The side that didn't make it to the table this game:
+          </p>
+          <p className={cn(
+            'font-display text-2xl font-black uppercase tracking-widest',
+            state.leftoverRole === 'rebel' ? 'text-bomb-rebel' : 'text-bomb-wire'
+          )}>
+            {state.leftoverRole === 'rebel' ? '🧨 Rebel' : '🛡️ Peacekeeper'}
+          </p>
+          <p className="text-center text-[10px] font-bold uppercase tracking-widest text-gray-400">
+            Keep it to yourself
+          </p>
+          <div className="mt-1 flex gap-3">
+            <button
+              type="button"
+              onClick={() => onChoose({ kind: 'swap', swap: true })}
+              className="rounded-full bg-bomb-bolt px-5 py-2 font-display text-xs font-black uppercase tracking-wider text-bomb-ink transition-transform hover:scale-105"
+            >
+              Swap to it
+            </button>
+            <button
+              type="button"
+              onClick={() => onChoose({ kind: 'swap', swap: false })}
+              className="rounded-full border-2 border-white/30 px-5 py-2 font-display text-xs font-black uppercase tracking-wider text-gray-200 transition-colors hover:border-bomb-bolt hover:text-bomb-bolt"
+            >
+              Stay put
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -10,12 +10,15 @@ export function shuffle<T>(arr: T[]): T[] {
   return out;
 }
 
+// Double Agent needs a hidden rebel-count draw to swap into, which only exists
+// at 8+ players — below that it's dropped rather than dealt in as a no-op.
 export function buildDeck(playerCount: number, specials: SpecialCardType[], folkHeroInPlay = false): CardType[] {
-  const { explode, wire, special, blank } = deckCompositionFor(playerCount, specials.length, folkHeroInPlay);
+  const eligible = specials.filter((t) => t !== 'double-agent' || playerCount >= 8);
+  const { explode, wire, special, blank } = deckCompositionFor(playerCount, eligible.length, folkHeroInPlay);
   return shuffle([
     ...Array<CardType>(explode).fill('explode'),
     ...Array<CardType>(wire).fill('wire'),
-    ...specials.slice(0, special),
+    ...eligible.slice(0, special),
     ...Array<CardType>(blank).fill('blank'),
   ]);
 }

@@ -13,11 +13,11 @@ describe('maxSpecialsFor', () => {
     }
   });
 
-  it('has no room for all six specials at 3 players', () => {
+  it('has no room for every special at 3 players', () => {
     expect(maxSpecialsFor(3)).toBeLessThan(ALL_SPECIALS.length);
   });
 
-  it('fits all six from 5 players up', () => {
+  it('fits every special from 5 players up', () => {
     for (let n = 5; n <= 10; n++) {
       expect(maxSpecialsFor(n)).toBeGreaterThanOrEqual(ALL_SPECIALS.length);
     }
@@ -37,10 +37,11 @@ describe('buildDeck', () => {
   });
 
   // Specials come out of the blanks, so the wire count — and the win odds that
-  // were balanced around it — must not move when they're switched on.
+  // were balanced around it — must not move when they're switched on. 8 players
+  // so Double Agent's own gating (see below) doesn't shrink the count.
   it('takes specials out of the blanks, never the wires', () => {
-    const plain = buildDeck(6, []);
-    const withSpecials = buildDeck(6, ALL_SPECIALS);
+    const plain = buildDeck(8, []);
+    const withSpecials = buildDeck(8, ALL_SPECIALS);
     expect(withSpecials.filter((c) => c === 'wire')).toHaveLength(plain.filter((c) => c === 'wire').length);
     expect(withSpecials.filter(isSpecial)).toHaveLength(ALL_SPECIALS.length);
     expect(withSpecials.filter((c) => c === 'blank').length)
@@ -64,6 +65,22 @@ describe('buildDeck', () => {
     const deck = buildDeck(6, [], true);
     expect(deck).toHaveLength(6 * CARDS_PER_PLAYER);
     expect(deck.filter((c) => c === 'explode')).toHaveLength(2);
+  });
+
+  // Double Agent needs a hidden rebel-count draw to swap into, which only
+  // exists at 8+ players — below that it's dropped rather than dealt as a no-op.
+  it('drops Double Agent below 8 players', () => {
+    for (let n = 3; n < 8; n++) {
+      const deck = buildDeck(n, ['double-agent']);
+      expect(deck.filter((c) => c === 'double-agent')).toHaveLength(0);
+    }
+  });
+
+  it('deals Double Agent from 8 players up', () => {
+    for (let n = 8; n <= 10; n++) {
+      const deck = buildDeck(n, ['double-agent']);
+      expect(deck.filter((c) => c === 'double-agent')).toHaveLength(1);
+    }
   });
 });
 

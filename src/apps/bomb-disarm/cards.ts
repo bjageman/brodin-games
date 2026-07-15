@@ -46,6 +46,17 @@ export const CARD_META: Record<CardType, CardMeta> = {
     effect: 'Secretly add one extra Bomb or Cut Wire to next round’s deck. Does nothing in the final round.',
     secret: true,
   },
+  'double-agent': {
+    title: 'Double Agent',
+    effectLabel: 'When Revealed',
+    effect: 'Secretly see the side that didn’t make it to the table this game, and swap your own role for it if you want. Only in play at 8+ players.',
+    secret: true,
+  },
+  'smoke-bomb': {
+    title: 'Smoke Bomb',
+    effectLabel: 'When Revealed',
+    effect: 'Cut wires and blanks stay anonymous on the table for the rest of the round. Specials and the bomb still show.',
+  },
 };
 
 export const SPECIAL_CARD_TYPES: SpecialCardType[] = [
@@ -55,6 +66,8 @@ export const SPECIAL_CARD_TYPES: SpecialCardType[] = [
   'user-manual',
   'crossed-wires',
   'repair-kit',
+  'double-agent',
+  'smoke-bomb',
 ];
 
 export function isSpecial(type: CardType): type is SpecialCardType {

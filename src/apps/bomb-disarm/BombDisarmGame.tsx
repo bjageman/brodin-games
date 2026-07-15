@@ -5,24 +5,21 @@ import { loadSnapshot, saveSnapshot, gameSnapshotKey } from '../../shared/utils/
 import type { Envelope } from '../../shared/types';
 import type { GamePlayProps } from '../../shared/GameShell';
 import { DEBUG_MODE } from '../../shared/constants';
-import { type DebugAction } from '../../shared/components/DebugWidget';
 import type {
-  CardType, EffectChoice, EndReason, GameState, LastReveal, PendingEffect, Role, Winner,
+  EffectChoice, EndReason, GameState, LastReveal, PendingEffect, Role, Winner,
 } from './types';
 import {
   MEMORIZE_DURATION_MS,
-  ROLE_REVEAL_DURATION_MS,
   RESULT_REVEAL_DELAY_MS,
   PEEK_DURATION_MS,
+  ROUND_SUMMARY_DELAY_MS,
   ROUNDS,
   WIRE_WIN_THRESHOLD,
-  STATE_REQUEST_RETRY_INTERVAL_MS,
-  STATE_REQUEST_MAX_ATTEMPTS,
 } from './constants';
-import { isSpecial } from './cards';
-import { assignRoles, folkHeroId, isSidelined } from './roles';
-import { buildDeck, dealHands, redeal, shuffle, swapCards } from './deck';
-import { specialRolesForDeal, specialsForDeal } from './settings';
+import { folkHeroId, isSidelined } from './roles';
+import { redeal, swapCards } from './deck';
+import { useDebugActions } from './useDebugActions';
+import { usePhaseTransitions } from './usePhaseTransitions';
 import LandscapeStage from './components/LandscapeStage';
 import { RoleReveal, MemorizeView, TableView, ResultsView } from './components/BombViews';
 
@@ -47,8 +44,11 @@ const EMPTY: GameState = {
   revealedRoleIds: [],
   folkHeroSpent: false,
   opportunistTeam: null,
+  leftoverRole: null,
   pendingRescue: null,
   endReason: null,
+  smokeActive: false,
+  roundSummary: null,
   hands: {},
   activePlayerId: '',
   wiresRevealed: 0,
@@ -80,7 +80,7 @@ export default function BombDisarmGame({
   const {
     phase, roles, specialRoles, hands, activePlayerId, wiresRevealed, turn, round, revealsThisRound,
     roleRevealEndTimestamp, memorizeEndTimestamp, winner, lastReveal,
-    pendingWinner, pendingEffect, peek, deckAdditions, pendingRescue, opportunistTeam,
+    pendingWinner, pendingEffect, peek, deckAdditions, pendingRescue, opportunistTeam, leftoverRole,
   } = state;
 
   const nameOf = (id: string) => roster.find((p) => p.id === id)?.name ?? '?';
@@ -129,6 +129,7 @@ export default function BombDisarmGame({
   function advanceTurn(base: GameState, ownerId: string) {
     if (base.revealsThisRound >= roster.length) {
       if (base.round >= ROUNDS) return finishWith(base, 'rebels', 'timeout');
+      if (base.smokeActive) return showRoundSummary(base, ownerId);
       return endRound(base, ownerId);
     }
     // Normally the pick passes to the phone that was just tapped — unless a Rogue
@@ -159,7 +160,22 @@ export default function BombDisarmGame({
       deckAdditions: [],
       effectNote: null,
       lastReveal: null,
+      smokeActive: false,
+      roundSummary: null,
     });
+  }
+
+  // ---- Host: a Smoke Bomb round ends with an anonymous tally instead of the
+  // ordinary per-turn status, then rolls into the next round as usual ----
+  function showRoundSummary(base: GameState, lastOwnerId: string) {
+    const revealedThisRound = Object.values(base.hands).flat().filter((c) => c.revealed);
+    const summary = {
+      blanks: revealedThisRound.filter((c) => c.type === 'blank').length,
+      wires: revealedThisRound.filter((c) => c.type === 'wire').length,
+    };
+    const withSummary = { ...base, roundSummary: summary };
+    publish(withSummary);
+    setTimeout(() => endRound({ ...withSummary, roundSummary: null }, lastOwnerId), ROUND_SUMMARY_DELAY_MS);
   }
 
   // ---- Host: reveal a card and resolve the turn (shared by taps and debug) ----
@@ -207,11 +223,21 @@ export default function BombDisarmGame({
       );
     }
 
+    if (card.type === 'smoke-bomb') {
+      return advanceTurn(
+        { ...base, smokeActive: true, effectNote: `${nameOf(actorId)} set off a smoke bomb — cut wires and blanks stay anonymous for the rest of the round` },
+        ownerId,
+      );
+    }
+
     // A Repair Kit in the final round has no next deal to salt, so it does nothing.
+    // Double Agent needs a hidden rebel count to swap into, which only exists at
+    // 8+ players (see buildDeck) — it always has an effect once it's in the deck.
     const asksAQuestion =
       card.type === 'interrogate' ||
       card.type === 'user-manual' ||
       card.type === 'crossed-wires' ||
+      card.type === 'double-agent' ||
       (card.type === 'repair-kit' && base.round < ROUNDS);
 
     if (asksAQuestion) {
@@ -259,6 +285,23 @@ export default function BombDisarmGame({
           pendingEffect: null,
           deckAdditions: [...deckAdditions, choice.cardType],
           effectNote: `${nameOf(effect.actorId)} used the repair kit`,
+        },
+        ownerId,
+      );
+    }
+
+    if (effect.type === 'double-agent' && choice.kind === 'swap') {
+      // The old role becomes the new leftover — nobody ever needs to look at it
+      // again unless another Double Agent turns up.
+      const nextRoles = choice.swap && leftoverRole ? { ...roles, [effect.actorId]: leftoverRole } : roles;
+      const nextLeftover = choice.swap && leftoverRole ? roles[effect.actorId] : leftoverRole;
+      return advanceTurn(
+        {
+          ...state,
+          roles: nextRoles,
+          leftoverRole: nextLeftover,
+          pendingEffect: null,
+          effectNote: `${nameOf(effect.actorId)} used the Double Agent card`,
         },
         ownerId,
       );
@@ -352,86 +395,12 @@ export default function BombDisarmGame({
     resolveReveal(senderId, cardIndex);
   }
 
-  // ---- Host: deal a fresh game ----
-  function dealGame(): GameState {
-    const ids = roster.map((p) => p.id);
-    const { roles: nextRoles, specialRoles: nextSpecialRoles } = assignRoles(
-      ids,
-      specialRolesForDeal(code),
-    );
-    const folkHeroInPlay = Object.values(nextSpecialRoles).includes('folk-hero');
-    const deck = buildDeck(roster.length, specialsForDeal(code, roster.length), folkHeroInPlay);
-
-    return {
-      ...EMPTY,
-      phase: 'role-reveal',
-      roles: nextRoles,
-      specialRoles: nextSpecialRoles,
-      hands: dealHands(ids, deck),
-      roleRevealEndTimestamp: Date.now() + ROLE_REVEAL_DURATION_MS,
-    };
-  }
-
-  // ---- Host: initialize the game on a fresh start ----
-  useEffect(() => {
-    if (isHost && (phase === 'starting' || freshStart)) {
-      if (roster.length === 0) return;
-      const s = dealGame();
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setState(s);
-      sendMessage({ type: 'bomb-state-update', timestamp: Date.now(), payload: s });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHost, freshStart, roster.length]);
-
-  // ---- Host transitions (called directly by both the timer effects and the
-  // debug skips, so a skip never depends on a countdown re-firing) ----
-  function goToMemorize() {
-    patch({ phase: 'memorize', roleRevealEndTimestamp: null, memorizeEndTimestamp: Date.now() + MEMORIZE_DURATION_MS });
-  }
-
-  function goToTable() {
-    // Flip every hand face-down and shuffle its order so the 60s of study can't
-    // be turned into "the bomb is the third card".
-    const shuffledHands: GameState['hands'] = {};
-    Object.entries(hands).forEach(([pid, hand]) => { shuffledHands[pid] = shuffle(hand); });
-    // Rounds 2 and 3 open with whoever's card was flipped last; round 1 is random.
-    const carried = roster.some((p) => p.id === activePlayerId) ? activePlayerId : '';
-    const firstPicker = carried || roster[Math.floor(Math.random() * roster.length)]?.id || '';
-    patch({ phase: 'table', hands: shuffledHands, activePlayerId: firstPicker, memorizeEndTimestamp: null });
-  }
-
-  // ---- Host transition: Role Reveal -> Memorize ----
-  useEffect(() => {
-    if (isHost && phase === 'role-reveal' && roleRevealEndTimestamp && roleExpired) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      goToMemorize();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHost, phase, roleRevealEndTimestamp, roleExpired]);
-
-  // ---- Host transition: Memorize -> Table ----
-  useEffect(() => {
-    if (isHost && phase === 'memorize' && memorizeEndTimestamp && memoExpired) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      goToTable();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHost, phase, memorizeEndTimestamp, memoExpired]);
-
-  // ---- Client: recover from a missed initial broadcast (mirrors fake-it) ----
-  useEffect(() => {
-    if (isHost || phase !== 'starting') return;
-    let attempts = 0;
-    const trySend = () => {
-      sendMessage({ type: 'bomb-request-state', playerId, timestamp: Date.now(), payload: {} });
-      attempts++;
-      if (attempts >= STATE_REQUEST_MAX_ATTEMPTS) clearInterval(interval);
-    };
-    trySend();
-    const interval = setInterval(trySend, STATE_REQUEST_RETRY_INTERVAL_MS);
-    return () => clearInterval(interval);
-  }, [isHost, phase, playerId, sendMessage]);
+  // ---- Host: clock-driven phase changes (deal, role reveal, memorize, table) ----
+  const { goToMemorize, goToTable } = usePhaseTransitions({
+    code, playerId, roster, isHost, freshStart, phase, hands, activePlayerId,
+    roleRevealEndTimestamp, roleExpired, memorizeEndTimestamp, memoExpired,
+    emptyState: EMPTY, sendMessage, setState, patch,
+  });
 
   // ---- Client: tap a card on my own phone (someone reached over and tapped it) ----
   function tapCard(cardIndex: number) {
@@ -474,88 +443,11 @@ export default function BombDisarmGame({
   }
 
   // ---- Debug (host authority) ----
-  function handleDebugHostAction(action: string) {
-    if (!isHost) return;
-    if (action === 'skip-role' && phase === 'role-reveal') return goToMemorize();
-    if (action === 'skip-memorize' && phase === 'memorize') return goToTable();
-    if (phase !== 'table' || winner) return;
-    if (action === 'answer-effect') return autoAnswerEffect();
-    if (action === 'rescue-save') return handleRescue(pendingRescue?.heroId, true);
-    if (action === 'rescue-decline') return handleRescue(pendingRescue?.heroId, false);
-    if (action === 'declare-rebel' || action === 'declare-peacekeeper') {
-      const opportunist = Object.entries(specialRoles).find(([, r]) => r === 'opportunist')?.[0];
-      return handleDeclare(opportunist, action === 'declare-rebel' ? 'rebel' : 'peacekeeper');
-    }
-    if (action === 'reveal-wire') revealFirstOfType((t) => t === 'wire');
-    else if (action === 'reveal-blank') revealFirstOfType((t) => t === 'blank');
-    else if (action === 'reveal-bomb') revealFirstOfType((t) => t === 'explode');
-    else if (action === 'reveal-special') revealFirstOfType(isSpecial);
-  }
-
-  // A bot can't pick up its phone to answer a special, so a special flipped on a
-  // bot's turn would sit forever. Answer for whoever the actor is.
-  function autoAnswerEffect() {
-    const effect = pendingEffect;
-    if (!effect) return;
-    const faceDown = (skip?: string) => {
-      for (const p of roster) {
-        if (p.id === skip) continue;
-        const idx = hands[p.id]?.findIndex((c) => !c.revealed) ?? -1;
-        if (idx >= 0) return { kind: 'card', playerId: p.id, cardIndex: idx } as const;
-      }
-      return null;
-    };
-
-    let choice: EffectChoice | null;
-    if (effect.type === 'interrogate') {
-      choice = effect.role
-        ? { kind: 'done' }
-        : { kind: 'player', playerId: roster.find((p) => p.id !== effect.actorId)?.id ?? '' };
-    } else if (effect.type === 'repair-kit') {
-      choice = { kind: 'repair', cardType: 'wire' };
-    } else {
-      choice = faceDown(effect.firstPick?.playerId);
-    }
-    if (choice) handleEffectChoice(effect.actorId, choice);
-  }
-
-  // Debug shortcut: reveal the first unrevealed card matching a predicate (unlike
-  // a real tap, it doesn't skip the active phone — a test/host convenience).
-  function revealFirstOfType(match: (type: CardType) => boolean) {
-    for (const p of roster) {
-      const idx = hands[p.id]?.findIndex((c) => match(c.type) && !c.revealed) ?? -1;
-      if (idx >= 0) return resolveReveal(p.id, idx);
-    }
-  }
-
-  function triggerAction(action: string) {
-    if (isHost) handleDebugHostAction(action);
-    else sendMessage({ type: 'debug-host-action', playerId, timestamp: Date.now(), payload: { action } });
-  }
-
-  function getDebugActions(): DebugAction[] {
-    const list: DebugAction[] = [];
-    if (phase === 'role-reveal') list.push({ label: '⏭️ Skip to Memorize', onClick: () => triggerAction('skip-role'), variant: 'warning' });
-    if (phase === 'memorize') list.push({ label: '⏭️ Skip to Table', onClick: () => triggerAction('skip-memorize'), variant: 'warning' });
-    if (phase === 'table' && !winner) {
-      const opportunist = Object.entries(specialRoles).find(([, r]) => r === 'opportunist')?.[0];
-      if (pendingRescue) {
-        list.push({ label: `🦸 Save (as ${nameOf(pendingRescue.heroId)})`, onClick: () => triggerAction('rescue-save'), variant: 'success' });
-        list.push({ label: '💥 Let it blow', onClick: () => triggerAction('rescue-decline'), variant: 'danger' });
-      } else if (pendingEffect) {
-        list.push({ label: `🤖 Answer for ${nameOf(pendingEffect.actorId)}`, onClick: () => triggerAction('answer-effect'), variant: 'primary' });
-      } else if (!peek) {
-        if (opportunist && opportunist !== playerId && !opportunistTeam && opportunist === activePlayerId) {
-          list.push({ label: `🎭 Flip ${nameOf(opportunist)} → Rebel`, onClick: () => triggerAction('declare-rebel'), variant: 'warning' });
-        }
-        list.push({ label: '✂️ Reveal a Cut Wire', onClick: () => triggerAction('reveal-wire'), variant: 'primary' });
-        list.push({ label: '▢ Reveal a Blank', onClick: () => triggerAction('reveal-blank'), variant: 'secondary' });
-        list.push({ label: '🎴 Reveal a Special', onClick: () => triggerAction('reveal-special'), variant: 'success' });
-        list.push({ label: '💥 Reveal the Bomb', onClick: () => triggerAction('reveal-bomb'), variant: 'danger' });
-      }
-    }
-    return list;
-  }
+  const { handleDebugHostAction, getDebugActions } = useDebugActions({
+    isHost, playerId, roster, nameOf, sendMessage,
+    phase, winner, hands, activePlayerId, pendingRescue, pendingEffect, peek, specialRoles, opportunistTeam,
+    resolveReveal, handleEffectChoice, handleRescue, handleDeclare, goToMemorize, goToTable,
+  });
 
   // ---- Message handler ----
   useEffect(() => {

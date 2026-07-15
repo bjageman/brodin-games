@@ -50,6 +50,7 @@ function maxPeacekeeperSpecialSeatsFor(playerCount: number): number {
 export function assignRoles(playerIds: string[], enabled: SpecialRole[]): {
   roles: Record<string, Role>;
   specialRoles: Record<string, SpecialRole>;
+  leftoverRole: Role | null;
 } {
   const order = shuffle(playerIds);
   const rebelCount = rebelCountFor(playerIds.length);
@@ -72,7 +73,12 @@ export function assignRoles(playerIds: string[], enabled: SpecialRole[]): {
     if (peacekeeperSeats[i]) specialRoles[peacekeeperSeats[i]] = role;
   });
 
-  return { roles, specialRoles };
+  // At 8-10 players the rebel count is a hidden 2-or-3 draw. Whichever way it
+  // landed, the other outcome is "the side that wasn't dealt out" — a Double
+  // Agent can secretly swap into it.
+  const leftoverRole: Role | null = playerIds.length >= 8 ? (rebelCount === 3 ? 'peacekeeper' : 'rebel') : null;
+
+  return { roles, specialRoles, leftoverRole };
 }
 
 // `winner` is a side ('rebels'), a player's role is singular ('rebel') — they are
