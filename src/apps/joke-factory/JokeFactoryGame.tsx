@@ -31,6 +31,7 @@ export default function JokeFactoryGame({
   isHost,
   roster,
   sendMessage,
+  isDisplay,
   freshStart,
   onRegisterMessageHandler,
   onQuit,
@@ -693,6 +694,23 @@ export default function JokeFactoryGame({
     }
   }, [phase, isTimerPaused, playerPrompts, matchups, currentMatchIndex, round3Data, round, onRegisterDebugActions, getDebugActions]);
 
+  // Client recovery: if we're still on the loading screen ('starting') after
+  // mounting, we likely missed the host's one-shot initial state broadcast
+  // (a race: the broadcast can arrive before our message handler registers).
+  // Poll the host for the current state until it lands or we give up.
+  useEffect(() => {
+    if (isHost || phase !== 'starting') return;
+    let attempts = 0;
+    const trySend = () => {
+      sendMessage({ type: 'joke-factory-request-state', playerId, timestamp: Date.now(), payload: {} });
+      attempts++;
+      if (attempts >= 10) clearInterval(interval);
+    };
+    trySend();
+    const interval = setInterval(trySend, 1000);
+    return () => clearInterval(interval);
+  }, [isHost, phase, playerId, sendMessage]);
+
   // Message Handler Registration
   useEffect(() => {
     onRegisterMessageHandler((envelope: Envelope) => {
@@ -732,6 +750,10 @@ export default function JokeFactoryGame({
             const data = payload as { choice: string };
             handleClientSubmitVote(senderId, data.choice);
           }
+        } else if (type === 'joke-factory-request-state') {
+          if (phaseRef.current !== 'starting') {
+            broadcastState({});
+          }
         }
       }
     });
@@ -746,7 +768,7 @@ export default function JokeFactoryGame({
       round={round}
       roster={roster}
       playerId={playerId}
-      isDisplay={false}
+      isDisplay={isDisplay}
       isHost={isHost}
       prompts={prompts}
       writingSec={writingSec}

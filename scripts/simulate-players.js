@@ -28,7 +28,7 @@
 import { chromium, expect } from '@playwright/test';
 
 function parseArgs(argv) {
-  const args = { players: 1, url: 'http://localhost:5173', headless: true, code: null, verbose: false, host: false };
+  const args = { players: 1, url: 'http://localhost:5173', headless: true, code: null, verbose: false, host: false, game: 'memo-random' };
   for (const arg of argv) {
     const stripped = arg.replace(/^--/, '');
     const eq = stripped.indexOf('=');
@@ -41,6 +41,7 @@ function parseArgs(argv) {
     else if (key === 'headed') args.headless = false;
     else if (key === 'verbose') args.verbose = value !== 'false';
     else if (key === 'host') args.host = value !== 'false';
+    else if (key === 'game') args.game = value.toLowerCase();
   }
   return args;
 }
@@ -48,7 +49,7 @@ function parseArgs(argv) {
 const args = parseArgs(process.argv.slice(2));
 const validCode = args.host || (args.code && args.code.length === 4);
 if (!validCode || !Number.isInteger(args.players) || args.players < 1) {
-  console.error('Usage: npm run simulate -- (--code=ABCD | --host) [--players=3] [--url=http://localhost:5173] [--headed] [--verbose]');
+  console.error('Usage: npm run simulate -- (--code=ABCD | --host) [--players=3] [--url=http://localhost:5173] [--headed] [--verbose] [--game=joke-factory]');
   process.exit(1);
 }
 
@@ -102,99 +103,196 @@ async function playThroughGame(page, name, verbose) {
   const log = (msg) => console.log(`[${name}] ${msg}`);
   const debug = (msg) => { if (verbose) log(`[debug] ${msg}`); };
 
-  // Round 1 (only if we're still around for it — a bot started this late
-  // could join mid-round or skip straight to waiting for round 2).
-  debug('waiting for round 1 screen...');
-  if (await waitVisible(page.getByText('Type as many words as you can'), 5 * 60_000)) {
-    // Keep typing — picking a random still-short category each time — until every
-    // category hits 5 (matching the app's MAX_WORDS_PER_CATEGORY) or the round1
-    // screen disappears because time ran out first, whichever comes first.
-    const input = page.getByPlaceholder('Type a word...');
-    const pools = Object.fromEntries(Object.entries(WORD_POOLS).map(([cat, pool]) => [cat, shuffled(pool)]));
-    const counts = Object.fromEntries(Object.keys(WORD_POOLS).map((cat) => [cat, 0]));
-    const typedWords = [];
-    while (Object.values(counts).some((c) => c < 5)) {
-      if (!(await page.getByText('Type as many words as you can').isVisible().catch(() => false))) break;
-      const available = Object.keys(pools).filter((cat) => counts[cat] < 5 && pools[cat].length > 0);
-      if (available.length === 0) break;
-      const cat = available[Math.floor(Math.random() * available.length)];
-      const word = pools[cat].pop();
-      await input.fill(word);
-      await input.press('Enter');
-      counts[cat]++;
-      typedWords.push(word);
-      await randomDelay(300, 1500);
-    }
-    log(`typed ${typedWords.length} words: ${typedWords.join(', ')}`);
-  } else {
-    debug('round 1 screen never appeared — joined mid/after round 1');
-  }
+  // Detect which game is active from the h1 element in header or url or text content
+  debug('waiting for game header...');
+  await page.locator('h1').waitFor({ timeout: 15_000 }).catch(() => {});
+  const gameTitle = await page.locator('h1').innerText().catch(() => '');
+  const isJokeFactory = gameTitle.toLowerCase().includes('joke factory');
+  debug(`Detected game: "${gameTitle}", isJokeFactory: ${isJokeFactory}`);
 
-  debug('waiting for round 2 sheet (or a "sat out round 2" drop screen)...');
-  const sheetOrDropped = page.getByText('Fill out your memo').or(page.getByText('sat out round 2'));
-  await sheetOrDropped.waitFor({ timeout: 90_000 });
+  if (isJokeFactory) {
+    // -------------------------------------------------------------
+    // Joke Factory Simulation Loop
+    // -------------------------------------------------------------
+    for (let round = 0; round < 15; round++) {
+      debug(`[Joke Factory] waiting for next screen...`);
+      const screen = await Promise.race([
+        page.getByText('Type your punchline here...').waitFor({ timeout: 90_000 }).then(() => 'writing'),
+        page.getByText(/Option A|Option B|Vote for the funniest punchline/i).waitFor({ timeout: 90_000 }).then(() => 'voting'),
+        page.getByText('Battle Results').waitFor({ timeout: 90_000 }).then(() => 'results'),
+        page.getByText(/Standings|Leaderboard/i).waitFor({ timeout: 90_000 }).then(() => 'leaderboard'),
+      ]).catch(() => 'timeout');
 
-  if (await page.getByText('sat out round 2').isVisible()) {
-    log('sat out round 2 (submission arrived too late)');
-  } else {
-    const selects = page.locator('select');
-    const count = await selects.count();
-    debug(`filling ${count} dropdown(s) on the round 2 memo...`);
-    for (let i = 0; i < count; i++) {
-      const select = selects.nth(i);
-      const values = await Promise.all((await select.locator('option').all()).map((o) => o.getAttribute('value')));
-      const real = values.filter((v) => v);
-      if (real.length > 0) {
-        await select.selectOption(real[Math.floor(Math.random() * real.length)]);
+      if (screen === 'timeout') {
+        // If final scoreboard appears, we might be done
+        if (await page.getByText('Final Scoreboard').isVisible().catch(() => false)) {
+          debug('[Joke Factory] Final Scoreboard is visible');
+          break;
+        }
+        debug('[Joke Factory] timeout waiting for screen — giving up');
+        break;
+      }
+
+      debug(`[Joke Factory] Screen is "${screen}"`);
+
+      if (screen === 'writing') {
+        const inputs = page.getByPlaceholder('Type your punchline here...');
+        const count = await inputs.count();
+        debug(`[Joke Factory] writing: found ${count} prompts`);
+        for (let i = 0; i < count; i++) {
+          const promptInput = inputs.nth(i);
+          const adj = WORD_POOLS.adjective[Math.floor(Math.random() * WORD_POOLS.adjective.length)];
+          const noun = WORD_POOLS.noun[Math.floor(Math.random() * WORD_POOLS.noun.length)];
+          await promptInput.fill(`The ${adj} ${noun}!`);
+        }
+        await randomDelay(300, 1500);
+        const submitBtn = page.getByRole('button', { name: 'Submit Answers' });
+        await expect(submitBtn).toBeEnabled({ timeout: 10_000 });
+        await submitBtn.click();
+        log('submitted punchlines');
+        await page.getByText('Answers Locked In!').waitFor({ timeout: 10_000 }).catch(() => {});
+      } else if (screen === 'voting') {
+        await randomDelay(1000, 3000);
+        const optA = page.getByRole('button', { name: /Option A/i });
+        const optB = page.getByRole('button', { name: /Option B/i });
+        const options = page.getByRole('button').filter({ hasNotText: 'Submit' });
+        const optCount = await options.count();
+        
+        if (await optA.isVisible().catch(() => false)) {
+          if (Math.random() > 0.5) {
+            await optA.click();
+          } else {
+            await optB.click();
+          }
+          log('voted Option A or B');
+        } else if (optCount > 0) {
+          const selectable = [];
+          for (let i = 0; i < optCount; i++) {
+            const opt = options.nth(i);
+            const isEnabled = await opt.isEnabled().catch(() => false);
+            if (isEnabled) {
+              selectable.push(opt);
+            }
+          }
+          if (selectable.length > 0) {
+            await selectable[Math.floor(Math.random() * selectable.length)].click();
+            log('voted in round 3');
+          }
+        }
+        await page.getByText('Battle Results').waitFor({ timeout: 20_000 }).catch(() => {});
+      } else if (screen === 'results') {
+        debug('waiting for results to finish...');
+        await page.getByText('Battle Results').waitFor({ state: 'detached', timeout: 20_000 }).catch(() => {});
+      } else if (screen === 'leaderboard') {
+        if (name === 'HostBot') {
+          await randomDelay(1500, 4000);
+          const startRoundBtn = page.getByRole('button', { name: /Start Round|End Game/i });
+          if (await startRoundBtn.isVisible().catch(() => false)) {
+            const btnText = await startRoundBtn.innerText();
+            await startRoundBtn.click();
+            log(`clicked: ${btnText}`);
+          }
+        } else {
+          debug('waiting for host to advance...');
+          await page.getByText(/Standings|Leaderboard/i).waitFor({ state: 'detached', timeout: 45_000 }).catch(() => {});
+        }
       }
     }
-    await randomDelay(500, 3000);
-    // Filling the last dropdown triggers a React re-render before the
-    // Submit button flips to enabled — wait/retry for it rather than
-    // checking once and silently giving up if we're too early.
-    const submitButton = page.getByRole('button', { name: 'Submit' });
-    await expect(submitButton).toBeEnabled({ timeout: 10_000 });
-    await submitButton.click();
-    log('submitted round 2 sheet');
-  }
-
-  // Voting is now a sequence of head-to-head matchups (one pair of memos
-  // at a time, with results shown in between) rather than a single
-  // pick-your-favorite-among-everyone screen. Keep voting on whatever
-  // matchup comes up until the final scoreboard appears — how many
-  // matchups there are (and whether an odd sheet out gets a bot opponent)
-  // is decided by the host, not something this bot needs to know.
-  for (let round = 0; round < 10; round++) {
-    debug(`waiting for matchup ${round + 1} (or the final scoreboard)...`);
-    const matchupOrFinal = page.getByText('Pick the Better One').or(page.getByText('Final Scoreboard'));
-    if (!(await waitVisible(matchupOrFinal, 90_000))) {
-      debug('neither a matchup nor the final scoreboard showed up within 90s — giving up on voting');
-      break;
-    }
-    if (await page.getByText('Final Scoreboard').isVisible()) break;
-
-    await randomDelay(500, 3000);
-    // The matchup screen has its own "Submit" button once a memo is
-    // picked — scope the random pick to the two vote cards only, so we
-    // never accidentally target the (disabled-until-selected) Submit
-    // button itself.
-    const voteCards = page.getByRole('button').filter({ hasNotText: 'Submit' });
-    const voteCount = await voteCards.count();
-    debug(`found ${voteCount} vote card(s) for this matchup`);
-    if (voteCount > 0) {
-      await voteCards.nth(Math.floor(Math.random() * voteCount)).click();
-      log('voted');
-      await randomDelay(300, 2000);
-      const submitVoteButton = page.getByRole('button', { name: 'Submit' });
-      await expect(submitVoteButton).toBeEnabled({ timeout: 5_000 });
-      await submitVoteButton.click();
-      log('submitted vote');
+  } else {
+    // Round 1 (only if we're still around for it — a bot started this late
+    // could join mid-round or skip straight to waiting for round 2).
+    debug('waiting for round 1 screen...');
+    if (await waitVisible(page.getByText('Type as many words as you can'), 5 * 60_000)) {
+      // Keep typing — picking a random still-short category each time — until every
+      // category hits 5 (matching the app's MAX_WORDS_PER_CATEGORY) or the round1
+      // screen disappears because time ran out first, whichever comes first.
+      const input = page.getByPlaceholder('Type a word...');
+      const pools = Object.fromEntries(Object.entries(WORD_POOLS).map(([cat, pool]) => [cat, shuffled(pool)]));
+      const counts = Object.fromEntries(Object.keys(WORD_POOLS).map((cat) => [cat, 0]));
+      const typedWords = [];
+      while (Object.values(counts).some((c) => c < 5)) {
+        if (!(await page.getByText('Type as many words as you can').isVisible().catch(() => false))) break;
+        const available = Object.keys(pools).filter((cat) => counts[cat] < 5 && pools[cat].length > 0);
+        if (available.length === 0) break;
+        const cat = available[Math.floor(Math.random() * available.length)];
+        const word = pools[cat].pop();
+        await input.fill(word);
+        await input.press('Enter');
+        counts[cat]++;
+        typedWords.push(word);
+        await randomDelay(300, 1500);
+      }
+      log(`typed ${typedWords.length} words: ${typedWords.join(', ')}`);
+    } else {
+      debug('round 1 screen never appeared — joined mid/after round 1');
     }
 
-    // Wait for this matchup's result to display before looping back to
-    // check whether the next matchup or the final scoreboard comes next.
-    debug('waiting for this matchup\'s result to display...');
-    await waitVisible(page.getByText(/And the Winner Is|It's a Tie!/), 20_000);
+    debug('waiting for round 2 sheet (or a "sat out round 2" drop screen)...');
+    const sheetOrDropped = page.getByText('Fill out your memo').or(page.getByText('sat out round 2'));
+    await sheetOrDropped.waitFor({ timeout: 90_000 });
+
+    if (await page.getByText('sat out round 2').isVisible()) {
+      log('sat out round 2 (submission arrived too late)');
+    } else {
+      const selects = page.locator('select');
+      const count = await selects.count();
+      debug(`filling ${count} dropdown(s) on the round 2 memo...`);
+      for (let i = 0; i < count; i++) {
+        const select = selects.nth(i);
+        const values = await Promise.all((await select.locator('option').all()).map((o) => o.getAttribute('value')));
+        const real = values.filter((v) => v);
+        if (real.length > 0) {
+          await select.selectOption(real[Math.floor(Math.random() * real.length)]);
+        }
+      }
+      await randomDelay(500, 3000);
+      // Filling the last dropdown triggers a React re-render before the
+      // Submit button flips to enabled — wait/retry for it rather than
+      // checking once and silently giving up if we're too early.
+      const submitButton = page.getByRole('button', { name: 'Submit' });
+      await expect(submitButton).toBeEnabled({ timeout: 10_000 });
+      await submitButton.click();
+      log('submitted round 2 sheet');
+    }
+
+    // Voting is now a sequence of head-to-head matchups (one pair of memos
+    // at a time, with results shown in between) rather than a single
+    // pick-your-favorite-among-everyone screen. Keep voting on whatever
+    // matchup comes up until the final scoreboard appears — how many
+    // matchups there are (and whether an odd sheet out gets a bot opponent)
+    // is decided by the host, not something this bot needs to know.
+    for (let round = 0; round < 10; round++) {
+      debug(`waiting for matchup ${round + 1} (or the final scoreboard)...`);
+      const matchupOrFinal = page.getByText('Pick the Better One').or(page.getByText('Final Scoreboard'));
+      if (!(await waitVisible(matchupOrFinal, 90_000))) {
+        debug('neither a matchup nor the final scoreboard showed up within 90s — giving up on voting');
+        break;
+      }
+      if (await page.getByText('Final Scoreboard').isVisible()) break;
+
+      await randomDelay(500, 3000);
+      // The matchup screen has its own "Submit" button once a memo is
+      // picked — scope the random pick to the two vote cards only, so we
+      // never accidentally target the (disabled-until-selected) Submit
+      // button itself.
+      const voteCards = page.getByRole('button').filter({ hasNotText: 'Submit' });
+      const voteCount = await voteCards.count();
+      debug(`found ${voteCount} vote card(s) for this matchup`);
+      if (voteCount > 0) {
+        await voteCards.nth(Math.floor(Math.random() * voteCount)).click();
+        log('voted');
+        await randomDelay(300, 2000);
+        const submitVoteButton = page.getByRole('button', { name: 'Submit' });
+        await expect(submitVoteButton).toBeEnabled({ timeout: 5_000 });
+        await submitVoteButton.click();
+        log('submitted vote');
+      }
+
+      // Wait for this matchup's result to display before looping back to
+      // check whether the next matchup or the final scoreboard comes next.
+      debug('waiting for this matchup\'s result to display...');
+      await waitVisible(page.getByText(/And the Winner Is|It's a Tie!/), 20_000);
+    }
   }
 
   debug('waiting for the final scoreboard...');
@@ -241,8 +339,9 @@ async function createHostBot(browser, expectedPlayerCount, url, verbose) {
   const context = await browser.newContext();
   page = await context.newPage();
 
-  debug(`navigating to ${url}/#/host`);
-  await page.goto(`${url}/#/host`);
+  const game = args.game || 'memo-random';
+  debug(`navigating to ${url}/#/host?game=${game}`);
+  await page.goto(`${url}/#/host?game=${game}`);
   await page.getByPlaceholder('Your name...').fill(name);
   await page.getByRole('button', { name: 'Create Room' }).click();
   const code = await page.locator('span.font-display.text-2xl').innerText();
