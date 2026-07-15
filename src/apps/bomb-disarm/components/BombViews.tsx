@@ -2,31 +2,18 @@ import { cn } from '../../../shared/utils/cn';
 import WaitingForHost from '../../../shared/components/WaitingForHost';
 import { useCountdown } from '../../../shared/hooks/useCountdown';
 import type { GamePlayProps } from '../../../shared/GameShell';
-import type { Card, EffectChoice, GameState, LastReveal, Role, Winner } from '../types';
+import type { Card, EffectChoice, GameState, LastReveal, Role, SpecialRole, Winner } from '../types';
 import { CARD_META } from '../cards';
 import { ROUNDS, WIRE_WIN_THRESHOLD } from '../constants';
+import { didWin } from '../roles';
 import { CardArt, LightningBolt } from './BombArt';
 import { BoardFrame, BombCard, HandRow, TeamCounts, WiresPanel } from './BombBoard';
 import { EffectPrompt, EffectWaiting, PeekOverlay } from './BombEffects';
+import { DeclarePrompt, RescuePrompt, RescueWaiting, RoleBadge, RoleCard } from './BombRoles';
 
-function RoleBadge({ role }: { role: Role | undefined }) {
-  if (!role) return null;
-  const rebel = role === 'rebel';
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 font-display text-[10px] font-black uppercase tracking-widest sm:text-xs',
-        rebel
-          ? 'border-bomb-rebel bg-bomb-rebel/15 text-bomb-rebel'
-          : 'border-bomb-wire bg-bomb-wire/20 text-white'
-      )}
-    >
-      {rebel ? '🧨 Rebel' : '🛡️ Peacekeeper'}
-    </span>
-  );
-}
-
-export function RoleReveal({ role, isDisplay, seconds }: { role: Role | undefined; isDisplay: boolean; seconds: number }) {
+export function RoleReveal({ role, special, isDisplay, seconds }: {
+  role: Role | undefined; special?: SpecialRole; isDisplay: boolean; seconds: number;
+}) {
   if (isDisplay) {
     return (
       <div className="mx-auto w-full max-w-md space-y-4 px-4 py-10 text-center">
@@ -35,26 +22,10 @@ export function RoleReveal({ role, isDisplay, seconds }: { role: Role | undefine
       </div>
     );
   }
-  const rebel = role === 'rebel';
   return (
     <div className="mx-auto w-full max-w-md space-y-8 px-4 py-8 text-center">
-      <h2 className="font-display text-2xl font-extrabold uppercase tracking-wider text-white">Your Team</h2>
-      <div
-        className={cn(
-          'space-y-5 rounded-3xl border p-8 shadow-2xl',
-          rebel ? 'border-bomb-rebel bg-bomb-rebel/15' : 'border-bomb-wire bg-bomb-wire/20'
-        )}
-      >
-        <span className="text-5xl">{rebel ? '🧨' : '🛡️'}</span>
-        <h3 className={cn('font-display text-3xl font-black uppercase tracking-widest', rebel ? 'text-bomb-rebel' : 'text-white')}>
-          {rebel ? 'Rebel' : 'Peacekeeper'}
-        </h3>
-        <p className="text-sm leading-relaxed text-gray-200">
-          {rebel
-            ? 'Sabotage the disarm. You win the moment a bomb is revealed — steer the table toward it.'
-            : `Disarm the bomb. Reveal ${WIRE_WIN_THRESHOLD} cut wires before any bomb turns up.`}
-        </p>
-      </div>
+      <h2 className="font-display text-2xl font-extrabold uppercase tracking-wider text-white">Your Role</h2>
+      <RoleCard role={role} special={special} />
       <div className="space-y-2">
         <div className="animate-bounce font-display text-4xl font-black text-bomb-bolt">{seconds}</div>
         <p className="text-xs uppercase tracking-widest text-gray-300">Dealing cards…</p>
@@ -94,17 +65,17 @@ export function VerdictOverlay({ reveal, winner }: { reveal: LastReveal | null; 
 }
 
 export function MemorizeView({
-  role, hand, seconds, isDisplay, isHost, round, wiresRevealed, playerCount, rebelCount, onReady, onQuit,
+  role, special, hand, seconds, isDisplay, isHost, round, wiresRevealed, playerCount, extraRebels, onReady, onQuit,
 }: {
-  role: Role | undefined; hand: Card[]; seconds: number; isDisplay: boolean; isHost: boolean;
-  round: number; wiresRevealed: number; playerCount: number; rebelCount: number | null;
+  role: Role | undefined; special?: SpecialRole; hand: Card[]; seconds: number; isDisplay: boolean; isHost: boolean;
+  round: number; wiresRevealed: number; playerCount: number; extraRebels: number;
   onReady: () => void; onQuit: () => void;
 }) {
   return (
     <BoardFrame onQuit={onQuit}>
       <div className="flex h-full flex-col p-3">
         <div className="flex shrink-0 items-center justify-between gap-3">
-          <RoleBadge role={role} />
+          <RoleBadge role={role} special={special} />
           <p className="hidden text-center text-[10px] font-bold uppercase tracking-widest text-gray-300 sm:block">
             {round === 1
               ? 'Memorize your hand — it shuffles face-down when the table is dealt'
@@ -123,7 +94,7 @@ export function MemorizeView({
 
         <div className="flex min-h-0 flex-1 items-end justify-between gap-4">
           <div className="space-y-2">
-            <TeamCounts playerCount={playerCount} rebelCount={rebelCount} />
+            <TeamCounts playerCount={playerCount} extraRebels={extraRebels} />
             {isHost && (
               <button
                 type="button"
@@ -145,19 +116,26 @@ export function MemorizeView({
 
 export function TableView({
   hand, isMyTurn, activeName, wiresRevealed, lastReveal, isDisplay,
-  round, revealsThisRound, revealsPerRound, pendingWinner, playerCount, rebelCount,
-  state, playerId, roster, onChooseEffect, onTap, onQuit,
+  round, revealsThisRound, revealsPerRound, pendingWinner, playerCount, extraRebels,
+  state, playerId, roster, onChooseEffect, onChooseRescue, onDeclare, onTap, onQuit,
 }: {
   hand: Card[]; isMyTurn: boolean; activeName: string; wiresRevealed: number; lastReveal: LastReveal | null;
   isDisplay: boolean; round: number; revealsThisRound: number; revealsPerRound: number;
-  pendingWinner: Winner | null; playerCount: number; rebelCount: number | null;
+  pendingWinner: Winner | null; playerCount: number; extraRebels: number;
   state: GameState; playerId: string; roster: GamePlayProps['roster'];
   onChooseEffect: (choice: EffectChoice) => void;
+  onChooseRescue: (save: boolean) => void;
+  onDeclare: (team: Role) => void;
   onTap: (i: number) => void; onQuit: () => void;
 }) {
   const picksLeft = revealsPerRound - revealsThisRound;
-  const { pendingEffect, peek, effectNote, rogueAgentId } = state;
+  const { pendingEffect, peek, effectNote, rogueAgentId, pendingRescue, specialRoles, opportunistTeam } = state;
   const { msRemaining: peekMs } = useCountdown(peek?.endTimestamp ?? null);
+
+  // The Opportunist may flip on their own turn, any time before the game ends.
+  const canDeclare =
+    !isDisplay && isMyTurn && !pendingWinner && !pendingEffect && !peek && !pendingRescue &&
+    specialRoles[playerId] === 'opportunist' && !opportunistTeam;
 
   const status = effectNote
     ?? (lastReveal ? `Last: ${CARD_META[lastReveal.type].title} on ${lastReveal.targetName}` : 'Cards are face-down on the table');
@@ -192,7 +170,7 @@ export function TableView({
 
         <div className="flex min-h-0 flex-1 items-end justify-between gap-4">
           <div className="space-y-1.5">
-            <TeamCounts playerCount={playerCount} rebelCount={rebelCount} />
+            <TeamCounts playerCount={playerCount} extraRebels={extraRebels} />
             <p className="text-[11px] font-bold sm:text-sm">
               {isDisplay || !isMyTurn ? (
                 <span className="text-gray-200">
@@ -204,6 +182,7 @@ export function TableView({
                 </span>
               )}
             </p>
+            {canDeclare && <DeclarePrompt onDeclare={onDeclare} />}
           </div>
           <div className="-mb-3 -mr-3">
             <WiresPanel wiresRevealed={wiresRevealed} />
@@ -213,6 +192,12 @@ export function TableView({
 
       {peek && !pendingWinner && (
         <PeekOverlay type={peek.type} ownerName={peek.ownerName} seconds={Math.ceil(peekMs / 1000)} />
+      )}
+
+      {pendingRescue && !pendingWinner && !isDisplay && (
+        pendingRescue.heroId === playerId
+          ? <RescuePrompt bombOwnerName={roster.find((p) => p.id === pendingRescue.bombOwnerId)?.name ?? '?'} onChoose={onChooseRescue} />
+          : <RescueWaiting />
       )}
 
       {pendingEffect && !pendingWinner && !isDisplay && (
@@ -226,12 +211,19 @@ export function TableView({
   );
 }
 
+const END_BLURB: Record<string, string> = {
+  bomb: 'A bomb was revealed — the disarm failed.',
+  wires: `${WIRE_WIN_THRESHOLD} cut wires revealed — the bomb is disarmed!`,
+  timeout: 'The clock ran out. The bomb was never disarmed.',
+};
+
 export function ResultsView({
-  winner, roles, roster, isHost, onPlayAgain, onQuit,
+  state, roster, isHost, onPlayAgain, onQuit,
 }: {
-  winner: Winner | null; roles: Record<string, Role>; roster: GamePlayProps['roster'];
+  state: GameState; roster: GamePlayProps['roster'];
   isHost: boolean; onPlayAgain: () => void; onQuit: () => void;
 }) {
+  const { winner, roles, specialRoles, endReason } = state;
   const rebelsWon = winner === 'rebels';
   return (
     <div className="mx-auto flex w-full max-w-xl flex-col items-center space-y-6 px-4 py-6">
@@ -247,21 +239,23 @@ export function ResultsView({
         <h2 className={cn('font-display text-3xl font-black uppercase tracking-widest', rebelsWon ? 'text-bomb-rebel' : 'text-bomb-bolt')}>
           {rebelsWon ? 'Rebels Win' : 'Peacekeepers Win'}
         </h2>
-        <p className="text-sm text-gray-200">
-          {rebelsWon
-            ? 'The bomb was never disarmed.'
-            : `${WIRE_WIN_THRESHOLD} cut wires revealed — the bomb is disarmed!`}
-        </p>
+        <p className="text-sm text-gray-200">{endReason ? END_BLURB[endReason] : ''}</p>
       </div>
 
       <div className="w-full space-y-2 rounded-2xl border border-white/10 bg-bomb-board p-5 shadow-lg">
         <h4 className="border-b border-white/10 pb-2 text-xs font-bold uppercase tracking-wider text-gray-300">Roles Revealed</h4>
-        {roster.map((p) => (
-          <div key={p.id} className="flex items-center justify-between text-sm">
-            <span className="font-bold text-white">{p.name}</span>
-            <RoleBadge role={roles[p.id]} />
-          </div>
-        ))}
+        {roster.map((p) => {
+          const won = didWin(p.id, state);
+          return (
+            <div key={p.id} className="flex items-center justify-between gap-2 text-sm">
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className={cn('shrink-0', won ? 'opacity-100' : 'opacity-0')}>🏆</span>
+                <span className={cn('truncate font-bold', won ? 'text-bomb-bolt' : 'text-white/60')}>{p.name}</span>
+              </span>
+              <RoleBadge role={roles[p.id]} special={specialRoles[p.id]} />
+            </div>
+          );
+        })}
       </div>
 
       {isHost ? (

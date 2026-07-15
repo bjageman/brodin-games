@@ -6,7 +6,9 @@ import type { Envelope } from '../../shared/types';
 import type { GamePlayProps } from '../../shared/GameShell';
 import { DEBUG_MODE } from '../../shared/constants';
 import { type DebugAction } from '../../shared/components/DebugWidget';
-import type { CardType, EffectChoice, GameState, LastReveal, PendingEffect, Role, Winner } from './types';
+import type {
+  CardType, EffectChoice, EndReason, GameState, LastReveal, PendingEffect, Role, Winner,
+} from './types';
 import {
   MEMORIZE_DURATION_MS,
   ROLE_REVEAL_DURATION_MS,
@@ -16,12 +18,11 @@ import {
   WIRE_WIN_THRESHOLD,
   STATE_REQUEST_RETRY_INTERVAL_MS,
   STATE_REQUEST_MAX_ATTEMPTS,
-  knownRebelCountFor,
-  rebelCountFor,
 } from './constants';
 import { isSpecial } from './cards';
+import { assignRoles, folkHeroId, isSidelined } from './roles';
 import { buildDeck, dealHands, redeal, shuffle, swapCards } from './deck';
-import { specialsForDeal } from './settings';
+import { specialRolesForDeal, specialsForDeal } from './settings';
 import LandscapeStage from './components/LandscapeStage';
 import { RoleReveal, MemorizeView, TableView, ResultsView } from './components/BombViews';
 
@@ -42,6 +43,12 @@ const EMPTY: GameState = {
   deckAdditions: [],
   effectNote: null,
   roles: {},
+  specialRoles: {},
+  revealedRoleIds: [],
+  folkHeroSpent: false,
+  opportunistTeam: null,
+  pendingRescue: null,
+  endReason: null,
   hands: {},
   activePlayerId: '',
   wiresRevealed: 0,
@@ -71,9 +78,9 @@ export default function BombDisarmGame({
   // whole state anyway, and a missing field here is a desync on someone's phone.
   const [state, setState] = useState<GameState>({ ...EMPTY, ...restored });
   const {
-    phase, roles, hands, activePlayerId, wiresRevealed, turn, round, revealsThisRound,
+    phase, roles, specialRoles, hands, activePlayerId, wiresRevealed, turn, round, revealsThisRound,
     roleRevealEndTimestamp, memorizeEndTimestamp, winner, lastReveal,
-    pendingWinner, pendingEffect, peek, deckAdditions,
+    pendingWinner, pendingEffect, peek, deckAdditions, pendingRescue, opportunistTeam,
   } = state;
 
   const nameOf = (id: string) => roster.find((p) => p.id === id)?.name ?? '?';
@@ -106,24 +113,30 @@ export default function BombDisarmGame({
   }
 
   // The winning card sits face-up for a beat so the table can see what happened.
-  function finishWith(base: GameState, won: Winner) {
-    const held: GameState = { ...base, pendingWinner: won };
+  function finishWith(base: GameState, won: Winner, reason: EndReason) {
+    const held: GameState = { ...base, pendingWinner: won, endReason: reason, pendingRescue: null };
     publish(held);
     setTimeout(() => publish({ ...held, phase: 'results', winner: won }), RESULT_REVEAL_DELAY_MS);
+  }
+
+  // A Folk Hero who spent their save keeps their cards on the table but never
+  // picks again.
+  function canPick(pid: string, base: GameState): boolean {
+    return !isSidelined(pid, base) && hasValidTarget(pid, base.hands);
   }
 
   // ---- Host: hand the pick to the next phone, or close out the round ----
   function advanceTurn(base: GameState, ownerId: string) {
     if (base.revealsThisRound >= roster.length) {
-      if (base.round >= ROUNDS) return finishWith(base, 'rebels');
+      if (base.round >= ROUNDS) return finishWith(base, 'rebels', 'timeout');
       return endRound(base, ownerId);
     }
     // Normally the pick passes to the phone that was just tapped — unless a Rogue
     // Agent has taken the round, in which case it keeps coming back to them.
     let nextActive = base.rogueAgentId ?? ownerId;
-    if (!hasValidTarget(nextActive, base.hands)) {
-      const fallback = roster.find((p) => hasValidTarget(p.id, base.hands));
-      if (!fallback) return finishWith(base, 'rebels');
+    if (!canPick(nextActive, base)) {
+      const fallback = roster.find((p) => canPick(p.id, base));
+      if (!fallback) return finishWith(base, 'rebels', 'timeout');
       nextActive = fallback.id;
     }
     publish({ ...base, activePlayerId: nextActive });
@@ -142,6 +155,7 @@ export default function BombDisarmGame({
       rogueAgentId: null,
       pendingEffect: null,
       peek: null,
+      pendingRescue: null,
       deckAdditions: [],
       effectNote: null,
       lastReveal: null,
@@ -152,7 +166,7 @@ export default function BombDisarmGame({
   function resolveReveal(ownerId: string, cardIndex: number) {
     const hand = hands[ownerId];
     if (!hand || cardIndex < 0 || cardIndex >= hand.length || hand[cardIndex].revealed) return;
-    if (pendingWinner || pendingEffect || peek) return;
+    if (pendingWinner || pendingEffect || peek || pendingRescue) return;
 
     const card = hand[cardIndex];
     const actorId = activePlayerId;
@@ -172,11 +186,19 @@ export default function BombDisarmGame({
       pendingWinner: null,
       pendingEffect: null,
       peek: null,
+      pendingRescue: null,
       effectNote: null,
     };
 
-    if (card.type === 'explode') return finishWith(base, 'rebels');
-    if (base.wiresRevealed >= WIRE_WIN_THRESHOLD) return finishWith(base, 'peacekeepers');
+    if (card.type === 'explode') {
+      // A Folk Hero who hasn't spent themselves yet gets the chance to stop it.
+      const hero = folkHeroId(base);
+      if (hero && !base.folkHeroSpent) {
+        return publish({ ...base, pendingRescue: { bombOwnerId: ownerId, heroId: hero } });
+      }
+      return finishWith(base, 'rebels', 'bomb');
+    }
+    if (base.wiresRevealed >= WIRE_WIN_THRESHOLD) return finishWith(base, 'peacekeepers', 'wires');
 
     if (card.type === 'rogue-agent') {
       return advanceTurn(
@@ -280,6 +302,39 @@ export default function BombDisarmGame({
     }
   }
 
+  // ---- Host: the Folk Hero answers the bomb ----
+  function handleRescue(senderId: string | undefined, save: boolean) {
+    const rescue = pendingRescue;
+    if (!rescue || !senderId || senderId !== rescue.heroId) return;
+
+    if (!save) return finishWith({ ...state, pendingRescue: null }, 'rebels', 'bomb');
+
+    advanceTurn(
+      {
+        ...state,
+        pendingRescue: null,
+        folkHeroSpent: true,
+        revealedRoleIds: [...state.revealedRoleIds, rescue.heroId],
+        effectNote: `🦸 ${nameOf(rescue.heroId)} threw themselves on the bomb — the game goes on, but they're out of the picking`,
+      },
+      rescue.bombOwnerId,
+    );
+  }
+
+  // ---- Host: the Opportunist flips their card and picks a side, in the open ----
+  function handleDeclare(senderId: string | undefined, team: Role) {
+    if (!senderId || specialRoles[senderId] !== 'opportunist') return;
+    if (opportunistTeam || phase !== 'table' || winner || pendingWinner) return;
+    if (senderId !== activePlayerId) return;
+
+    patch({
+      roles: { ...roles, [senderId]: team },
+      opportunistTeam: team,
+      revealedRoleIds: [...state.revealedRoleIds, senderId],
+      effectNote: `🎭 ${nameOf(senderId)} flipped their card — they're a ${team === 'rebel' ? 'Rebel' : 'Peacekeeper'}`,
+    });
+  }
+
   // ---- Host: the peeked card turns back over and play resumes ----
   useEffect(() => {
     if (!isHost || !peek || !peekExpired) return;
@@ -301,14 +356,16 @@ export default function BombDisarmGame({
   function dealGame(): GameState {
     const ids = roster.map((p) => p.id);
     const deck = buildDeck(roster.length, specialsForDeal(code, roster.length));
-    const rebelIds = new Set(shuffle(ids).slice(0, rebelCountFor(roster.length)));
-    const nextRoles: Record<string, Role> = {};
-    ids.forEach((id) => { nextRoles[id] = rebelIds.has(id) ? 'rebel' : 'peacekeeper'; });
+    const { roles: nextRoles, specialRoles: nextSpecialRoles } = assignRoles(
+      ids,
+      specialRolesForDeal(code, roster.length),
+    );
 
     return {
       ...EMPTY,
       phase: 'role-reveal',
       roles: nextRoles,
+      specialRoles: nextSpecialRoles,
       hands: dealHands(ids, deck),
       roleRevealEndTimestamp: Date.now() + ROLE_REVEAL_DURATION_MS,
     };
@@ -377,7 +434,7 @@ export default function BombDisarmGame({
 
   // ---- Client: tap a card on my own phone (someone reached over and tapped it) ----
   function tapCard(cardIndex: number) {
-    if (phase !== 'table' || winner || pendingWinner || pendingEffect || peek) return;
+    if (phase !== 'table' || winner || pendingWinner || pendingEffect || peek || pendingRescue) return;
     if (playerId === activePlayerId) return;
     if (hands[playerId]?.[cardIndex]?.revealed) return;
     if (isHost) {
@@ -397,6 +454,19 @@ export default function BombDisarmGame({
     }
   }
 
+  // ---- Client: I'm the Folk Hero and a bomb just turned up ----
+  function chooseRescue(save: boolean) {
+    if (pendingRescue?.heroId !== playerId) return;
+    if (isHost) handleRescue(playerId, save);
+    else sendMessage({ type: 'bomb-rescue', playerId, timestamp: Date.now(), payload: { save } });
+  }
+
+  // ---- Client: I'm the Opportunist and I'm picking a side ----
+  function declareTeam(team: Role) {
+    if (isHost) handleDeclare(playerId, team);
+    else sendMessage({ type: 'bomb-declare', playerId, timestamp: Date.now(), payload: { team } });
+  }
+
   // ---- Host: play again -> back to lobby ----
   function playAgain() {
     sendMessage({ type: 'play-again', timestamp: Date.now(), payload: {} });
@@ -409,6 +479,12 @@ export default function BombDisarmGame({
     if (action === 'skip-memorize' && phase === 'memorize') return goToTable();
     if (phase !== 'table' || winner) return;
     if (action === 'answer-effect') return autoAnswerEffect();
+    if (action === 'rescue-save') return handleRescue(pendingRescue?.heroId, true);
+    if (action === 'rescue-decline') return handleRescue(pendingRescue?.heroId, false);
+    if (action === 'declare-rebel' || action === 'declare-peacekeeper') {
+      const opportunist = Object.entries(specialRoles).find(([, r]) => r === 'opportunist')?.[0];
+      return handleDeclare(opportunist, action === 'declare-rebel' ? 'rebel' : 'peacekeeper');
+    }
     if (action === 'reveal-wire') revealFirstOfType((t) => t === 'wire');
     else if (action === 'reveal-blank') revealFirstOfType((t) => t === 'blank');
     else if (action === 'reveal-bomb') revealFirstOfType((t) => t === 'explode');
@@ -461,9 +537,16 @@ export default function BombDisarmGame({
     if (phase === 'role-reveal') list.push({ label: '⏭️ Skip to Memorize', onClick: () => triggerAction('skip-role'), variant: 'warning' });
     if (phase === 'memorize') list.push({ label: '⏭️ Skip to Table', onClick: () => triggerAction('skip-memorize'), variant: 'warning' });
     if (phase === 'table' && !winner) {
-      if (pendingEffect) {
+      const opportunist = Object.entries(specialRoles).find(([, r]) => r === 'opportunist')?.[0];
+      if (pendingRescue) {
+        list.push({ label: `🦸 Save (as ${nameOf(pendingRescue.heroId)})`, onClick: () => triggerAction('rescue-save'), variant: 'success' });
+        list.push({ label: '💥 Let it blow', onClick: () => triggerAction('rescue-decline'), variant: 'danger' });
+      } else if (pendingEffect) {
         list.push({ label: `🤖 Answer for ${nameOf(pendingEffect.actorId)}`, onClick: () => triggerAction('answer-effect'), variant: 'primary' });
       } else if (!peek) {
+        if (opportunist && opportunist !== playerId && !opportunistTeam && opportunist === activePlayerId) {
+          list.push({ label: `🎭 Flip ${nameOf(opportunist)} → Rebel`, onClick: () => triggerAction('declare-rebel'), variant: 'warning' });
+        }
         list.push({ label: '✂️ Reveal a Cut Wire', onClick: () => triggerAction('reveal-wire'), variant: 'primary' });
         list.push({ label: '▢ Reveal a Blank', onClick: () => triggerAction('reveal-blank'), variant: 'secondary' });
         list.push({ label: '🎴 Reveal a Special', onClick: () => triggerAction('reveal-special'), variant: 'success' });
@@ -487,6 +570,10 @@ export default function BombDisarmGame({
           handleReveal(senderId, p.cardIndex, p.turn);
         } else if (type === 'bomb-effect-choice') {
           handleEffectChoice(senderId, payload as EffectChoice);
+        } else if (type === 'bomb-rescue') {
+          handleRescue(senderId, (payload as { save: boolean }).save);
+        } else if (type === 'bomb-declare') {
+          handleDeclare(senderId, (payload as { team: Role }).team);
         } else if (type === 'bomb-request-state') {
           if (phase !== 'starting') patch({});
         }
@@ -499,7 +586,7 @@ export default function BombDisarmGame({
   useEffect(() => {
     if (DEBUG_MODE && onRegisterDebugActions) onRegisterDebugActions(getDebugActions(), phase);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, turn, winner, activePlayerId, wiresRevealed, pendingEffect, peek]);
+  }, [phase, turn, winner, activePlayerId, wiresRevealed, pendingEffect, peek, pendingRescue, opportunistTeam, specialRoles]);
 
   // ---- Confetti on a win ----
   useEffect(() => {
@@ -515,7 +602,8 @@ export default function BombDisarmGame({
   const myHand = hands[playerId] ?? [];
   const isMyTurn = phase === 'table' && activePlayerId === playerId;
   const activeName = nameOf(activePlayerId);
-  const rebelCount = knownRebelCountFor(roster.length);
+  // An Opportunist who flipped to the rebels left a peacekeeper seat, in public.
+  const extraRebels = opportunistTeam === 'rebel' ? 1 : 0;
 
   return (
     <div className="w-full flex-1 flex flex-col items-center">
@@ -526,13 +614,14 @@ export default function BombDisarmGame({
       )}
 
       {phase === 'role-reveal' && (
-        <RoleReveal role={roles[playerId]} isDisplay={isDisplay} seconds={roleSec} />
+        <RoleReveal role={roles[playerId]} special={specialRoles[playerId]} isDisplay={isDisplay} seconds={roleSec} />
       )}
 
       {phase === 'memorize' && (
         <LandscapeStage>
           <MemorizeView
             role={roles[playerId]}
+            special={specialRoles[playerId]}
             hand={myHand}
             seconds={memoSec}
             isDisplay={isDisplay}
@@ -540,7 +629,7 @@ export default function BombDisarmGame({
             round={round}
             wiresRevealed={wiresRevealed}
             playerCount={roster.length}
-            rebelCount={rebelCount}
+            extraRebels={extraRebels}
             onReady={goToTable}
             onQuit={onQuit}
           />
@@ -561,11 +650,13 @@ export default function BombDisarmGame({
             revealsPerRound={roster.length}
             pendingWinner={pendingWinner}
             playerCount={roster.length}
-            rebelCount={rebelCount}
+            extraRebels={extraRebels}
             state={state}
             playerId={playerId}
             roster={roster}
             onChooseEffect={chooseEffect}
+            onChooseRescue={chooseRescue}
+            onDeclare={declareTeam}
             onTap={tapCard}
             onQuit={onQuit}
           />
@@ -574,8 +665,7 @@ export default function BombDisarmGame({
 
       {phase === 'results' && (
         <ResultsView
-          winner={winner}
-          roles={roles}
+          state={state}
           roster={roster}
           isHost={isHost}
           onPlayAgain={playAgain}
