@@ -110,7 +110,7 @@ export default function QuizQuestGame({
         handleDebugHostAction((envelope.payload as { action: string }).action);
       }
     });
-  });
+  }, [onRegisterMessageHandler, isHost, state, publish, submitAnswer, handleDebugHostAction]);
 
   useEffect(() => {
     onGameBgChange?.('bg-quiz-bg');
