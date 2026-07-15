@@ -75,6 +75,21 @@ export default {
           easel: '#f6a554',  // easel wood
           easelDark: '#bf7337',
         },
+        // Quiz Quest palette, sampled from the dungeon-crawler mockup
+        // (Design Docs/Quiz Quest/Quiz Quest Main Layout.png): grim stone walls,
+        // torchlit gold trim, blood-red danger, healthy green HP.
+        quiz: {
+          bg: '#1c1c1c',
+          stone: '#3a3a3a',
+          stoneLight: '#575757',
+          panel: '#141414',
+          gold: '#f4b324',
+          goldDark: '#a86f16',
+          hp: '#2f9f2a',
+          hpTrack: '#4a4a4a',
+          danger: '#c23b3b',
+          ink: '#e8e6df',
+        },
       },
       keyframes: {
         shake: {
