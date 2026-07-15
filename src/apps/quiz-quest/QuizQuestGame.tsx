@@ -4,6 +4,7 @@ import type { Envelope } from '../../shared/types';
 import type { GamePlayProps } from '../../shared/GameShell';
 import type { GameState } from './types';
 import PartyCard from './components/PartyCard';
+import MenuOverlay from './components/MenuOverlay';
 
 interface QuizSnapshot {
   quiz: GameState;
@@ -19,6 +20,7 @@ export default function QuizQuestGame({
 }: GamePlayProps) {
   const restored = freshStart ? null : loadSnapshot<QuizSnapshot>(gameSnapshotKey(code))?.quiz ?? null;
   const [state, setState] = useState<GameState>({ ...EMPTY, ...restored });
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     const current = loadSnapshot<Record<string, unknown>>(gameSnapshotKey(code)) ?? {};
@@ -73,11 +75,19 @@ export default function QuizQuestGame({
             The dungeon is still being built — rooms, monsters, and trivia are coming soon.
           </p>
           <button
-            onClick={onQuit}
+            onClick={() => setMenuOpen(true)}
             className="rounded-full border-2 border-quiz-gold px-6 py-2 font-display text-xs font-bold uppercase tracking-wider text-quiz-gold transition-colors hover:bg-quiz-gold hover:text-quiz-ink"
           >
-            Quit
+            Menu
           </button>
+          {menuOpen && (
+            <MenuOverlay
+              code={code}
+              playerCount={roster.length}
+              onQuit={onQuit}
+              onClose={() => setMenuOpen(false)}
+            />
+          )}
         </>
       )}
     </div>
