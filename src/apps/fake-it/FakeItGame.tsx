@@ -91,13 +91,7 @@ export default function FakeItGame({
     setVotes(next);
   }
 
-  // Dev-only host controls (hoisted helpers below are passed in as context).
-  const { isTimerPaused, handleDebugHostAction, getDebugActions } = useFakeItDebug({
-    isHost, playerId, sendMessage, phase, roster, drawerIndex, lines, votes,
-    roleRevealEndTimestamp, turnEndTimestamp, voteEndTimestamp,
-    setRoleRevealEndTimestamp, setTurnEndTimestamp, setVoteEndTimestamp,
-    setPhase, setLines, setVotes: applyVotes, broadcastState, advanceTurn, revealResults, getPlayerColor,
-  });
+
 
   // Save state snapshots on change
   useEffect(() => {
@@ -182,11 +176,6 @@ export default function FakeItGame({
     guessEndTimestamp, sendMessage
   ]);
 
-  // Handle drawing turn timeout on host
-  const handleTurnTimeout = useCallback(() => {
-    advanceTurn(lines);
-  }, [lines, advanceTurn]);
-
   // Helper to advance the drawing turn
   const advanceTurn = useCallback((currentLines: Line[]) => {
     let nextDrawerIndex = drawerIndex + 1;
@@ -227,6 +216,11 @@ export default function FakeItGame({
       });
     }
   }, [drawerIndex, drawingRound, roster.length, broadcastState]);
+
+  // Handle drawing turn timeout on host
+  const handleTurnTimeout = useCallback(() => {
+    advanceTurn(lines);
+  }, [lines, advanceTurn]);
 
   // Host: Process client drawn line
   function handleClientDrawLine(senderId: string | undefined, points: Point[]) {
@@ -503,6 +497,14 @@ export default function FakeItGame({
     }
   }, [isHost, freshStart, roster, scores, sendMessage, usedTopicNames, phase]);
 
+  // Dev-only host controls (hoisted helpers below are passed in as context).
+  const { isTimerPaused, handleDebugHostAction, getDebugActions } = useFakeItDebug({
+    isHost, playerId, sendMessage, phase, roster, drawerIndex, lines, votes,
+    roleRevealEndTimestamp, turnEndTimestamp, voteEndTimestamp,
+    setRoleRevealEndTimestamp, setTurnEndTimestamp, setVoteEndTimestamp,
+    setPhase, setLines, setVotes: applyVotes, broadcastState, advanceTurn, revealResults, getPlayerColor,
+  });
+
   // Client recovery: if we're still on the loading screen ('starting') after
   // mounting, we likely missed the host's one-shot initial state broadcast
   // (a race: the broadcast can arrive before our message handler registers).
@@ -542,7 +544,10 @@ export default function FakeItGame({
   // Host transition: Drawing Turn Timeout
   useEffect(() => {
     if (isHost && phase === 'drawing' && turnEndTimestamp && turnExpired) {
-      handleTurnTimeout();
+      const timer = setTimeout(() => {
+        handleTurnTimeout();
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, [isHost, phase, turnEndTimestamp, turnExpired, handleTurnTimeout]);
 
@@ -588,7 +593,6 @@ export default function FakeItGame({
           setGuessEndTimestamp(state.guessEndTimestamp);
 
           setMyVote(null);
-          setImposterGuess(null);
         }
       } else if (type === 'debug-host-action') {
         if (isHost) {
@@ -601,7 +605,7 @@ export default function FakeItGame({
           }
         } else if (type === 'draw-line') {
           if (senderId) {
-            handleClientDrawLine(senderId, (payload as { line: Line }).line);
+            handleClientDrawLine(senderId, (payload as { points: Point[] }).points);
           }
         } else if (type === 'submit-guess') {
           if (senderId) {

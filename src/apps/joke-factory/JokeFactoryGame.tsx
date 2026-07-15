@@ -116,6 +116,86 @@ export default function JokeFactoryGame({
     round3Data, scores, roundPoints, writingEndTimestamp, votingEndTimestamp,
     resultsEndTimestamp, sendMessage
   ]);
+  const revealMatchupResults = useCallback((latestMatchups: PromptMatchup[]) => {
+    const currentMatch = latestMatchups[currentMatchIndexRef.current];
+
+    const leftVotes = Object.values(currentMatch.votes).filter((v) => v === 'left').length;
+    const rightVotes = Object.values(currentMatch.votes).filter((v) => v === 'right').length;
+    const totalVotes = leftVotes + rightVotes;
+
+    const ptsPerVote = 100;
+    const bonusPts = 200;
+
+    let leftPoints = leftVotes * ptsPerVote;
+    let rightPoints = rightVotes * ptsPerVote;
+
+    if (totalVotes > 0) {
+      if (leftVotes === totalVotes) leftPoints += bonusPts;
+      if (rightVotes === totalVotes) rightPoints += bonusPts;
+    }
+
+    const nextRoundPoints = { ...roundPointsRef.current };
+    nextRoundPoints[currentMatch.leftPlayerId] = (nextRoundPoints[currentMatch.leftPlayerId] || 0) + leftPoints;
+    nextRoundPoints[currentMatch.rightPlayerId] = (nextRoundPoints[currentMatch.rightPlayerId] || 0) + rightPoints;
+
+    const nextScores = { ...scoresRef.current };
+    nextScores[currentMatch.leftPlayerId] = (nextScores[currentMatch.leftPlayerId] || 0) + leftPoints;
+    nextScores[currentMatch.rightPlayerId] = (nextScores[currentMatch.rightPlayerId] || 0) + rightPoints;
+
+    const endTimestamp = Date.now() + RESULTS_DURATION_MS;
+
+    setPhase('results');
+    setVotingEndTimestamp(null);
+    setResultsEndTimestamp(endTimestamp);
+    setRoundPoints(nextRoundPoints);
+    setScores(nextScores);
+
+    broadcastState({
+      phase: 'results',
+      votingEndTimestamp: null,
+      resultsEndTimestamp: endTimestamp,
+      roundPoints: nextRoundPoints,
+      scores: nextScores,
+      matchups: latestMatchups,
+    });
+  }, [broadcastState]);
+
+  const revealRound3Results = useCallback((latestR3Data: Round3State) => {
+    const totalVotes = Object.keys(latestR3Data.votes).length;
+
+    const nextRoundPoints = { ...roundPointsRef.current };
+    const nextScores = { ...scoresRef.current };
+
+    roster.forEach((p) => {
+      const vCount = Object.values(latestR3Data.votes).filter((v) => v === p.id).length;
+
+      const ptsPerVote = 200; // doubled
+      const bonusPts = 400; // doubled
+
+      const isQuiplash = totalVotes > 0 && vCount === totalVotes;
+      const points = vCount * ptsPerVote + (isQuiplash ? bonusPts : 0);
+
+      nextRoundPoints[p.id] = (nextRoundPoints[p.id] || 0) + points;
+      nextScores[p.id] = (nextScores[p.id] || 0) + points;
+    });
+
+    const endTimestamp = Date.now() + RESULTS_DURATION_MS;
+
+    setPhase('results');
+    setVotingEndTimestamp(null);
+    setResultsEndTimestamp(endTimestamp);
+    setRoundPoints(nextRoundPoints);
+    setScores(nextScores);
+
+    broadcastState({
+      phase: 'results',
+      votingEndTimestamp: null,
+      resultsEndTimestamp: endTimestamp,
+      roundPoints: nextRoundPoints,
+      scores: nextScores,
+      round3Data: latestR3Data,
+    });
+  }, [roster, broadcastState]);
 
   function simulateAnswers() {
     const finalAnswers = { ...answersRef.current };
@@ -200,29 +280,7 @@ export default function JokeFactoryGame({
     }
   }
 
-  const { isTimerPaused, handleDebugHostAction, getDebugActions } = useJokeFactoryDebug({
-    isHost,
-    playerId,
-    sendMessage,
-    phase,
-    round,
-    revealEndTimestamp,
-    writingEndTimestamp,
-    votingEndTimestamp,
-    resultsEndTimestamp,
-    setRevealEndTimestamp,
-    setWritingEndTimestamp,
-    setVotingEndTimestamp,
-    setResultsEndTimestamp,
-    simulateAnswers,
-    skipWriting: autoSubmitAnswers,
-    simulateVotes,
-    skipMatchup,
-    skipResults: handleResultsTimeout,
-    nextRound: handleNextRound,
-    endGameAction: onQuit,
-    broadcastState,
-  });
+
 
   // Save state snapshots on change
   useEffect(() => {
@@ -409,86 +467,7 @@ export default function JokeFactoryGame({
     }
   }, [roster, round3Data, broadcastState, revealRound3Results, revealMatchupResults]);
 
-  const revealMatchupResults = useCallback((latestMatchups: PromptMatchup[]) => {
-    const currentMatch = latestMatchups[currentMatchIndexRef.current];
 
-    const leftVotes = Object.values(currentMatch.votes).filter((v) => v === 'left').length;
-    const rightVotes = Object.values(currentMatch.votes).filter((v) => v === 'right').length;
-    const totalVotes = leftVotes + rightVotes;
-
-    const ptsPerVote = 100;
-    const bonusPts = 200;
-
-    let leftPoints = leftVotes * ptsPerVote;
-    let rightPoints = rightVotes * ptsPerVote;
-
-    if (totalVotes > 0) {
-      if (leftVotes === totalVotes) leftPoints += bonusPts;
-      if (rightVotes === totalVotes) rightPoints += bonusPts;
-    }
-
-    const nextRoundPoints = { ...roundPointsRef.current };
-    nextRoundPoints[currentMatch.leftPlayerId] = (nextRoundPoints[currentMatch.leftPlayerId] || 0) + leftPoints;
-    nextRoundPoints[currentMatch.rightPlayerId] = (nextRoundPoints[currentMatch.rightPlayerId] || 0) + rightPoints;
-
-    const nextScores = { ...scoresRef.current };
-    nextScores[currentMatch.leftPlayerId] = (nextScores[currentMatch.leftPlayerId] || 0) + leftPoints;
-    nextScores[currentMatch.rightPlayerId] = (nextScores[currentMatch.rightPlayerId] || 0) + rightPoints;
-
-    const endTimestamp = Date.now() + RESULTS_DURATION_MS;
-
-    setPhase('results');
-    setVotingEndTimestamp(null);
-    setResultsEndTimestamp(endTimestamp);
-    setRoundPoints(nextRoundPoints);
-    setScores(nextScores);
-
-    broadcastState({
-      phase: 'results',
-      votingEndTimestamp: null,
-      resultsEndTimestamp: endTimestamp,
-      roundPoints: nextRoundPoints,
-      scores: nextScores,
-      matchups: latestMatchups,
-    });
-  }, [broadcastState]);
-
-  const revealRound3Results = useCallback((latestR3Data: Round3State) => {
-    const totalVotes = Object.keys(latestR3Data.votes).length;
-
-    const nextRoundPoints = { ...roundPointsRef.current };
-    const nextScores = { ...scoresRef.current };
-
-    roster.forEach((p) => {
-      const vCount = Object.values(latestR3Data.votes).filter((v) => v === p.id).length;
-
-      const ptsPerVote = 200; // doubled
-      const bonusPts = 400; // doubled
-
-      const isQuiplash = totalVotes > 0 && vCount === totalVotes;
-      const points = vCount * ptsPerVote + (isQuiplash ? bonusPts : 0);
-
-      nextRoundPoints[p.id] = (nextRoundPoints[p.id] || 0) + points;
-      nextScores[p.id] = (nextScores[p.id] || 0) + points;
-    });
-
-    const endTimestamp = Date.now() + RESULTS_DURATION_MS;
-
-    setPhase('results');
-    setVotingEndTimestamp(null);
-    setResultsEndTimestamp(endTimestamp);
-    setRoundPoints(nextRoundPoints);
-    setScores(nextScores);
-
-    broadcastState({
-      phase: 'results',
-      votingEndTimestamp: null,
-      resultsEndTimestamp: endTimestamp,
-      roundPoints: nextRoundPoints,
-      scores: nextScores,
-      round3Data: latestR3Data,
-    });
-  }, [roster, broadcastState]);
 
   const handleResultsTimeout = useCallback(() => {
     if (roundRef.current < 3) {
@@ -682,6 +661,30 @@ export default function JokeFactoryGame({
       return () => clearTimeout(timer);
     }
   }, [isHost, phase, resultsEndTimestamp, resultsExpired, handleResultsTimeout]);
+
+  const { isTimerPaused, handleDebugHostAction, getDebugActions } = useJokeFactoryDebug({
+    isHost,
+    playerId,
+    sendMessage,
+    phase,
+    round,
+    revealEndTimestamp,
+    writingEndTimestamp,
+    votingEndTimestamp,
+    resultsEndTimestamp,
+    setRevealEndTimestamp,
+    setWritingEndTimestamp,
+    setVotingEndTimestamp,
+    setResultsEndTimestamp,
+    simulateAnswers,
+    skipWriting: autoSubmitAnswers,
+    simulateVotes,
+    skipMatchup,
+    skipResults: handleResultsTimeout,
+    nextRound: handleNextRound,
+    endGameAction: onQuit,
+    broadcastState,
+  });
 
   // Register debug actions with GameShell
   useEffect(() => {

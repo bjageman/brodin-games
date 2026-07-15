@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useCountdown } from '../../shared/hooks/useCountdown';
 import { loadDictionary } from './utils/dictionary';
 import { audioManager } from '../../shared/utils/audio';
