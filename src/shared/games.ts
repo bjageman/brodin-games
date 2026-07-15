@@ -150,10 +150,10 @@ export const GAMES_REGISTRY: Record<string, GameConfig> = {
     id: 'quiz-quest',
     title: 'Quiz Quest',
     // Playable solo — a lone player just has nobody to out-score, only the
-    // boss to beat. Up to a full party of 6 (matches PARTY_SLOTS / the party
-    // panel's six seats).
+    // boss to beat. Up to a full party of 8 (matches PARTY_SLOTS / the party
+    // panel's eight seats).
     minPlayers: 1,
-    maxPlayers: 6,
+    maxPlayers: 8,
     gamePlay: QuizQuestGame,
     playerTag: QuizTag,
     theme: QUIZ_THEME,
