@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { loadSnapshot, saveSnapshot, gameSnapshotKey } from '../../shared/utils/sessionSnapshot';
 import { useCountdown } from '../../shared/hooks/useCountdown';
 import type { Envelope } from '../../shared/types';
@@ -49,8 +49,15 @@ export default function QuizQuestGame({
   const { startDungeon, submitAnswer, timeoutRound, timeoutReveal } = useDungeon({ roster, state, publish });
 
   // ---- Host: once the party has joined, move past the loading spinner ----
+  // `freshStart` stays true for the rest of the session (it only marks a live
+  // lobby->in-game transition vs. a refresh), so this must only ever fire
+  // once — otherwise every later phase change (e.g. clicking "Enter the
+  // Dungeon") re-triggers it and stomps the game right back to 'party'.
+  const kickedOffRef = useRef(false);
   useEffect(() => {
+    if (kickedOffRef.current) return;
     if (isHost && (state.phase === 'starting' || freshStart) && roster.length > 0) {
+      kickedOffRef.current = true;
       const timer = setTimeout(() => {
         publish({ ...EMPTY, phase: 'party' });
       }, 0);
