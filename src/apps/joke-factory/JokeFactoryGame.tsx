@@ -719,7 +719,6 @@ export default function JokeFactoryGame({
       myVote={myVote}
       onSubmitVote={handleSubmitVote}
       scores={scores}
-      roundPoints={roundPoints}
       handleNextRound={handleNextRound}
       endGame={onQuit}
       round3Data={round3Data}
