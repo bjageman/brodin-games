@@ -53,4 +53,7 @@ export interface GameState {
   askedQuestionIds: string[];
   // Set once the boss falls — ties are possible and all get listed.
   winnerIds: string[];
+  // True when the run ended because the whole party was wiped out (everyone a
+  // ghost at once) rather than by beating the boss. Drives the game-over copy.
+  partyWiped: boolean;
 }

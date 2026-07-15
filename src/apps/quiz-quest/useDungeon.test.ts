@@ -17,6 +17,7 @@ const EMPTY: GameState = {
   lastReveal: null,
   askedQuestionIds: [],
   winnerIds: [],
+  partyWiped: false,
 };
 
 const roster: PlayerInfo[] = [{ id: 'a', name: 'Alice' }, { id: 'b', name: 'Bob' }];
@@ -83,15 +84,43 @@ describe('useDungeon', () => {
     expect(state.lastReveal?.monsterDamage).toBe(1);
   });
 
-  it('never lets HP go negative', () => {
+  it('clamps HP at 0 and ends the run when a solo party is wiped', () => {
     const h = makeHarness([{ id: 'a', name: 'Alice' }]);
     h.startDungeon();
-    for (let i = 0; i < STARTING_HP + 2; i++) {
+    // Keep answering wrong until Alice drops. HP must clamp at 0 (never
+    // negative), and a solo wipe should end the run right away.
+    let guard = 0;
+    while (h.getState().phase !== 'game-over' && guard < 10) {
       const wrong = (h.getState().room!.question.correctIndex + 1) % 4;
       h.submitAnswer('a', wrong);
-      h.tick(REVEAL_DURATION_MS);
+      if (h.getState().phase === 'reveal') h.tick(REVEAL_DURATION_MS);
+      guard++;
     }
-    expect(h.getState().players.a.hp).toBe(0);
+    const state = h.getState();
+    expect(state.players.a.hp).toBe(0);
+    expect(state.phase).toBe('game-over');
+    expect(state.partyWiped).toBe(true);
+  });
+
+  it('ends the run immediately when the whole party is wiped out', () => {
+    const h = makeHarness(); // Alice + Bob
+    h.startDungeon();
+    // Both keep answering wrong: no monster damage, so nobody is revived —
+    // the moment both are ghosts the run is over, straight to game-over.
+    let guard = 0;
+    while (h.getState().phase !== 'game-over' && guard < 10) {
+      const wrong = (h.getState().room!.question.correctIndex + 1) % 4;
+      h.submitAnswer('a', wrong);
+      h.submitAnswer('b', wrong);
+      if (h.getState().phase === 'reveal') h.tick(REVEAL_DURATION_MS);
+      guard++;
+    }
+    const state = h.getState();
+    expect(state.phase).toBe('game-over');
+    expect(state.partyWiped).toBe(true);
+    expect(state.room).toBeNull();
+    expect(state.players.a.hp).toBe(0);
+    expect(state.players.b.hp).toBe(0);
   });
 
   it('rolls a new question in the same room if the monster survives', () => {

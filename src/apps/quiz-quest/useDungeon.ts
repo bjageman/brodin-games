@@ -20,6 +20,13 @@ function reviveGhosts(players: Record<string, PlayerCombat>): Record<string, Pla
   return revived;
 }
 
+// Everyone tied for the highest score — the run's winners, whether the party
+// beat the boss or just out-scored each other before the wipe.
+function topScorerIds(players: Record<string, PlayerCombat>, roster: PlayerInfo[]): string[] {
+  const topScore = Math.max(0, ...roster.map((p) => players[p.id]?.score ?? 0));
+  return roster.filter((p) => (players[p.id]?.score ?? 0) === topScore).map((p) => p.id);
+}
+
 // The room-loop reducer: start the dungeon, collect simultaneous answers,
 // resolve a round (HP + monster damage), and roll into the next question,
 // room, or game-over. Host-authoritative, same shape as Bomb Disarm's.
@@ -48,6 +55,7 @@ export function useDungeon({ roster, state, publish }: DungeonDeps) {
       players,
       askedQuestionIds: [room.question.id],
       winnerIds: [],
+      partyWiped: false,
     }, room));
   }
 
@@ -105,6 +113,24 @@ export function useDungeon({ roster, state, publish }: DungeonDeps) {
     const nextMonsterHp = Math.max(0, room.monsterHp - monsterDamage);
     const monsterDefeated = nextMonsterHp <= 0;
 
+    // Total party wipe: everyone's a ghost at once and the monster's still
+    // standing (a killing blow needs a correct answer, which costs no HP, so a
+    // defeated monster always leaves at least one hero alive). Ghosts only get
+    // revived by clearing a room, so a full wipe can never recover — end the
+    // run right now on a game-over with the final scores.
+    if (!monsterDefeated && roster.every((p) => nextPlayers[p.id]?.isGhost)) {
+      return publish({
+        ...base,
+        phase: 'game-over',
+        players: nextPlayers,
+        room: null,
+        winnerIds: topScorerIds(nextPlayers, roster),
+        partyWiped: true,
+        roundEndTimestamp: null,
+        revealEndTimestamp: null,
+      });
+    }
+
     // Clearing a (non-boss) room drops loot for whoever's furthest behind —
     // a rubber-band so a rough run doesn't spiral. No loot at the boss;
     // the run's over either way.
@@ -146,10 +172,14 @@ export function useDungeon({ roster, state, publish }: DungeonDeps) {
     }
 
     if (room.isBoss) {
-      const scores = roster.map((p) => base.players[p.id]?.score ?? 0);
-      const topScore = Math.max(0, ...scores);
-      const winnerIds = roster.filter((p) => (base.players[p.id]?.score ?? 0) === topScore).map((p) => p.id);
-      return publish({ ...base, phase: 'game-over', room: null, winnerIds, revealEndTimestamp: null });
+      return publish({
+        ...base,
+        phase: 'game-over',
+        room: null,
+        winnerIds: topScorerIds(base.players, roster),
+        partyWiped: false,
+        revealEndTimestamp: null,
+      });
     }
 
     // The party presses on — clearing a room drags any ghosts back to their feet.

@@ -28,6 +28,7 @@ const EMPTY: GameState = {
   lastReveal: null,
   askedQuestionIds: [],
   winnerIds: [],
+  partyWiped: false,
 };
 
 export default function QuizQuestGame({
@@ -37,7 +38,7 @@ export default function QuizQuestGame({
   const restored = freshStart ? null : loadSnapshot<QuizSnapshot>(gameSnapshotKey(code))?.quiz ?? null;
   const [state, setState] = useState<GameState>({ ...EMPTY, ...restored });
   const [menuOpen, setMenuOpen] = useState(false);
-  const { phase, room, players, answers, roundEndTimestamp, lastReveal, winnerIds } = state;
+  const { phase, room, players, answers, roundEndTimestamp, lastReveal, winnerIds, partyWiped } = state;
 
   useEffect(() => {
     const current = loadSnapshot<Record<string, unknown>>(gameSnapshotKey(code)) ?? {};
@@ -190,7 +191,7 @@ export default function QuizQuestGame({
       )}
 
       {phase === 'game-over' && (
-        <GameOverView players={players} roster={roster} winnerIds={winnerIds} isHost={isHost} onQuit={onQuit} />
+        <GameOverView players={players} roster={roster} winnerIds={winnerIds} partyWiped={partyWiped} isHost={isHost} onQuit={onQuit} />
       )}
 
       {menuOpen && (

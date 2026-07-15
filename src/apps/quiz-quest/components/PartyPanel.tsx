@@ -1,7 +1,7 @@
 import { cn } from '../../../shared/utils/cn';
 import type { PlayerInfo } from '../../../shared/types';
 import type { PlayerCombat } from '../types';
-import { MAX_ITEMS, STARTING_HP } from '../constants';
+import { MAX_ITEMS, PARTY_SLOTS, STARTING_HP } from '../constants';
 import { portraitFor } from '../portraits';
 
 // One party member, styled after the mockup's roster cards: a name plate, the
@@ -19,7 +19,7 @@ function MemberCard({ name, index, combat, isMe }: {
   return (
     <div
       className={cn(
-        'flex h-full flex-col border-2 bg-quiz-stone shadow-[0_2px_6px_rgba(0,0,0,0.5)]',
+        'flex aspect-[4/3] flex-col border-2 bg-quiz-stone shadow-[0_2px_6px_rgba(0,0,0,0.5)]',
         isMe ? 'border-quiz-gold' : 'border-quiz-goldDark',
         isGhost && 'opacity-60 grayscale'
       )}
@@ -62,18 +62,33 @@ function MemberCard({ name, index, combat, isMe }: {
   );
 }
 
-// The mockup's right-hand roster: the whole party, always on screen, in a
-// two-column grid so everyone can watch each other's HP and loadout.
+// An unfilled seat — a spot waiting for a player to drop in. Same footprint as
+// a MemberCard so the roster grid stays a stable set of seats.
+function OpenSlot() {
+  return (
+    <div className="flex aspect-[4/3] flex-col items-center justify-center border-2 border-dashed border-quiz-goldDark/50 bg-quiz-stone/25">
+      <span className="font-pixelBlock text-[9px] uppercase tracking-wide text-quiz-ink/30">Open</span>
+    </div>
+  );
+}
+
+// The mockup's right-hand roster: a fixed grid of PARTY_SLOTS seats, always on
+// screen, so everyone can watch each other's HP and loadout. Seats past the
+// current party size render as open spaces rather than letting a small party
+// stretch to fill the whole column.
 export default function PartyPanel({ roster, players, playerId }: {
   roster: PlayerInfo[];
   players: Record<string, PlayerCombat>;
   playerId: string;
 }) {
   return (
-    <div className="grid h-full grid-cols-2 auto-rows-fr gap-2">
-      {roster.map((p, i) => (
-        <MemberCard key={p.id} name={p.name} index={i} combat={players[p.id]} isMe={p.id === playerId} />
-      ))}
+    <div className="grid grid-cols-2 content-start gap-2">
+      {Array.from({ length: PARTY_SLOTS }, (_, i) => {
+        const p = roster[i];
+        return p
+          ? <MemberCard key={p.id} name={p.name} index={i} combat={players[p.id]} isMe={p.id === playerId} />
+          : <OpenSlot key={`open-${i}`} />;
+      })}
     </div>
   );
 }
