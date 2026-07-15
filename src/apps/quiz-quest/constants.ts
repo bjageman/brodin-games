@@ -8,6 +8,11 @@ export const CORRECT_ANSWER_DAMAGE = 1;
 // this much HP — a fresh start, not a full heal (see #80).
 export const REVIVE_HP = 1;
 
+// Two equipment slots per player (#84). A Ward absorbs one wrong answer's
+// damage before being consumed. Earned as room loot, going to whoever's
+// furthest behind on points — a rubber-band to keep the party together.
+export const MAX_ITEMS = 2;
+
 export const REGULAR_ROOM_COUNT = 5;
 // The boss has a bigger HP pool (more correct answers needed) and, per #82,
 // two things that make it feel distinct rather than just "a bigger number":

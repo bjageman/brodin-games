@@ -49,6 +49,14 @@ const GAMES: Game[] = [
     art: '/games/joke-factory.png',
     tone: 'cyan',
     href: '#/host?game=joke-factory',
+  },
+  {
+    id: 'quiz-quest',
+    title: 'Quiz Quest',
+    description: 'Team up to trivia your way through a dungeon full of monsters and a boss at the end.',
+    art: '/quiz-quest/portraits/human_fighter_male_plate.jpg',
+    tone: 'pink',
+    href: '#/host?game=quiz-quest',
     newest: true,
   },
 ];

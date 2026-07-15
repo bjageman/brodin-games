@@ -11,6 +11,10 @@ export interface PlayerCombat {
   // Hit 0 HP: they keep answering and scoring but no longer land damage on
   // the monster. Revived to 1 HP whenever the party clears a room (#80).
   isGhost: boolean;
+  // Ward count (0-2, see MAX_ITEMS) — the mockup's two item slots. Each Ward
+  // absorbs one wrong answer's damage before being consumed. Earned as room
+  // loot, given to whoever's furthest behind on points (#84).
+  items: number;
 }
 
 export interface ActiveRoom {
@@ -29,6 +33,10 @@ export interface RoundResult {
   damageDealt: Record<string, number>;
   monsterDamage: number;
   monsterDefeated: boolean;
+  // Ids of players whose Ward absorbed a wrong answer this round.
+  wardsUsed: string[];
+  // Whoever the room's loot went to, if the room was cleared this round.
+  lootRecipientId: string | null;
 }
 
 export interface GameState {
