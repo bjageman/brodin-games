@@ -35,6 +35,7 @@ export interface GameState {
   players: Record<string, PlayerCombat>;
   answers: Record<string, number>;
   roundEndTimestamp: number | null;
+  revealEndTimestamp: number | null;
   lastReveal: RoundResult | null;
   // Ids of every question already asked this run, so the same one doesn't
   // repeat if a room takes multiple questions to clear.

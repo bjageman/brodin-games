@@ -510,9 +510,9 @@ export default function JokeFactoryGame({
   function handleNextRound() {
     const nextRound = roundRef.current + 1;
     const setup = startRound(nextRound);
-    const revealEnd = Date.now() + 5000;
+    const endTimestamp = Date.now() + WRITING_DURATION_MS;
 
-    setPhase('prompt-reveal');
+    setPhase('writing');
     setRound(nextRound);
     setPlayerPrompts(setup.playerPrompts);
     setPlayerAnswers({});
@@ -522,10 +522,10 @@ export default function JokeFactoryGame({
     setRoundPoints({});
     setAnswersSubmitted(false);
     setMyVote(null);
-    setRevealEndTimestamp(revealEnd);
+    setWritingEndTimestamp(endTimestamp);
 
     broadcastState({
-      phase: 'prompt-reveal',
+      phase: 'writing',
       round: nextRound,
       playerPrompts: setup.playerPrompts,
       playerAnswers: {},
@@ -533,7 +533,7 @@ export default function JokeFactoryGame({
       currentMatchIndex: 0,
       round3Data: setup.round3Data,
       roundPoints: {},
-      writingEndTimestamp: null,
+      writingEndTimestamp: endTimestamp,
       votingEndTimestamp: null,
       resultsEndTimestamp: null,
     });
@@ -575,19 +575,19 @@ export default function JokeFactoryGame({
         });
 
         const setup = startRound(1);
-        const revealEnd = Date.now() + 5000;
+        const endTimestamp = Date.now() + WRITING_DURATION_MS;
 
-        setPhase('prompt-reveal');
+        setPhase('writing');
         setRound(1);
         setPlayerPrompts(setup.playerPrompts);
         setMatchups(setup.matchups);
         setRound3Data(setup.round3Data);
         setScores(initialScores);
         setRoundPoints({});
-        setRevealEndTimestamp(revealEnd);
+        setWritingEndTimestamp(endTimestamp);
 
         const newState: GameState = {
-          phase: 'prompt-reveal',
+          phase: 'writing',
           round: 1,
           playerPrompts: setup.playerPrompts,
           playerAnswers: {},
@@ -596,7 +596,7 @@ export default function JokeFactoryGame({
           round3Data: setup.round3Data,
           scores: initialScores,
           roundPoints: {},
-          writingEndTimestamp: null,
+          writingEndTimestamp: endTimestamp,
           votingEndTimestamp: null,
           resultsEndTimestamp: null,
         };

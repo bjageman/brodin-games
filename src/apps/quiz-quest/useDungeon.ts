@@ -20,6 +20,7 @@ export function useDungeon({ roster, state, publish }: DungeonDeps) {
       room,
       answers: {},
       roundEndTimestamp: Date.now() + ANSWER_DURATION_MS,
+      revealEndTimestamp: null,
       lastReveal: null,
     };
   }
@@ -88,6 +89,7 @@ export function useDungeon({ roster, state, publish }: DungeonDeps) {
       players: nextPlayers,
       room: { ...room, monsterHp: nextMonsterHp },
       lastReveal: { correctIndex, answers: base.answers, damageDealt, monsterDamage, monsterDefeated },
+      revealEndTimestamp: Date.now() + REVEAL_DURATION_MS,
     };
     publish(withReveal);
     setTimeout(() => advanceAfterReveal(withReveal), REVEAL_DURATION_MS);
@@ -111,12 +113,18 @@ export function useDungeon({ roster, state, publish }: DungeonDeps) {
       const scores = roster.map((p) => base.players[p.id]?.score ?? 0);
       const topScore = Math.max(0, ...scores);
       const winnerIds = roster.filter((p) => (base.players[p.id]?.score ?? 0) === topScore).map((p) => p.id);
-      return publish({ ...base, phase: 'game-over', room: null, winnerIds });
+      return publish({ ...base, phase: 'game-over', room: null, winnerIds, revealEndTimestamp: null });
     }
 
     const nextRoom = buildRoom(room.index + 1, roster.length, base.askedQuestionIds);
     return publish(askQuestion({ ...base, askedQuestionIds: [...base.askedQuestionIds, nextRoom.question.id] }, nextRoom));
   }
 
-  return { startDungeon, submitAnswer, timeoutRound };
+  // ---- Host: the reveal window ran out — advance to the next room/question ----
+  function timeoutReveal() {
+    if (state.phase !== 'reveal') return;
+    advanceAfterReveal(state);
+  }
+
+  return { startDungeon, submitAnswer, timeoutRound, timeoutReveal };
 }

@@ -27,7 +27,6 @@ test('host + 2 players step through Joke Factory rounds and verify leaderboard',
   await host.getByRole('button', { name: 'Start Game' }).click();
 
   // 4. Play Round 1
-  await expect(host.getByText('Prepare', { exact: false }).or(host.getByText('Get ready', { exact: false }))).toBeVisible({ timeout: 15_000 });
   await expect(host.getByText('Round 1: Write!')).toBeVisible({ timeout: 15_000 });
   
   // Skip writing using debug widget
