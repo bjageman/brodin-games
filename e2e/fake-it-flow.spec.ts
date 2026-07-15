@@ -35,9 +35,9 @@ test('host + 2 players step through every Fake It screen', async ({ browser }: {
   }
 
   // Find who the imposter is and get the topic name
-  let imposterPage = host;
-  let imposterName = 'Hosty';
-  let artistPages = [p1, p2];
+  let imposterPage: typeof host;
+  let imposterName: string;
+  let artistPages: (typeof host)[];
 
   const hostHeading = await host.getByRole('heading').innerText();
   if (hostHeading.includes('Imposter')) {

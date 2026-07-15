@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import type { GamePlayProps } from '../../shared/GameShell';
-import type { Envelope } from '../../shared/types';
 
 export default function JokeFactoryGame({
   playerId,
@@ -9,7 +8,7 @@ export default function JokeFactoryGame({
   onQuit,
 }: GamePlayProps) {
   useEffect(() => {
-    onRegisterMessageHandler((envelope: Envelope) => {
+    onRegisterMessageHandler(() => {
       // Stub for message handling
     });
   }, [onRegisterMessageHandler]);

@@ -154,6 +154,8 @@ export default function GameShell({
         );
         rosterRef.current = nextRoster;
         setRoster(nextRoster);
+        // Forward ref to sendMessage (declared later) — fine, only called after mount.
+        // eslint-disable-next-line react-hooks/immutability
         sendMessage({
           type: 'roster-update',
           timestamp: Date.now(),

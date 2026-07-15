@@ -554,6 +554,7 @@ export default function FakeItGame({
   // Host transition: Guessing Timeout
   useEffect(() => {
     if (isHost && phase === 'guessing' && guessEndTimestamp && guessExpired) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       handleImposterGuess(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
