@@ -33,7 +33,6 @@ const GAMES: Game[] = [
     art: '/games/bomb-disarm.png',
     tone: 'pink',
     href: '#/host?game=bomb-disarm',
-    newest: true,
   },
   {
     id: 'memo-random',
@@ -49,6 +48,8 @@ const GAMES: Game[] = [
     description: 'Assess the best jokes before they get released to the public.',
     art: '/games/joke-factory.png',
     tone: 'cyan',
+    href: '#/host?game=joke-factory',
+    newest: true,
   },
 ];
 
