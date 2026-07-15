@@ -113,17 +113,95 @@ export default function JokeFactoryGame({
     });
   }
 
+  function simulateAnswers() {
+    const finalAnswers = { ...answersRef.current };
+    roster.forEach((p) => {
+      if (p.id !== playerId) {
+        const prompts = promptsRef.current[p.id] || [];
+        const answers: Record<string, string> = {};
+        prompts.forEach((pr, idx) => {
+          answers[pr.id] = `Funny joke ${idx + 1} from ${p.name}!`;
+        });
+        finalAnswers[p.id] = answers;
+      }
+    });
+
+    setPlayerAnswers(finalAnswers);
+
+    const activePlayers = roster.length;
+    const submittedCount = Object.keys(finalAnswers).length;
+
+    if (submittedCount >= activePlayers) {
+      advanceToVoting(finalAnswers);
+    } else {
+      broadcastState({ playerAnswers: finalAnswers });
+    }
+  }
+
+  function simulateVotes() {
+    if (roundRef.current === 3) {
+      if (!round3Data) return;
+      const nextVotes = { ...round3Data.votes };
+      roster.forEach((p) => {
+        if (p.id !== playerId) {
+          const options = roster.filter((item) => item.id !== p.id);
+          if (options.length > 0) {
+            const pick = options[Math.floor(Math.random() * options.length)].id;
+            nextVotes[p.id] = pick;
+          }
+        }
+      });
+      const nextR3Data = { ...round3Data, votes: nextVotes };
+      setRound3Data(nextR3Data);
+
+      const voterCount = Object.keys(nextVotes).length;
+      const expectedVotes = roster.length;
+
+      if (voterCount >= expectedVotes) {
+        revealRound3Results(nextR3Data);
+      } else {
+        broadcastState({ round3Data: nextR3Data });
+      }
+    } else {
+      const currentMatch = matchupsRef.current[currentMatchIndexRef.current];
+      if (!currentMatch) return;
+      const nextVotes = { ...currentMatch.votes };
+      roster.forEach((p) => {
+        if (p.id !== currentMatch.leftPlayerId && p.id !== currentMatch.rightPlayerId && p.id !== playerId) {
+          const pick = Math.random() > 0.5 ? 'left' : 'right';
+          nextVotes[p.id] = pick;
+        }
+      });
+      const updatedMatchup = { ...currentMatch, votes: nextVotes };
+      const nextMatchups = [...matchupsRef.current];
+      nextMatchups[currentMatchIndexRef.current] = updatedMatchup;
+      setMatchups(nextMatchups);
+
+      const expectedVotes = roster.length - 2;
+      const voterCount = Object.keys(nextVotes).length;
+
+      if (voterCount >= expectedVotes) {
+        revealMatchupResults(nextMatchups);
+      } else {
+        broadcastState({ matchups: nextMatchups });
+      }
+    }
+  }
+
+  function skipMatchup() {
+    if (roundRef.current === 3) {
+      if (round3Data) revealRound3Results(round3Data);
+    } else {
+      revealMatchupResults(matchupsRef.current);
+    }
+  }
+
   const { isTimerPaused, handleDebugHostAction, getDebugActions } = useJokeFactoryDebug({
     isHost,
     playerId,
     sendMessage,
     phase,
     round,
-    roster,
-    promptsRef,
-    matchupsRef,
-    currentMatchIndexRef,
-    round3Data,
     revealEndTimestamp,
     writingEndTimestamp,
     votingEndTimestamp,
@@ -132,14 +210,13 @@ export default function JokeFactoryGame({
     setWritingEndTimestamp,
     setVotingEndTimestamp,
     setResultsEndTimestamp,
-    handleClientSubmitAnswers,
-    autoSubmitAnswers,
-    handleClientSubmitVote,
-    revealRound3Results,
-    revealMatchupResults,
-    handleResultsTimeout,
-    handleNextRound,
-    onQuit,
+    simulateAnswers,
+    skipWriting: autoSubmitAnswers,
+    simulateVotes,
+    skipMatchup,
+    skipResults: handleResultsTimeout,
+    nextRound: handleNextRound,
+    endGameAction: onQuit,
     broadcastState,
   });
 

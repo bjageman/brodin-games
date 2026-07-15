@@ -1,7 +1,6 @@
-import { useRef, useState, type MutableRefObject } from 'react';
+import { useRef, useState } from 'react';
 import type { DebugAction } from '../../shared/components/DebugWidget';
-import type { PlayerInfo } from '../../shared/types';
-import type { JokeFactoryPhase, GameState, Prompt, PromptMatchup, Round3State } from './types';
+import type { JokeFactoryPhase, GameState } from './types';
 
 interface JokeFactoryDebugCtx {
   isHost: boolean;
@@ -9,11 +8,6 @@ interface JokeFactoryDebugCtx {
   sendMessage: (payload: unknown) => Promise<void> | void;
   phase: JokeFactoryPhase;
   round: number;
-  roster: PlayerInfo[];
-  promptsRef: MutableRefObject<Record<string, Prompt[]>>;
-  matchupsRef: MutableRefObject<PromptMatchup[]>;
-  currentMatchIndexRef: MutableRefObject<number>;
-  round3Data: Round3State | null;
   revealEndTimestamp: number | null;
   writingEndTimestamp: number | null;
   votingEndTimestamp: number | null;
@@ -22,14 +16,13 @@ interface JokeFactoryDebugCtx {
   setWritingEndTimestamp: (v: number | null) => void;
   setVotingEndTimestamp: (v: number | null) => void;
   setResultsEndTimestamp: (v: number | null) => void;
-  handleClientSubmitAnswers: (senderId: string, answers: Record<string, string>) => void;
-  autoSubmitAnswers: () => void;
-  handleClientSubmitVote: (senderId: string, choice: string) => void;
-  revealRound3Results: (latestR3Data: Round3State) => void;
-  revealMatchupResults: (latestMatchups: PromptMatchup[]) => void;
-  handleResultsTimeout: () => void;
-  handleNextRound: () => void;
-  onQuit: () => void;
+  simulateAnswers: () => void;
+  skipWriting: () => void;
+  simulateVotes: () => void;
+  skipMatchup: () => void;
+  skipResults: () => void;
+  nextRound: () => void;
+  endGameAction: () => void;
   broadcastState: (fields: Partial<GameState>) => void;
 }
 
@@ -40,11 +33,6 @@ export function useJokeFactoryDebug(ctx: JokeFactoryDebugCtx) {
     sendMessage,
     phase,
     round,
-    roster,
-    promptsRef,
-    matchupsRef,
-    currentMatchIndexRef,
-    round3Data,
     revealEndTimestamp,
     writingEndTimestamp,
     votingEndTimestamp,
@@ -53,14 +41,13 @@ export function useJokeFactoryDebug(ctx: JokeFactoryDebugCtx) {
     setWritingEndTimestamp,
     setVotingEndTimestamp,
     setResultsEndTimestamp,
-    handleClientSubmitAnswers,
-    autoSubmitAnswers,
-    handleClientSubmitVote,
-    revealRound3Results,
-    revealMatchupResults,
-    handleResultsTimeout,
-    handleNextRound,
-    onQuit,
+    simulateAnswers,
+    skipWriting,
+    simulateVotes,
+    skipMatchup,
+    skipResults,
+    nextRound,
+    endGameAction,
     broadcastState,
   } = ctx;
 
@@ -150,130 +137,6 @@ export function useJokeFactoryDebug(ctx: JokeFactoryDebugCtx) {
     setActiveTimestamp(newEndTimestamp);
   };
 
-  const simulateAnswers = () => {
-    if (!isHost) {
-      sendMessage({
-        type: 'debug-host-action',
-        playerId,
-        timestamp: Date.now(),
-        payload: { action: 'simulate-answers' },
-      });
-      return;
-    }
-    roster.forEach((p) => {
-      if (p.id !== playerId) {
-        const prompts = promptsRef.current[p.id] || [];
-        const answers: Record<string, string> = {};
-        prompts.forEach((pr, idx) => {
-          answers[pr.id] = `Funny joke ${idx + 1} from ${p.name}!`;
-        });
-        handleClientSubmitAnswers(p.id, answers);
-      }
-    });
-  };
-
-  const skipWriting = () => {
-    if (!isHost) {
-      sendMessage({
-        type: 'debug-host-action',
-        playerId,
-        timestamp: Date.now(),
-        payload: { action: 'skip-writing' },
-      });
-      return;
-    }
-    autoSubmitAnswers();
-  };
-
-  const simulateVotes = () => {
-    if (!isHost) {
-      sendMessage({
-        type: 'debug-host-action',
-        playerId,
-        timestamp: Date.now(),
-        payload: { action: 'simulate-votes' },
-      });
-      return;
-    }
-    if (round === 3) {
-      if (!round3Data) return;
-      roster.forEach((p) => {
-        if (p.id !== playerId) {
-          const options = roster.filter((item) => item.id !== p.id);
-          if (options.length > 0) {
-            const pick = options[Math.floor(Math.random() * options.length)].id;
-            handleClientSubmitVote(p.id, pick);
-          }
-        }
-      });
-    } else {
-      const currentMatch = matchupsRef.current[currentMatchIndexRef.current];
-      if (!currentMatch) return;
-      roster.forEach((p) => {
-        if (p.id !== currentMatch.leftPlayerId && p.id !== currentMatch.rightPlayerId && p.id !== playerId) {
-          const pick = Math.random() > 0.5 ? 'left' : 'right';
-          handleClientSubmitVote(p.id, pick);
-        }
-      });
-    }
-  };
-
-  const skipMatchup = () => {
-    if (!isHost) {
-      sendMessage({
-        type: 'debug-host-action',
-        playerId,
-        timestamp: Date.now(),
-        payload: { action: 'skip-matchup' },
-      });
-      return;
-    }
-    if (round === 3) {
-      if (round3Data) revealRound3Results(round3Data);
-    } else {
-      revealMatchupResults(matchupsRef.current);
-    }
-  };
-
-  const skipResults = () => {
-    if (!isHost) {
-      sendMessage({
-        type: 'debug-host-action',
-        playerId,
-        timestamp: Date.now(),
-        payload: { action: 'skip-results' },
-      });
-      return;
-    }
-    handleResultsTimeout();
-  };
-
-  const nextRound = () => {
-    if (!isHost) {
-      sendMessage({
-        type: 'debug-host-action',
-        playerId,
-        timestamp: Date.now(),
-        payload: { action: 'next-round' },
-      });
-      return;
-    }
-    handleNextRound();
-  };
-
-  const endGameAction = () => {
-    if (!isHost) {
-      sendMessage({
-        type: 'debug-host-action',
-        playerId,
-        timestamp: Date.now(),
-        payload: { action: 'end-game' },
-      });
-      return;
-    }
-    onQuit();
-  };
-
   const handleDebugHostAction = (action: string, payloadObj?: Record<string, unknown>) => {
     if (!isHost) return;
     if (action === 'pause-timer') {
@@ -332,42 +195,119 @@ export function useJokeFactoryDebug(ctx: JokeFactoryDebugCtx) {
     if (phase === 'writing') {
       actionsList.push({
         label: '🤖 Simulate Answers for Others',
-        onClick: () => simulateAnswers(),
+        onClick: () => {
+          if (isHost) {
+            simulateAnswers();
+          } else {
+            sendMessage({
+              type: 'debug-host-action',
+              playerId,
+              timestamp: Date.now(),
+              payload: { action: 'simulate-answers' },
+            });
+          }
+        },
         variant: 'success',
       });
       actionsList.push({
         label: '⏭️ Skip Writing Phase',
-        onClick: () => skipWriting(),
+        onClick: () => {
+          if (isHost) {
+            skipWriting();
+          } else {
+            sendMessage({
+              type: 'debug-host-action',
+              playerId,
+              timestamp: Date.now(),
+              payload: { action: 'skip-writing' },
+            });
+          }
+        },
         variant: 'warning',
       });
     } else if (phase === 'voting') {
       actionsList.push({
         label: '🤖 Simulate Votes for Others',
-        onClick: () => simulateVotes(),
+        onClick: () => {
+          if (isHost) {
+            simulateVotes();
+          } else {
+            sendMessage({
+              type: 'debug-host-action',
+              playerId,
+              timestamp: Date.now(),
+              payload: { action: 'simulate-votes' },
+            });
+          }
+        },
         variant: 'success',
       });
       actionsList.push({
         label: '⏭️ Skip Matchup',
-        onClick: () => skipMatchup(),
+        onClick: () => {
+          if (isHost) {
+            skipMatchup();
+          } else {
+            sendMessage({
+              type: 'debug-host-action',
+              playerId,
+              timestamp: Date.now(),
+              payload: { action: 'skip-matchup' },
+            });
+          }
+        },
         variant: 'warning',
       });
     } else if (phase === 'results') {
       actionsList.push({
         label: '⏭️ Skip Results Display',
-        onClick: () => skipResults(),
+        onClick: () => {
+          if (isHost) {
+            skipResults();
+          } else {
+            sendMessage({
+              type: 'debug-host-action',
+              playerId,
+              timestamp: Date.now(),
+              payload: { action: 'skip-results' },
+            });
+          }
+        },
         variant: 'warning',
       });
     } else if (phase === 'leaderboard') {
       if (round < 3) {
         actionsList.push({
           label: `Start Round ${round + 1}`,
-          onClick: () => nextRound(),
+          onClick: () => {
+            if (isHost) {
+              nextRound();
+            } else {
+              sendMessage({
+                type: 'debug-host-action',
+                playerId,
+                timestamp: Date.now(),
+                payload: { action: 'next-round' },
+              });
+            }
+          },
           variant: 'primary',
         });
       } else {
         actionsList.push({
           label: 'End Game',
-          onClick: () => endGameAction(),
+          onClick: () => {
+            if (isHost) {
+              endGameAction();
+            } else {
+              sendMessage({
+                type: 'debug-host-action',
+                playerId,
+                timestamp: Date.now(),
+                payload: { action: 'end-game' },
+              });
+            }
+          },
           variant: 'danger',
         });
       }
