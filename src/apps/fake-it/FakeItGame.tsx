@@ -438,7 +438,7 @@ export default function FakeItGame({
 
   // Initialize Game (Host only)
   useEffect(() => {
-    if (isHost && (phase === 'starting' || freshStart)) {
+    if (isHost && phase === 'starting') {
       const activePlayers = roster;
       if (activePlayers.length === 0) return;
 

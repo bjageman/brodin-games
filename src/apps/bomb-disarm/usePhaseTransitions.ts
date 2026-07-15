@@ -75,7 +75,7 @@ export function usePhaseTransitions(deps: PhaseTransitionsDeps) {
 
   // ---- Host: initialize the game on a fresh start ----
   useEffect(() => {
-    if (isHost && (phase === 'starting' || freshStart)) {
+    if (isHost && phase === 'starting') {
       if (roster.length === 0) return;
       const s = dealGame();
       setState(s);
