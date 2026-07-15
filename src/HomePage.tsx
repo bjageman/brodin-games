@@ -70,7 +70,7 @@ const GAMES: Game[] = [
     art: '/quiz-quest/portraits/human_fighter_male_plate.jpg',
     tone: 'pink',
     minPlayers: 1,
-    maxPlayers: 8,
+    maxPlayers: 6,
     href: '#/host?game=quiz-quest',
     newest: true,
   },
