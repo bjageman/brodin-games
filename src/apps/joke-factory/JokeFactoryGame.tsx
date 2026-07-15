@@ -565,7 +565,7 @@ export default function JokeFactoryGame({
 
   // Initialize Game (Host only)
   useEffect(() => {
-    if (isHost && (phase === 'starting' || freshStart)) {
+    if (isHost && phase === 'starting') {
       if (roster.length === 0) return;
 
       const timer = setTimeout(() => {
