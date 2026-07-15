@@ -3,6 +3,7 @@ import type { PlayerInfo } from '../../../shared/types';
 import type { Card, EffectChoice, GameState, PendingEffect } from '../types';
 import { CARD_META } from '../cards';
 import { CardArt, LightningBolt } from './BombArt';
+import { BombCard } from './BombBoard';
 
 const OVERLAY = 'absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-bomb-bg/92 p-4 backdrop-blur-sm';
 
@@ -184,6 +185,39 @@ export function EffectPrompt({ effect, state, roster, onChoose }: {
           />
         </>
       )}
+
+      {effect.type === 'double-agent' && (
+        <>
+          <p className="text-center text-xs text-gray-300 sm:text-sm">
+            The side that didn't make it to the table this game:
+          </p>
+          <p className={cn(
+            'font-display text-2xl font-black uppercase tracking-widest',
+            state.leftoverRole === 'rebel' ? 'text-bomb-rebel' : 'text-bomb-wire'
+          )}>
+            {state.leftoverRole === 'rebel' ? '🧨 Rebel' : '🛡️ Peacekeeper'}
+          </p>
+          <p className="text-center text-[10px] font-bold uppercase tracking-widest text-gray-400">
+            Keep it to yourself
+          </p>
+          <div className="mt-1 flex gap-3">
+            <button
+              type="button"
+              onClick={() => onChoose({ kind: 'swap', swap: true })}
+              className="rounded-full bg-bomb-bolt px-5 py-2 font-display text-xs font-black uppercase tracking-wider text-bomb-ink transition-transform hover:scale-105"
+            >
+              Swap to it
+            </button>
+            <button
+              type="button"
+              onClick={() => onChoose({ kind: 'swap', swap: false })}
+              className="rounded-full border-2 border-white/30 px-5 py-2 font-display text-xs font-black uppercase tracking-wider text-gray-200 transition-colors hover:border-bomb-bolt hover:text-bomb-bolt"
+            >
+              Stay put
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -207,13 +241,11 @@ export function EffectWaiting({ effect, actorName }: { effect: PendingEffect; ac
 }
 
 export function PeekOverlay({ type, ownerName, seconds }: { type: Card['type']; ownerName: string; seconds: number }) {
-  const meta = CARD_META[type];
   return (
     <div className={OVERLAY}>
       <Title>{ownerName}'s card</Title>
-      <div className="flex h-[42%] animate-cardFlip flex-col items-center gap-1 rounded-xl border-2 border-bomb-face/60 bg-bomb-face p-3 shadow-2xl">
-        <span className="font-display text-[11px] font-black uppercase tracking-widest text-white">{meta.title}</span>
-        {type !== 'blank' && <span className="w-12"><CardArt type={type} /></span>}
+      <div className="h-[42%]">
+        <BombCard card={{ type, revealed: true }} faceUp={false} />
       </div>
       <p className="text-center text-xs text-gray-300">
         Turning back over in <span className="font-black text-bomb-bolt">{seconds}s</span> — its action does not trigger.

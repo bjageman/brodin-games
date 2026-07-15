@@ -4,11 +4,17 @@ import type { GameState, Role, SpecialRole, Winner } from './types';
 
 export const SPECIAL_ROLES: SpecialRole[] = ['procrastinator', 'opportunist', 'folk-hero'];
 
+// The Procrastinator wants the clock to run out, which lines up with the rebels
+// far more than the peacekeepers, so they take a rebel's seat. Opportunist and
+// Folk Hero still take a peacekeeper's seat.
+const REBEL_SPECIAL_ROLES: SpecialRole[] = ['procrastinator'];
+const PEACEKEEPER_SPECIAL_ROLES: SpecialRole[] = ['opportunist', 'folk-hero'];
+
 export const SPECIAL_ROLE_META: Record<SpecialRole, { title: string; icon: string; blurb: string }> = {
   procrastinator: {
     title: 'Procrastinator',
     icon: '🐌',
-    blurb: 'You want the clock to run out. You win only if round 3 ends with no bomb revealed and fewer than 6 wires cut — a bomb going off or the last wire being cut is a loss for you.',
+    blurb: 'A rebel. You want the clock to run out. You win only if round 3 ends with no bomb revealed and fewer than 6 wires cut — a bomb going off or the last wire being cut is a loss for you.',
   },
   opportunist: {
     title: 'Opportunist',
@@ -18,36 +24,61 @@ export const SPECIAL_ROLE_META: Record<SpecialRole, { title: string; icon: strin
   'folk-hero': {
     title: 'Folk Hero',
     icon: '🦸',
-    blurb: 'A peacekeeper. If a bomb is revealed you may reveal yourself to keep the game alive — but you take no more turns after that.',
+    blurb: 'A peacekeeper. If a bomb is revealed you may reveal yourself to keep the game alive — but you take no more turns after that. An extra bomb is added to the deck to make up for your save.',
   },
 };
 
-// A special role takes a peacekeeper's seat, never a rebel's, so the rebel count
-// (and the win balance tuned around it) is the same whether these are on or off.
-// One plain peacekeeper is always left over.
+// One plain rebel and one plain peacekeeper are always left over, so a table's
+// only rebel (3-4 players) is never turned entirely into a Procrastinator, and
+// the same holds for the peacekeepers.
 export function maxSpecialRolesFor(playerCount: number): number {
+  return maxRebelSpecialSeatsFor(playerCount) + maxPeacekeeperSpecialSeatsFor(playerCount);
+}
+
+function maxRebelSpecialSeatsFor(playerCount: number): number {
+  // At 8-10 players the real rebel count is a hidden 2-or-3 draw; assuming the
+  // smaller number keeps this safe regardless of which way it lands.
+  const minRebels = playerCount <= 4 ? 1 : 2;
+  return Math.max(0, Math.min(REBEL_SPECIAL_ROLES.length, minRebels - 1));
+}
+
+function maxPeacekeeperSpecialSeatsFor(playerCount: number): number {
   const rebels = playerCount <= 4 ? 1 : playerCount <= 7 ? 2 : 3;
-  return Math.max(0, Math.min(SPECIAL_ROLES.length, playerCount - rebels - 1));
+  return Math.max(0, Math.min(PEACEKEEPER_SPECIAL_ROLES.length, playerCount - rebels - 1));
 }
 
 export function assignRoles(playerIds: string[], enabled: SpecialRole[]): {
   roles: Record<string, Role>;
   specialRoles: Record<string, SpecialRole>;
+  leftoverRole: Role | null;
 } {
   const order = shuffle(playerIds);
   const rebelCount = rebelCountFor(playerIds.length);
-  const rebels = new Set(order.slice(0, rebelCount));
+  const rebelSeats = order.slice(0, rebelCount);
+  const peacekeeperSeats = order.slice(rebelCount);
 
   const roles: Record<string, Role> = {};
-  playerIds.forEach((id) => { roles[id] = rebels.has(id) ? 'rebel' : 'peacekeeper'; });
+  const rebelSet = new Set(rebelSeats);
+  playerIds.forEach((id) => { roles[id] = rebelSet.has(id) ? 'rebel' : 'peacekeeper'; });
 
   const specialRoles: Record<string, SpecialRole> = {};
-  const seats = order.slice(rebelCount);
-  enabled.slice(0, maxSpecialRolesFor(playerIds.length)).forEach((role, i) => {
-    if (seats[i]) specialRoles[seats[i]] = role;
+
+  const rebelSpecials = enabled.filter((r) => REBEL_SPECIAL_ROLES.includes(r));
+  rebelSpecials.slice(0, maxRebelSpecialSeatsFor(playerIds.length)).forEach((role, i) => {
+    if (rebelSeats[i]) specialRoles[rebelSeats[i]] = role;
   });
 
-  return { roles, specialRoles };
+  const peacekeeperSpecials = enabled.filter((r) => PEACEKEEPER_SPECIAL_ROLES.includes(r));
+  peacekeeperSpecials.slice(0, maxPeacekeeperSpecialSeatsFor(playerIds.length)).forEach((role, i) => {
+    if (peacekeeperSeats[i]) specialRoles[peacekeeperSeats[i]] = role;
+  });
+
+  // At 8-10 players the rebel count is a hidden 2-or-3 draw. Whichever way it
+  // landed, the other outcome is "the side that wasn't dealt out" — a Double
+  // Agent can secretly swap into it.
+  const leftoverRole: Role | null = playerIds.length >= 8 ? (rebelCount === 3 ? 'peacekeeper' : 'rebel') : null;
+
+  return { roles, specialRoles, leftoverRole };
 }
 
 // `winner` is a side ('rebels'), a player's role is singular ('rebel') — they are

@@ -151,6 +151,29 @@ function RepairKitIcon() {
   );
 }
 
+function DoubleAgentIcon() {
+  return (
+    <svg viewBox="0 0 44 44" className="h-full w-full" aria-hidden>
+      <path d="M4 16c4-5 12-6 18-6s14 1 18 6c-2 8-8 12-18 12S6 24 4 16z" fill="#1a1f4d" />
+      <ellipse cx="14" cy="16" rx="5" ry="4" fill="#9a95dd" />
+      <ellipse cx="30" cy="16" rx="5" ry="4" fill="#9a95dd" />
+      <path d="M40 16c3 1 5 4 4 9" fill="none" stroke="#fcec79" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function SmokeBombIcon() {
+  return (
+    <svg viewBox="0 0 44 44" className="h-full w-full" aria-hidden>
+      <rect x="14" y="20" width="16" height="18" rx="3" fill="#1a1f4d" />
+      <rect x="18" y="14" width="8" height="6" rx="1.5" fill="#1a1f4d" />
+      <path d="M22 14c-2-4 2-6 0-10" fill="none" stroke="#9a95dd" strokeWidth="2.4" strokeLinecap="round" />
+      <path d="M13 11c-2-3 2-5 0-8" fill="none" stroke="#9a95dd" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
+      <path d="M31 11c2-3-2-5 0-8" fill="none" stroke="#9a95dd" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
+    </svg>
+  );
+}
+
 export function CardArt({ type }: { type: CardType }) {
   switch (type) {
     case 'blank': return null;
@@ -162,5 +185,7 @@ export function CardArt({ type }: { type: CardType }) {
     case 'user-manual': return <ManualIcon />;
     case 'crossed-wires': return <CrossedWiresIcon />;
     case 'repair-kit': return <RepairKitIcon />;
+    case 'double-agent': return <DoubleAgentIcon />;
+    case 'smoke-bomb': return <SmokeBombIcon />;
   }
 }

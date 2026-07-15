@@ -6,7 +6,9 @@ export type SpecialCardType =
   | 'rogue-agent'
   | 'user-manual'
   | 'crossed-wires'
-  | 'repair-kit';
+  | 'repair-kit'
+  | 'double-agent'
+  | 'smoke-bomb';
 
 export type CardType = 'blank' | 'wire' | 'explode' | SpecialCardType;
 
@@ -44,7 +46,7 @@ export interface CardRef {
 // A special card that needs its revealer to make a choice before play resumes.
 // `actorId` is whoever flipped it — they pick up their own phone to answer.
 export interface PendingEffect {
-  type: 'interrogate' | 'user-manual' | 'crossed-wires' | 'repair-kit';
+  type: 'interrogate' | 'user-manual' | 'crossed-wires' | 'repair-kit' | 'double-agent';
   actorId: string;
   // Crossed Wires needs two picks; the first is parked here while it waits.
   firstPick: CardRef | null;
@@ -68,6 +70,7 @@ export type EffectChoice =
   | { kind: 'player'; playerId: string }
   | { kind: 'card'; playerId: string; cardIndex: number }
   | { kind: 'repair'; cardType: 'explode' | 'wire' }
+  | { kind: 'swap'; swap: boolean }
   | { kind: 'done' };
 
 export interface GameState {
@@ -95,9 +98,18 @@ export interface GameState {
   revealedRoleIds: string[];
   folkHeroSpent: boolean;
   opportunistTeam: Role | null;
+  // At 8-10 players the rebel count is a hidden 2-or-3 draw; this is the side
+  // that didn't make it to the table, for a Double Agent to peek at and swap.
+  leftoverRole: Role | null;
   // A bomb is on the table and the Folk Hero is being asked to stop it.
   pendingRescue: { bombOwnerId: string; heroId: string } | null;
   endReason: EndReason | null;
+  // Smoke Bomb: blank/wire reveals stay anonymous on the status line for the
+  // rest of the round.
+  smokeActive: boolean;
+  // Set for a beat between rounds when smoke was active, so the table gets an
+  // anonymous tally of the round instead of the ordinary per-turn status line.
+  roundSummary: { blanks: number; wires: number } | null;
   hands: Record<string, Card[]>;
   activePlayerId: string;
   wiresRevealed: number;

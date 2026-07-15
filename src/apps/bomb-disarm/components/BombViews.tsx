@@ -6,7 +6,7 @@ import type { Card, EffectChoice, GameState, LastReveal, Role, SpecialRole, Winn
 import { CARD_META } from '../cards';
 import { ROUNDS, WIRE_WIN_THRESHOLD } from '../constants';
 import { didWin } from '../roles';
-import { CardArt, LightningBolt } from './BombArt';
+import { LightningBolt } from './BombArt';
 import { BoardFrame, BombCard, HandRow, TeamCounts, WiresPanel } from './BombBoard';
 import { EffectPrompt, EffectWaiting, PeekOverlay } from './BombEffects';
 import { DeclarePrompt, RescuePrompt, RescueWaiting, RoleBadge, RoleCard } from './BombRoles';
@@ -38,13 +38,11 @@ export function RoleReveal({ role, special, isDisplay, seconds }: {
 // would otherwise be invisible to everyone but its owner.
 export function VerdictOverlay({ reveal, winner }: { reveal: LastReveal | null; winner: Winner }) {
   if (!reveal) return null;
-  const meta = CARD_META[reveal.type];
   const rebelsWon = winner === 'rebels';
   return (
     <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-bomb-bg/90 backdrop-blur-sm">
-      <div className="flex h-[38%] animate-cardFlip flex-col items-center gap-1 rounded-xl border-2 border-bomb-face/60 bg-bomb-face p-3 shadow-2xl">
-        <span className="font-display text-[11px] font-black uppercase tracking-widest text-white">{meta.title}</span>
-        <span className="w-14"><CardArt type={reveal.type} /></span>
+      <div className="h-[38%]">
+        <BombCard card={{ type: reveal.type, revealed: true }} faceUp={false} />
       </div>
       <div className="animate-verdictIn space-y-1 text-center">
         <p className="text-sm font-bold text-gray-200">
@@ -60,6 +58,23 @@ export function VerdictOverlay({ reveal, winner }: { reveal: LastReveal | null; 
           {rebelsWon ? 'Rebels Win' : 'Peacekeepers Win'}
         </p>
       </div>
+    </div>
+  );
+}
+
+// The smoke clears at round's end: an anonymous tally, never who held what.
+export function RoundSummaryOverlay({ summary }: { summary: { blanks: number; wires: number } }) {
+  return (
+    <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-bomb-bg/92 p-4 backdrop-blur-sm">
+      <span className="text-4xl">💨</span>
+      <h3 className="text-center font-display text-sm font-black uppercase tracking-widest text-bomb-bolt sm:text-base">
+        The smoke clears
+      </h3>
+      <p className="max-w-xs text-center text-sm text-gray-200">
+        This round: <span className="font-black text-white">{summary.wires}</span>{' '}
+        {summary.wires === 1 ? 'cut wire' : 'cut wires'}, <span className="font-black text-white">{summary.blanks}</span>{' '}
+        {summary.blanks === 1 ? 'blank' : 'blanks'} — no telling which was whose.
+      </p>
     </div>
   );
 }
@@ -129,7 +144,10 @@ export function TableView({
   onTap: (i: number) => void; onQuit: () => void;
 }) {
   const picksLeft = revealsPerRound - revealsThisRound;
-  const { pendingEffect, peek, effectNote, rogueAgentId, pendingRescue, specialRoles, opportunistTeam } = state;
+  const {
+    pendingEffect, peek, effectNote, rogueAgentId, pendingRescue, specialRoles, opportunistTeam,
+    smokeActive, roundSummary,
+  } = state;
   const { msRemaining: peekMs } = useCountdown(peek?.endTimestamp ?? null);
 
   // The Opportunist may flip on their own turn, any time before the game ends.
@@ -137,8 +155,15 @@ export function TableView({
     !isDisplay && isMyTurn && !pendingWinner && !pendingEffect && !peek && !pendingRescue &&
     specialRoles[playerId] === 'opportunist' && !opportunistTeam;
 
+  // A Smoke Bomb keeps blank/wire reveals anonymous on the shared status line
+  // for the rest of the round — your own hand still shows you the truth.
+  const obfuscated = smokeActive && lastReveal && (lastReveal.type === 'blank' || lastReveal.type === 'wire');
   const status = effectNote
-    ?? (lastReveal ? `Last: ${CARD_META[lastReveal.type].title} on ${lastReveal.targetName}` : 'Cards are face-down on the table');
+    ?? (lastReveal
+      ? obfuscated
+        ? `Last: ??? on ${lastReveal.targetName}`
+        : `Last: ${CARD_META[lastReveal.type].title} on ${lastReveal.targetName}`
+      : 'Cards are face-down on the table');
 
   return (
     <BoardFrame onQuit={onQuit}>
@@ -205,6 +230,8 @@ export function TableView({
           ? <EffectPrompt effect={pendingEffect} state={state} roster={roster} onChoose={onChooseEffect} />
           : <EffectWaiting effect={pendingEffect} actorName={roster.find((p) => p.id === pendingEffect.actorId)?.name ?? '?'} />
       )}
+
+      {roundSummary && !pendingWinner && <RoundSummaryOverlay summary={roundSummary} />}
 
       {pendingWinner && <VerdictOverlay reveal={lastReveal} winner={pendingWinner} />}
     </BoardFrame>

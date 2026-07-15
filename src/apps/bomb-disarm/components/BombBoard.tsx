@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { cn } from '../../../shared/utils/cn';
 import type { Card } from '../types';
 import { CARD_META } from '../cards';
@@ -15,23 +15,48 @@ export function BombCard({ card, faceUp, tappable, maxWidth, onTap }: {
   const shown = faceUp || card.revealed;
   const meta = CARD_META[card.type];
 
+  // Both faces are always in the DOM and a 3D rotation swaps which one faces the
+  // viewer, so a card already dealt face-up (e.g. memorize) still gets to play
+  // the flip once mounted, instead of just popping in already-turned.
+  const [flipped, setFlipped] = useState(false);
+  useEffect(() => {
+    if (!shown) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setFlipped(false);
+      return;
+    }
+    const raf = requestAnimationFrame(() => setFlipped(true));
+    return () => cancelAnimationFrame(raf);
+  }, [shown]);
+
   return (
     <button
       type="button"
       disabled={!tappable}
       onClick={onTap}
-      style={maxWidth ? { maxWidth } : undefined}
+      style={maxWidth ? { maxWidth, perspective: '600px' } : { perspective: '600px' }}
       className={cn(
-        'relative h-full aspect-[1/1.75] min-w-0 shrink rounded-xl border-2 shadow-lg shadow-black/30 transition-transform',
-        shown
-          ? 'border-bomb-face/60 bg-bomb-face'
-          : 'border-bomb-cardEdge bg-bomb-card',
-        card.revealed && !faceUp && 'animate-cardFlip',
-        tappable && 'cursor-pointer ring-2 ring-bomb-bolt/70 hover:scale-[1.04] active:scale-95'
+        'relative h-full aspect-[1/1.75] min-w-0 shrink transition-transform',
+        tappable && 'cursor-pointer hover:scale-[1.04] active:scale-95'
       )}
     >
-      {shown ? (
-        <span className="flex h-full flex-col items-center gap-1.5 p-1.5 pt-2">
+      <div
+        className={cn(
+          'relative h-full w-full transition-transform duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] [transform-style:preserve-3d]',
+          flipped && '[transform:rotateY(180deg)]'
+        )}
+      >
+        <span
+          className={cn(
+            'absolute inset-0 flex items-center justify-center rounded-xl border-2 border-bomb-cardEdge bg-bomb-card shadow-lg shadow-black/30 [backface-visibility:hidden]',
+            tappable && 'ring-2 ring-bomb-bolt/70'
+          )}
+        >
+          <span className="w-1/2 max-w-[46px]">
+            <LightningBolt />
+          </span>
+        </span>
+        <span className="absolute inset-0 flex h-full flex-col items-center gap-1.5 rounded-xl border-2 border-bomb-face/60 bg-bomb-face p-1.5 pt-2 shadow-lg shadow-black/30 [backface-visibility:hidden] [transform:rotateY(180deg)]">
           <span className="font-display text-[10px] font-black uppercase leading-tight tracking-wider text-white drop-shadow-[0_1px_1px_rgba(26,31,77,0.5)] sm:text-xs">
             {meta.title}
           </span>
@@ -47,13 +72,7 @@ export function BombCard({ card, faceUp, tappable, maxWidth, onTap }: {
             </span>
           )}
         </span>
-      ) : (
-        <span className="flex h-full items-center justify-center">
-          <span className="w-1/2 max-w-[46px]">
-            <LightningBolt />
-          </span>
-        </span>
-      )}
+      </div>
     </button>
   );
 }
