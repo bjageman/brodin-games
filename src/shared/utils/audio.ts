@@ -4,7 +4,7 @@ class AudioManager {
   private ambientGain: GainNode | null = null;
   private isMuted: boolean = true; // Start muted to respect browser autoplay policies
   private masterGain: GainNode | null = null;
-  private timerId: any = null;
+  private timerId: ReturnType<typeof setTimeout> | null = null;
 
   private initCtx() {
     if (this.ctx) return;

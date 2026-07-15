@@ -123,16 +123,90 @@ export default function GameShell({
   // reaches it (mirrors useGameSocket's own onMessageRef idiom).
   const gameMessageHandlerRef = useRef<((envelope: Envelope) => void) | null>(null);
 
+  const sendMessageRef = useRef<((payload: unknown) => Promise<void>) | null>(null);
+  const sendMsg = (payload: unknown) => {
+    return sendMessageRef.current?.(payload) ?? Promise.resolve();
+  };
+
   useEffect(() => {
     if (phase === 'lobby') onIdlePrefetch?.();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, gameId]);
+  }, [phase, gameId, onIdlePrefetch]);
 
   // Merges into whatever the active game module saved under the same key.
   useEffect(() => {
     const current = loadSnapshot<Record<string, unknown>>(gameSnapshotKey(code)) ?? {};
     saveSnapshot(gameSnapshotKey(code), { ...current, phase, roster, gameId });
   }, [code, phase, roster, gameId]);
+
+  function hostReceiveJoinRequest(fromId: string, fromName: string) {
+    // Match by id only — two players can share a name, and matching by name would steal the wrong roster slot.
+    const existingMatch = rosterRef.current.find((p) => p.id === fromId);
+
+    // A retry from an already-joined player still gets re-acked, even mid-game.
+    if (phaseRef.current !== 'lobby' && phaseRef.current !== 'joining' && !existingMatch) {
+      sendMsg({
+        type: 'join-ack',
+        playerId: fromId,
+        timestamp: Date.now(),
+        payload: { accepted: false, reason: 'Game already in progress.' },
+      });
+      return;
+    }
+
+    if (!existingMatch && rosterRef.current.length >= maxPlayers) {
+      sendMsg({
+        type: 'join-ack',
+        playerId: fromId,
+        timestamp: Date.now(),
+        payload: { accepted: false, reason: `Room is full (max ${maxPlayers} players).` },
+      });
+      return;
+    }
+
+    // Reject duplicate names outright rather than merging — names are shown everywhere (voting, scoreboard).
+    const nameTaken = !existingMatch && rosterRef.current.some(
+      (p) => p.name.trim().toLowerCase() === fromName.trim().toLowerCase()
+    );
+    if (nameTaken) {
+      sendMsg({
+        type: 'join-ack',
+        playerId: fromId,
+        timestamp: Date.now(),
+        payload: { accepted: false, reason: 'That name is already taken in this room — pick a different one.' },
+      });
+      return;
+    }
+
+    const nextRoster = existingMatch
+      ? rosterRef.current.map((p) =>
+          p === existingMatch
+            ? { id: fromId, name: fromName }
+            : p
+        )
+      : [...rosterRef.current, { id: fromId, name: fromName }];
+    rosterRef.current = nextRoster;
+    setRoster(nextRoster);
+
+    sendMsg({
+      type: 'join-ack',
+      playerId: fromId,
+      timestamp: Date.now(),
+      payload: { accepted: true, gameId },
+    });
+    sendMsg({
+      type: 'roster-update',
+      timestamp: Date.now(),
+      payload: { players: nextRoster },
+    });
+  }
+
+  function hostReceiveLeaveLobby(fromId: string) {
+    if (!rosterRef.current.some((p) => p.id === fromId)) return;
+    const nextRoster = rosterRef.current.filter((p) => p.id !== fromId);
+    rosterRef.current = nextRoster;
+    setRoster(nextRoster);
+    sendMsg({ type: 'roster-update', timestamp: Date.now(), payload: { players: nextRoster } });
+  }
 
   const handleMessage = (data: unknown) => {
     const envelope = data as Envelope;
@@ -141,7 +215,6 @@ export default function GameShell({
       const payload = envelope.payload as JoinRequestPayload;
       const fromId = envelope.playerId;
       // Forward ref to hostReceiveJoinRequest (needs sendMessage, declared later) — fine, only called after mount.
-      // eslint-disable-next-line react-hooks/immutability
       if (fromId && payload?.name) hostReceiveJoinRequest(fromId, payload.name);
     }
 
@@ -155,8 +228,12 @@ export default function GameShell({
         rosterRef.current = nextRoster;
         setRoster(nextRoster);
         // Forward ref to sendMessage (declared later) — fine, only called after mount.
+<<<<<<< HEAD
         // eslint-disable-next-line react-hooks/immutability
         sendMessage({
+=======
+        sendMsg({
+>>>>>>> dev
           type: 'roster-update',
           timestamp: Date.now(),
           payload: { players: nextRoster },
@@ -188,7 +265,6 @@ export default function GameShell({
       if (isHost && phaseRef.current === 'lobby') {
         const fromId = envelope.playerId;
         // Forward ref to hostReceiveLeaveLobby (needs sendMessage, declared later) — fine, only called after mount.
-        // eslint-disable-next-line react-hooks/immutability
         if (fromId) hostReceiveLeaveLobby(fromId);
       }
     } else if (envelope.type === 'game-start') {
@@ -205,6 +281,9 @@ export default function GameShell({
   };
 
   const { sendMessage, isConnected } = useGameSocket(code, handleMessage);
+  useEffect(() => {
+    sendMessageRef.current = sendMessage;
+  }, [sendMessage]);
 
   const addDebugBots = async (count: number) => {
     const BOT_NAMES = ['Bilbo', 'Frodo', 'Gandalf', 'Aragorn', 'Legolas', 'Gimli', 'Boromir', 'Samwise', 'Merry', 'Pippin', 'Galadriel', 'Elrond'];
@@ -222,76 +301,6 @@ export default function GameShell({
       });
     }
   };
-
-  function hostReceiveJoinRequest(fromId: string, fromName: string) {
-    // Match by id only — two players can share a name, and matching by name would steal the wrong roster slot.
-    const existingMatch = rosterRef.current.find((p) => p.id === fromId);
-
-    // A retry from an already-joined player still gets re-acked, even mid-game.
-    if (phaseRef.current !== 'lobby' && phaseRef.current !== 'joining' && !existingMatch) {
-      sendMessage({
-        type: 'join-ack',
-        playerId: fromId,
-        timestamp: Date.now(),
-        payload: { accepted: false, reason: 'Game already in progress.' },
-      });
-      return;
-    }
-
-    if (!existingMatch && rosterRef.current.length >= maxPlayers) {
-      sendMessage({
-        type: 'join-ack',
-        playerId: fromId,
-        timestamp: Date.now(),
-        payload: { accepted: false, reason: `Room is full (max ${maxPlayers} players).` },
-      });
-      return;
-    }
-
-    // Reject duplicate names outright rather than merging — names are shown everywhere (voting, scoreboard).
-    const nameTaken = !existingMatch && rosterRef.current.some(
-      (p) => p.name.trim().toLowerCase() === fromName.trim().toLowerCase()
-    );
-    if (nameTaken) {
-      sendMessage({
-        type: 'join-ack',
-        playerId: fromId,
-        timestamp: Date.now(),
-        payload: { accepted: false, reason: 'That name is already taken in this room — pick a different one.' },
-      });
-      return;
-    }
-
-    const nextRoster = existingMatch
-      ? rosterRef.current.map((p) =>
-          p === existingMatch
-            ? { id: fromId, name: fromName }
-            : p
-        )
-      : [...rosterRef.current, { id: fromId, name: fromName }];
-    rosterRef.current = nextRoster;
-    setRoster(nextRoster);
-
-    sendMessage({
-      type: 'join-ack',
-      playerId: fromId,
-      timestamp: Date.now(),
-      payload: { accepted: true, gameId },
-    });
-    sendMessage({
-      type: 'roster-update',
-      timestamp: Date.now(),
-      payload: { players: nextRoster },
-    });
-  }
-
-  function hostReceiveLeaveLobby(fromId: string) {
-    if (!rosterRef.current.some((p) => p.id === fromId)) return;
-    const nextRoster = rosterRef.current.filter((p) => p.id !== fromId);
-    rosterRef.current = nextRoster;
-    setRoster(nextRoster);
-    sendMessage({ type: 'roster-update', timestamp: Date.now(), payload: { players: nextRoster } });
-  }
 
   // Join handshake: retry until the host acks, mirrors botc's join-retry pattern.
   useEffect(() => {

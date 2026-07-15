@@ -37,8 +37,7 @@ export default function WinnerScreen({
   useEffect(() => {
     if (winners.length === 0) return;
     confetti({ particleCount: 120, spread: 90, origin: { y: 0.4 }, colors: CONFETTI_COLORS });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [winners.length]);
 
   return (
     <div className="w-full max-w-md sm:max-w-lg md:max-w-xl mx-auto space-y-4">

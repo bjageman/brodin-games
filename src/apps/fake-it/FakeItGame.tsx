@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import confetti from 'canvas-confetti';
 import { useCountdown } from '../../shared/hooks/useCountdown';
 import type { Envelope } from '../../shared/types';
@@ -91,13 +91,7 @@ export default function FakeItGame({
     setVotes(next);
   }
 
-  // Dev-only host controls (hoisted helpers below are passed in as context).
-  const { isTimerPaused, handleDebugHostAction, getDebugActions } = useFakeItDebug({
-    isHost, playerId, sendMessage, phase, roster, drawerIndex, lines, votes,
-    roleRevealEndTimestamp, turnEndTimestamp, voteEndTimestamp,
-    setRoleRevealEndTimestamp, setTurnEndTimestamp, setVoteEndTimestamp,
-    setPhase, setLines, setVotes: applyVotes, broadcastState, advanceTurn, revealResults, getPlayerColor,
-  });
+
 
   // Save state snapshots on change
   useEffect(() => {
@@ -154,7 +148,7 @@ export default function FakeItGame({
   }
 
   // Helper to broadcast state from host
-  function broadcastState(fields: Partial<GameState>) {
+  const broadcastState = useCallback((fields: Partial<GameState>) => {
     const fullState: GameState = {
       phase,
       imposterId,
@@ -176,15 +170,14 @@ export default function FakeItGame({
       timestamp: Date.now(),
       payload: fullState,
     });
-  }
-
-  // Handle drawing turn timeout on host
-  function handleTurnTimeout() {
-    advanceTurn(lines);
-  }
+  }, [
+    phase, imposterId, topic, drawerIndex, drawingRound, lines, votes, scores,
+    roundPoints, roleRevealEndTimestamp, turnEndTimestamp, voteEndTimestamp,
+    guessEndTimestamp, sendMessage
+  ]);
 
   // Helper to advance the drawing turn
-  function advanceTurn(currentLines: Line[]) {
+  const advanceTurn = useCallback((currentLines: Line[]) => {
     let nextDrawerIndex = drawerIndex + 1;
     let nextDrawingRound = drawingRound;
 
@@ -222,7 +215,12 @@ export default function FakeItGame({
         turnEndTimestamp: endTimestamp,
       });
     }
-  }
+  }, [drawerIndex, drawingRound, roster.length, broadcastState]);
+
+  // Handle drawing turn timeout on host
+  const handleTurnTimeout = useCallback(() => {
+    advanceTurn(lines);
+  }, [lines, advanceTurn]);
 
   // Host: Process client drawn line
   function handleClientDrawLine(senderId: string | undefined, points: Point[]) {
@@ -263,7 +261,7 @@ export default function FakeItGame({
   }
 
   // Host: Calculate scores and transition to results
-  function revealResults(finalVotes: Record<string, string>) {
+  const revealResults = useCallback((finalVotes: Record<string, string>) => {
     const voteCounts: Record<string, number> = {};
     roster.forEach((p) => {
       voteCounts[p.id] = 0;
@@ -327,10 +325,10 @@ export default function FakeItGame({
       voteEndTimestamp: null,
       guessEndTimestamp: null,
     });
-  }
+  }, [roster, imposterId, scores, broadcastState]);
 
   // Host: process the imposter's guess
-  function handleImposterGuess(guessText: string | null) {
+  const handleImposterGuess = useCallback((guessText: string | null) => {
     const correct = guessText ? isFuzzyMatch(guessText, topic?.name || '') : false;
     const newRoundPoints: Record<string, number> = {};
     roster.forEach((p) => {
@@ -366,7 +364,7 @@ export default function FakeItGame({
       roundPoints: newRoundPoints,
       guessEndTimestamp: null,
     });
-  }
+  }, [topic, roster, imposterId, votes, scores, broadcastState]);
 
   // Host: Start next round/reset state
   function handleNextRound() {
@@ -444,59 +442,68 @@ export default function FakeItGame({
       const activePlayers = roster;
       if (activePlayers.length === 0) return;
 
-      const { topic: randomTopic, usedNames } = pickTopic(usedTopicNames);
-      const randomImposter = activePlayers[Math.floor(Math.random() * activePlayers.length)];
+      const timer = setTimeout(() => {
+        const { topic: randomTopic, usedNames } = pickTopic(usedTopicNames);
+        const randomImposter = activePlayers[Math.floor(Math.random() * activePlayers.length)];
 
-      const initialScores = { ...scores };
-      activePlayers.forEach((p) => {
-        if (initialScores[p.id] === undefined) {
-          initialScores[p.id] = 0;
-        }
-      });
+        const initialScores = { ...scores };
+        activePlayers.forEach((p) => {
+          if (initialScores[p.id] === undefined) {
+            initialScores[p.id] = 0;
+          }
+        });
 
-      const revealEnd = Date.now() + ROLE_REVEAL_DURATION_MS;
+        const revealEnd = Date.now() + ROLE_REVEAL_DURATION_MS;
 
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setPhase('role-reveal');
-      setImposterId(randomImposter.id);
-      setTopic(randomTopic);
-      setUsedTopicNames(usedNames);
-      setDrawerIndex(0);
-      setDrawingRound(1);
-      setLines([]);
-      applyVotes({});
-      setScores(initialScores);
-      setRoundPoints({});
-      setRoleRevealEndTimestamp(revealEnd);
-      setTurnEndTimestamp(null);
-      setVoteEndTimestamp(null);
-      setGuessEndTimestamp(null);
+        setPhase('role-reveal');
+        setImposterId(randomImposter.id);
+        setTopic(randomTopic);
+        setUsedTopicNames(usedNames);
+        setDrawerIndex(0);
+        setDrawingRound(1);
+        setLines([]);
+        applyVotes({});
+        setScores(initialScores);
+        setRoundPoints({});
+        setRoleRevealEndTimestamp(revealEnd);
+        setTurnEndTimestamp(null);
+        setVoteEndTimestamp(null);
+        setGuessEndTimestamp(null);
 
-      // Broadcast immediately
-      const newState: GameState = {
-        phase: 'role-reveal',
-        imposterId: randomImposter.id,
-        topic: randomTopic,
-        drawerIndex: 0,
-        drawingRound: 1,
-        lines: [],
-        votes: {},
-        scores: initialScores,
-        roundPoints: {},
-        roleRevealEndTimestamp: revealEnd,
-        turnEndTimestamp: null,
-        voteEndTimestamp: null,
-        guessEndTimestamp: null,
-      };
+        // Broadcast immediately
+        const newState: GameState = {
+          phase: 'role-reveal',
+          imposterId: randomImposter.id,
+          topic: randomTopic,
+          drawerIndex: 0,
+          drawingRound: 1,
+          lines: [],
+          votes: {},
+          scores: initialScores,
+          roundPoints: {},
+          roleRevealEndTimestamp: revealEnd,
+          turnEndTimestamp: null,
+          voteEndTimestamp: null,
+          guessEndTimestamp: null,
+        };
 
-      sendMessage({
-        type: 'fake-it-state-update',
-        timestamp: Date.now(),
-        payload: newState,
-      });
+        sendMessage({
+          type: 'fake-it-state-update',
+          timestamp: Date.now(),
+          payload: newState,
+        });
+      }, 0);
+      return () => clearTimeout(timer);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHost, freshStart, roster.length]);
+  }, [isHost, freshStart, roster, scores, sendMessage, usedTopicNames, phase]);
+
+  // Dev-only host controls (hoisted helpers below are passed in as context).
+  const { isTimerPaused, handleDebugHostAction, getDebugActions } = useFakeItDebug({
+    isHost, playerId, sendMessage, phase, roster, drawerIndex, lines, votes,
+    roleRevealEndTimestamp, turnEndTimestamp, voteEndTimestamp,
+    setRoleRevealEndTimestamp, setTurnEndTimestamp, setVoteEndTimestamp,
+    setPhase, setLines, setVotes: applyVotes, broadcastState, advanceTurn, revealResults, getPlayerColor,
+  });
 
   // Client recovery: if we're still on the loading screen ('starting') after
   // mounting, we likely missed the host's one-shot initial state broadcast
@@ -519,27 +526,30 @@ export default function FakeItGame({
   useEffect(() => {
     if (isHost && phase === 'role-reveal' && roleRevealEndTimestamp && revealExpired) {
       const endTimestamp = Date.now() + TURN_DURATION_MS;
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setPhase('drawing');
-      setRoleRevealEndTimestamp(null);
-      setTurnEndTimestamp(endTimestamp);
+      const timer = setTimeout(() => {
+        setPhase('drawing');
+        setRoleRevealEndTimestamp(null);
+        setTurnEndTimestamp(endTimestamp);
 
-      broadcastState({
-        phase: 'drawing',
-        roleRevealEndTimestamp: null,
-        turnEndTimestamp: endTimestamp,
-      });
+        broadcastState({
+          phase: 'drawing',
+          roleRevealEndTimestamp: null,
+          turnEndTimestamp: endTimestamp,
+        });
+      }, 0);
+      return () => clearTimeout(timer);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHost, phase, roleRevealEndTimestamp, revealExpired]);
+  }, [isHost, phase, roleRevealEndTimestamp, revealExpired, broadcastState]);
 
   // Host transition: Drawing Turn Timeout
   useEffect(() => {
     if (isHost && phase === 'drawing' && turnEndTimestamp && turnExpired) {
-      handleTurnTimeout();
+      const timer = setTimeout(() => {
+        handleTurnTimeout();
+      }, 0);
+      return () => clearTimeout(timer);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHost, phase, turnEndTimestamp, turnExpired]);
+  }, [isHost, phase, turnEndTimestamp, turnExpired, handleTurnTimeout]);
 
   // Host transition: Voting Timeout
   useEffect(() => {
@@ -548,17 +558,17 @@ export default function FakeItGame({
       // expiring would otherwise be left out of the tally.
       revealResults(votesRef.current);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHost, phase, voteEndTimestamp, voteExpired]);
+  }, [isHost, phase, voteEndTimestamp, voteExpired, revealResults]);
 
   // Host transition: Guessing Timeout
   useEffect(() => {
     if (isHost && phase === 'guessing' && guessEndTimestamp && guessExpired) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      handleImposterGuess(null);
+      const timer = setTimeout(() => {
+        handleImposterGuess(null);
+      }, 0);
+      return () => clearTimeout(timer);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHost, phase, guessEndTimestamp, guessExpired]);
+  }, [isHost, phase, guessEndTimestamp, guessExpired, handleImposterGuess]);
 
   // Message Handler Registration
   useEffect(() => {
@@ -581,25 +591,27 @@ export default function FakeItGame({
           setTurnEndTimestamp(state.turnEndTimestamp);
           setVoteEndTimestamp(state.voteEndTimestamp);
           setGuessEndTimestamp(state.guessEndTimestamp);
+
+          setMyVote(null);
         }
       } else if (type === 'debug-host-action') {
         if (isHost) {
-          const payloadObj = payload as { action: string; [key: string]: unknown };
-          handleDebugHostAction(payloadObj.action, payloadObj);
+          handleDebugHostAction((payload as { action: string }).action);
         }
       } else if (isHost) {
-        if (type === 'draw-line') {
-          const drawPayload = payload as { points: Point[] };
-          handleClientDrawLine(senderId, drawPayload.points);
-        } else if (type === 'submit-vote') {
-          const votePayload = payload as { targetId: string };
-          handleClientSubmitVote(senderId, votePayload.targetId);
+        if (type === 'submit-vote') {
+          if (senderId) {
+            handleClientSubmitVote(senderId, (payload as { choice: string }).choice);
+          }
+        } else if (type === 'draw-line') {
+          if (senderId) {
+            handleClientDrawLine(senderId, (payload as { points: Point[] }).points);
+          }
         } else if (type === 'submit-guess') {
-          const guessPayload = payload as { guess: string };
-          handleImposterGuess(guessPayload.guess);
+          if (senderId) {
+            handleImposterGuess((payload as { guess: string }).guess);
+          }
         } else if (type === 'fake-it-request-state') {
-          // A client missed the one-shot initial broadcast (or reconnected) and
-          // is stuck on the loading screen — re-send the current full state.
           // Only once the game has actually started; nothing to sync otherwise.
           if (phase !== 'starting') broadcastState({});
         } else if (type === 'play-again') {
@@ -608,8 +620,7 @@ export default function FakeItGame({
         }
       }
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHost, roster, drawerIndex, drawingRound, lines, votes, scores, roundPoints, phase, imposterId, topic, isTimerPaused, guessEndTimestamp]);
+  });
 
   // Confetti trigger on Leaderboard mounting
   useEffect(() => {
@@ -619,12 +630,13 @@ export default function FakeItGame({
   }, [phase]);
 
   // Register debug actions with GameShell
+  const linesCount = lines.length;
+  const votesCount = Object.keys(votes).length;
   useEffect(() => {
     if (DEBUG_MODE && onRegisterDebugActions) {
       onRegisterDebugActions(getDebugActions(), phase);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, isTimerPaused, lines.length, Object.keys(votes).length, drawerIndex, drawingRound]);
+  }, [phase, isTimerPaused, linesCount, votesCount, drawerIndex, drawingRound, getDebugActions, onRegisterDebugActions]);
 
   // Repaint the page chrome per phase. The mockups run the easel/painting
   // screens dark and the vote / final tally light; see DARK_PHASES.

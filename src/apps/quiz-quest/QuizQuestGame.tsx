@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { loadSnapshot, saveSnapshot, gameSnapshotKey } from '../../shared/utils/sessionSnapshot';
 import type { Envelope } from '../../shared/types';
 import type { GamePlayProps } from '../../shared/GameShell';
@@ -27,19 +27,20 @@ export default function QuizQuestGame({
     saveSnapshot(gameSnapshotKey(code), { ...current, quiz: state });
   }, [code, state]);
 
-  function publish(next: GameState) {
+  const publish = useCallback((next: GameState) => {
     setState(next);
     sendMessage({ type: 'quiz-state-update', timestamp: Date.now(), payload: next });
-  }
+  }, [sendMessage]);
 
   // ---- Host: once the party has joined, move past the loading spinner ----
   useEffect(() => {
     if (isHost && (state.phase === 'starting' || freshStart) && roster.length > 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      publish({ phase: 'party' });
+      const timer = setTimeout(() => {
+        publish({ phase: 'party' });
+      }, 0);
+      return () => clearTimeout(timer);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHost, freshStart, roster.length]);
+  }, [isHost, freshStart, roster.length, publish, state.phase]);
 
   useEffect(() => {
     onRegisterMessageHandler((envelope: Envelope) => {
@@ -49,8 +50,7 @@ export default function QuizQuestGame({
         if (state.phase !== 'starting') publish(state);
       }
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHost, state]);
+  });
 
   useEffect(() => {
     onGameBgChange?.('bg-quiz-bg');

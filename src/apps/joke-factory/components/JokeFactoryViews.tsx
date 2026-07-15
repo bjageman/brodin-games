@@ -1,4 +1,4 @@
-import { useState, type FormEvent, useEffect } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import type { PlayerInfo } from '../../../shared/types';
 import type { JokeFactoryPhase, Prompt, PromptMatchup, Round3State } from '../types';
 
@@ -54,17 +54,15 @@ export default function JokeFactoryViews({
 }: JokeFactoryViewsProps) {
   const currentMatch = matchups[currentMatchIndex];
   
-  // Shuffled answers list for Round 3 voting (to keep order stable during render)
   const [shuffledR3Answers, setShuffledR3Answers] = useState<{ playerId: string; text: string }[]>([]);
-
   useEffect(() => {
     if (phase === 'voting' && round === 3 && round3Data) {
-      const list = Object.entries(round3Data.answers).map(([pid, text]) => ({
-        playerId: pid,
-        text,
-      }));
-      // Shuffle
-      setShuffledR3Answers(list.sort(() => Math.random() - 0.5));
+      const list = Object.entries(round3Data.answers).map(([pid, text]) => ({ playerId: pid, text }));
+      const raf = requestAnimationFrame(() => setShuffledR3Answers(list.sort(() => Math.random() - 0.5)));
+      return () => cancelAnimationFrame(raf);
+    } else {
+      const raf = requestAnimationFrame(() => setShuffledR3Answers([]));
+      return () => cancelAnimationFrame(raf);
     }
   }, [phase, round, round3Data]);
 
