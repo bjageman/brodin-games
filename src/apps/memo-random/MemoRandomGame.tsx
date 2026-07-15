@@ -153,7 +153,7 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
   const remainingTimeRef = useRef<number | null>(null);
   const [isTimerPaused, setIsTimerPaused] = useState(false);
 
-  const setGameTimeout = (callback: () => void, delayMs: number) => {
+  const setGameTimeout = useCallback((callback: () => void, delayMs: number) => {
     if (activeTimeoutRef.current) {
       clearTimeout(activeTimeoutRef.current.id);
     }
@@ -168,7 +168,7 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
       callback();
     }, delayMs);
     activeTimeoutRef.current = { id, callback, scheduledAt: Date.now(), delay: delayMs };
-  };
+  }, [isTimerPaused]);
 
   // The host's game engine (round orchestration, matchmaking, scoring); returns
   // the host-only bookkeeping refs so routing/snapshot/debug share the instances.
@@ -242,11 +242,13 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
     };
     const current = loadSnapshot<Record<string, unknown>>(gameSnapshotKey(code)) ?? {};
     saveSnapshot(gameSnapshotKey(code), { ...current, ...snapshot });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- host refs read here are stable identities, not deps
   }, [
     code, isHost, phase, round1EndTimestamp, myLibrary, round2EndTimestamp, assignedLibrary,
     template, mySheetAnswers, currentMatchup, matchResult, myMatchVote, matchVoteLocked, seenSheets,
-    winnerInfo, round1Progress, round2Progress,
+    winnerInfo, round1Progress, round2Progress, assignmentsRef, currentMatchIndexRef,
+    expectedVotersRef, matchAdvancedRef, matchVotedPlayersRef, matchVotesRef, matchupsRef,
+    matchupsStartedRef, pairingsRef, round2StartedRef, scoresRef, sheetsRef, winnerAnnouncedRef,
+    wordLibrariesRef
   ]);
 
   // Register debug actions with GameShell
@@ -254,13 +256,14 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
     if (DEBUG_MODE && onRegisterDebugActions) {
       onRegisterDebugActions(getDebugActions(), phase);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, isTimerPaused, round1Progress, round2Progress, currentMatchup?.matchIndex]);
+  }, [phase, isTimerPaused, round1Progress, round2Progress, currentMatchup?.matchIndex, getDebugActions, onRegisterDebugActions]);
 
   // A host refresh kills every pending setTimeout fallback — re-arm whichever one applies, timed off the
   // persisted absolute end-timestamp so it still fires at the original real-world moment.
+  const hasRestoredTimeout = useRef(false);
   useEffect(() => {
-    if (!isHost || freshStart || !restored) return;
+    if (!isHost || freshStart || !restored || hasRestoredTimeout.current) return;
+    hasRestoredTimeout.current = true;
     const now = Date.now();
     if (phase === 'round1' || phase === 'round1-waiting') {
       const delay = Math.max(0, (restored.round1EndTimestamp ?? now) + GRACE_PERIOD_MS - now);
@@ -275,8 +278,10 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
       const delay = Math.max(0, (restored.matchResult?.resultsEndTimestamp ?? now) - now);
       setGameTimeout(() => startMatch((restored.host?.currentMatchIndex ?? 0) + 1), delay);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [
+    isHost, freshStart, restored, phase, setGameTimeout, advanceToRound2,
+    advanceToMatchups, finishMatch, startMatch
+  ]);
 
   const handleMessage = (data: unknown) => {
     const envelope = data as Envelope;
@@ -384,15 +389,16 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
     onRegisterMessageHandler(handleMessage);
   });
 
-
+  const hasMountedRef = useRef(false);
   useEffect(() => {
     // One-time reaction to how this component just mounted, not a synced value — an effect is still correct here.
+    if (hasMountedRef.current) return;
+    hasMountedRef.current = true;
     if (isHost && freshStart) beginRound1();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isHost, freshStart, beginRound1]);
 
   // Shared by the timer-expiry and maxed-out-every-category triggers below.
-  function submitRound1Library() {
+  const submitRound1Library = useCallback(() => {
     if (round1SubmittedRef.current) return;
     round1SubmittedRef.current = true;
     const library = myLibraryRef.current;
@@ -400,7 +406,7 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
     sendMessage({ type: 'word-library-submit', playerId, timestamp: Date.now(), payload: { library } });
     if (isHost) hostReceiveWordLibrary(playerId, library);
     setPhase('round1-waiting');
-  }
+  }, [playerId, sendMessage, isHost, hostReceiveWordLibrary]);
 
   // Round 1 local timer expiry: submit the (already-categorized) library
   // collected so far and wait for the host.
@@ -410,7 +416,7 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
     if (phase === 'round1' && round1Countdown.expired && !round1SubmittedRef.current) {
       submitRound1Library();
     }
-  }, [phase, round1Countdown.expired, playerId, sendMessage, isHost, isDisplay]);
+  }, [phase, round1Countdown.expired, playerId, sendMessage, isHost, isDisplay, submitRound1Library]);
 
   // No point waiting out the timer once every category is maxed out — there's nothing left to type.
   useEffect(() => {
@@ -419,7 +425,7 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
       (c) => myLibrary[c].length >= MAX_WORDS_PER_CATEGORY
     );
     if (maxedOut) submitRound1Library();
-  }, [phase, myLibrary, isDisplay]);
+  }, [phase, myLibrary, isDisplay, submitRound1Library]);
 
   // Every client's timer expires at once, bursting submissions over ntfy — keep resending until acked or we give up.
   useEffect(() => {
@@ -440,14 +446,14 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
 
   // Shared by both the manual "Submit" button and the timer-expiry auto-submit
   // below, guarded by round2SubmittedRef so only the first caller wins.
-  function submitRound2Sheet(finalAnswers: Record<string, string>) {
+  const submitRound2Sheet = useCallback((finalAnswers: Record<string, string>) => {
     if (round2SubmittedRef.current) return;
     round2SubmittedRef.current = true;
     round2AnswersRef.current = finalAnswers;
     sendMessage({ type: 'sheet-submit', playerId, timestamp: Date.now(), payload: { answers: finalAnswers } });
     if (isHost) hostReceiveSheetSubmit(playerId, finalAnswers);
     setPhase('round2-waiting');
-  }
+  }, [playerId, sendMessage, isHost, hostReceiveSheetSubmit]);
 
   // Round 2 local timer expiry: auto-fill unset blanks, submit, and wait.
   const round2Countdown = useCountdown(round2EndTimestamp);
@@ -466,7 +472,7 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
       }
       submitRound2Sheet(finalAnswers);
     }
-  }, [phase, round2Countdown.expired, playerId, sendMessage, isHost, isDisplay]);
+  }, [phase, round2Countdown.expired, playerId, sendMessage, isHost, isDisplay, submitRound2Sheet]);
 
   // Tick timers during countdowns
   const r1Sec = Math.ceil(round1Countdown.msRemaining / 1000);
@@ -555,11 +561,14 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
   };
 
   // Host-only display stat (wordLibrariesRef is only ever populated for the host).
-  // eslint-disable-next-line react-hooks/refs -- intentional read of host bookkeeping at render
-  const round1TotalWords = Array.from(wordLibrariesRef.current.values()).reduce(
-    (sum, library) => sum + CATEGORIES.reduce((s, c) => s + library[c].length, 0),
-    0
-  );
+  const [round1TotalWords, setRound1TotalWords] = useState(0);
+  useEffect(() => {
+    const total = Array.from(wordLibrariesRef.current.values()).reduce(
+      (sum, library) => sum + CATEGORIES.reduce((s, c) => s + library[c].length, 0),
+      0
+    );
+    setRound1TotalWords(total);
+  }, [round1Progress, wordLibrariesRef]);
 
   return (
     <>

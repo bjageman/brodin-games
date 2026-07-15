@@ -4,11 +4,12 @@ class AudioManager {
   private ambientGain: GainNode | null = null;
   private isMuted: boolean = true; // Start muted to respect browser autoplay policies
   private masterGain: GainNode | null = null;
-  private timerId: any = null;
+  private timerId: ReturnType<typeof setTimeout> | null = null;
 
   private initCtx() {
     if (this.ctx) return;
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    const AudioContextClass = window.AudioContext
+      || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!AudioContextClass) return;
     this.ctx = new AudioContextClass();
     
@@ -206,7 +207,9 @@ class AudioManager {
     this.ambientSource.forEach((source) => {
       try {
         source.stop();
-      } catch (e) {}
+      } catch {
+        // Already stopped or never started — nothing to clean up.
+      }
     });
     this.ambientSource = [];
     if (this.ambientGain) {

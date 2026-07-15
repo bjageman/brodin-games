@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import confetti from 'canvas-confetti';
 import { useCountdown } from '../../shared/hooks/useCountdown';
 import { loadSnapshot, saveSnapshot, gameSnapshotKey } from '../../shared/utils/sessionSnapshot';
@@ -98,53 +98,35 @@ export default function BombDisarmGame({
   const memoSec = Math.ceil(memoMs / 1000);
   const roleSec = Math.ceil(roleMs / 1000);
 
-  function publish(next: GameState) {
+  const publish = useCallback((next: GameState) => {
     setState(next);
     sendMessage({ type: 'bomb-state-update', timestamp: Date.now(), payload: next });
-  }
+  }, [sendMessage]);
 
-  function patch(fields: Partial<GameState>) {
+  const patch = useCallback((fields: Partial<GameState>) => {
     publish({ ...state, ...fields });
-  }
+  }, [publish, state]);
 
   // ---- Host: does anyone other than `pid` still have an unrevealed card? ----
-  function hasValidTarget(pid: string, handsState: GameState['hands']): boolean {
+  const hasValidTarget = useCallback((pid: string, handsState: GameState['hands']): boolean => {
     return roster.some((p) => p.id !== pid && (handsState[p.id]?.some((c) => !c.revealed) ?? false));
-  }
+  }, [roster]);
 
   // The winning card sits face-up for a beat so the table can see what happened.
-  function finishWith(base: GameState, won: Winner, reason: EndReason) {
+  const finishWith = useCallback((base: GameState, won: Winner, reason: EndReason) => {
     const held: GameState = { ...base, pendingWinner: won, endReason: reason, pendingRescue: null };
     publish(held);
     setTimeout(() => publish({ ...held, phase: 'results', winner: won }), RESULT_REVEAL_DELAY_MS);
-  }
+  }, [publish]);
 
   // A Folk Hero who spent their save keeps their cards on the table but never
   // picks again.
-  function canPick(pid: string, base: GameState): boolean {
+  const canPick = useCallback((pid: string, base: GameState): boolean => {
     return !isSidelined(pid, base) && hasValidTarget(pid, base.hands);
-  }
-
-  // ---- Host: hand the pick to the next phone, or close out the round ----
-  function advanceTurn(base: GameState, ownerId: string) {
-    if (base.revealsThisRound >= roster.length) {
-      if (base.round >= ROUNDS) return finishWith(base, 'rebels', 'timeout');
-      if (base.smokeActive) return showRoundSummary(base, ownerId);
-      return endRound(base, ownerId);
-    }
-    // Normally the pick passes to the phone that was just tapped — unless a Rogue
-    // Agent has taken the round, in which case it keeps coming back to them.
-    let nextActive = base.rogueAgentId ?? ownerId;
-    if (!canPick(nextActive, base)) {
-      const fallback = roster.find((p) => canPick(p.id, base));
-      if (!fallback) return finishWith(base, 'rebels', 'timeout');
-      nextActive = fallback.id;
-    }
-    publish({ ...base, activePlayerId: nextActive });
-  }
+  }, [hasValidTarget]);
 
   // ---- Host: drop the revealed cards, reshuffle the rest, redeal, re-memorize ----
-  function endRound(base: GameState, lastOwnerId: string) {
+  const endRound = useCallback((base: GameState, lastOwnerId: string) => {
     publish({
       ...base,
       phase: 'memorize',
@@ -163,11 +145,11 @@ export default function BombDisarmGame({
       smokeActive: false,
       roundSummary: null,
     });
-  }
+  }, [roster, publish]);
 
   // ---- Host: a Smoke Bomb round ends with an anonymous tally instead of the
   // ordinary per-turn status, then rolls into the next round as usual ----
-  function showRoundSummary(base: GameState, lastOwnerId: string) {
+  const showRoundSummary = useCallback((base: GameState, lastOwnerId: string) => {
     const revealedThisRound = Object.values(base.hands).flat().filter((c) => c.revealed);
     const summary = {
       blanks: revealedThisRound.filter((c) => c.type === 'blank').length,
@@ -176,7 +158,25 @@ export default function BombDisarmGame({
     const withSummary = { ...base, roundSummary: summary };
     publish(withSummary);
     setTimeout(() => endRound({ ...withSummary, roundSummary: null }, lastOwnerId), ROUND_SUMMARY_DELAY_MS);
-  }
+  }, [publish, endRound]);
+
+  // ---- Host: hand the pick to the next phone, or close out the round ----
+  const advanceTurn = useCallback((base: GameState, ownerId: string) => {
+    if (base.revealsThisRound >= roster.length) {
+      if (base.round >= ROUNDS) return finishWith(base, 'rebels', 'timeout');
+      if (base.smokeActive) return showRoundSummary(base, ownerId);
+      return endRound(base, ownerId);
+    }
+    // Normally the pick passes to the phone that was just tapped — unless a Rogue
+    // Agent has taken the round, in which case it keeps coming back to them.
+    let nextActive = base.rogueAgentId ?? ownerId;
+    if (!canPick(nextActive, base)) {
+      const fallback = roster.find((p) => canPick(p.id, base));
+      if (!fallback) return finishWith(base, 'rebels', 'timeout');
+      nextActive = fallback.id;
+    }
+    publish({ ...base, activePlayerId: nextActive });
+  }, [roster, finishWith, showRoundSummary, endRound, canPick, publish]);
 
   // ---- Host: reveal a card and resolve the turn (shared by taps and debug) ----
   function resolveReveal(ownerId: string, cardIndex: number) {
@@ -381,10 +381,11 @@ export default function BombDisarmGame({
   // ---- Host: the peeked card turns back over and play resumes ----
   useEffect(() => {
     if (!isHost || !peek || !peekExpired) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    advanceTurn({ ...state, peek: null }, lastReveal?.targetId ?? '');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHost, peek, peekExpired]);
+    const timer = setTimeout(() => {
+      advanceTurn({ ...state, peek: null }, lastReveal?.targetId ?? '');
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [isHost, peek, peekExpired, advanceTurn, state, lastReveal]);
 
   // ---- Host: validate an incoming tap, then resolve it ----
   function handleReveal(senderId: string | undefined, cardIndex: number, actedTurn: number) {
@@ -472,14 +473,12 @@ export default function BombDisarmGame({
         }
       }
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHost, roster, state]);
+  });
 
   // ---- Register debug actions ----
   useEffect(() => {
     if (DEBUG_MODE && onRegisterDebugActions) onRegisterDebugActions(getDebugActions(), phase);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, turn, winner, activePlayerId, wiresRevealed, pendingEffect, peek, pendingRescue, opportunistTeam, specialRoles]);
+  }, [phase, turn, winner, activePlayerId, wiresRevealed, pendingEffect, peek, pendingRescue, opportunistTeam, specialRoles, getDebugActions, onRegisterDebugActions]);
 
   // ---- Confetti on a win ----
   useEffect(() => {
