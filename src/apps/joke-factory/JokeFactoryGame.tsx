@@ -711,7 +711,6 @@ export default function JokeFactoryGame({
       answersSubmitted={answersSubmitted}
       onSubmitAnswers={handleSubmitAnswers}
       submissionCount={submissionCount}
-      onQuit={onQuit}
       
       matchups={matchups}
       currentMatchIndex={currentMatchIndex}
