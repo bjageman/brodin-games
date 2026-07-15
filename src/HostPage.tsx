@@ -22,12 +22,16 @@ export default function HostPage() {
     let saved: string | null = null;
     try {
       saved = sessionStorage.getItem('brodin-player-id');
-    } catch {}
+    } catch {
+      // ignore
+    }
     if (saved) return saved;
     const id = 'p-' + Math.random().toString(36).substring(2, 9);
     try {
       sessionStorage.setItem('brodin-player-id', id);
-    } catch {}
+    } catch {
+      // ignore
+    }
     return id;
   });
 
