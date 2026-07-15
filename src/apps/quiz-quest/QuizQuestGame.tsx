@@ -1,10 +1,12 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { loadSnapshot, saveSnapshot, gameSnapshotKey } from '../../shared/utils/sessionSnapshot';
 import { useCountdown } from '../../shared/hooks/useCountdown';
+import { DEBUG_MODE } from '../../shared/constants';
 import type { Envelope } from '../../shared/types';
 import type { GamePlayProps } from '../../shared/GameShell';
 import type { GameState } from './types';
 import { useDungeon } from './useDungeon';
+import { useQuizQuestDebug } from './useQuizQuestDebug';
 import PartyCard from './components/PartyCard';
 import MenuOverlay from './components/MenuOverlay';
 import QuestionView from './components/QuestionView';
@@ -30,6 +32,7 @@ const EMPTY: GameState = {
 
 export default function QuizQuestGame({
   code, playerId, roster, isHost, freshStart, sendMessage, onRegisterMessageHandler, onQuit, onGameBgChange,
+  onRegisterDebugActions,
 }: GamePlayProps) {
   const restored = freshStart ? null : loadSnapshot<QuizSnapshot>(gameSnapshotKey(code))?.quiz ?? null;
   const [state, setState] = useState<GameState>({ ...EMPTY, ...restored });
@@ -83,6 +86,17 @@ export default function QuizQuestGame({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHost, phase, state.revealEndTimestamp, revealExpired]);
 
+  const { handleDebugHostAction, getDebugActions } = useQuizQuestDebug({
+    isHost, playerId, roster, sendMessage, phase, room, answers, submitAnswer, timeoutRound,
+  });
+
+  // Register debug actions with GameShell
+  useEffect(() => {
+    if (DEBUG_MODE && onRegisterDebugActions) {
+      onRegisterDebugActions(getDebugActions(), phase);
+    }
+  }, [phase, room, answers, onRegisterDebugActions, getDebugActions]);
+
   useEffect(() => {
     onRegisterMessageHandler((envelope: Envelope) => {
       if (envelope.type === 'quiz-state-update' && !isHost) {
@@ -91,6 +105,8 @@ export default function QuizQuestGame({
         if (state.phase !== 'starting') publish(state);
       } else if (envelope.type === 'quiz-answer' && isHost) {
         submitAnswer(envelope.playerId, (envelope.payload as { choiceIndex: number }).choiceIndex);
+      } else if (envelope.type === 'quiz-debug-host-action' && isHost) {
+        handleDebugHostAction((envelope.payload as { action: string }).action);
       }
     });
   });
