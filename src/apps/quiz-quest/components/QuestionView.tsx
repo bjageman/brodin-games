@@ -2,6 +2,8 @@ import { cn } from '../../../shared/utils/cn';
 import type { PlayerInfo } from '../../../shared/types';
 import type { ActiveRoom, PlayerCombat } from '../types';
 import { MAX_ITEMS, STARTING_HP } from '../constants';
+import { monsterFor } from '../monsters';
+import PartyStatusBar from './PartyStatusBar';
 
 const ANSWER_LETTERS = ['A', 'B', 'C', 'D'];
 
@@ -32,15 +34,27 @@ export default function QuestionView({
         </span>
       </div>
 
-      <div className="rounded-lg border-2 border-quiz-gold bg-quiz-stone p-3">
-        <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wide">
-          <span>{room.isBoss ? 'The Boss' : 'Monster'}</span>
-          <span>{room.monsterHp}/{room.monsterMaxHp} HP</span>
+      <div className="overflow-hidden rounded-lg border-2 border-quiz-gold bg-quiz-stone">
+        <div className="flex items-center justify-center bg-quiz-bg py-4">
+          <img
+            src={monsterFor(room.index, room.isBoss)}
+            alt={room.isBoss ? 'The Boss' : 'Monster'}
+            className={cn('h-28 w-28 object-contain', room.isBoss && 'h-36 w-36')}
+            style={{ imageRendering: 'pixelated' }}
+          />
         </div>
-        <div className="mt-1 h-2.5 w-full rounded-full bg-quiz-hpTrack">
-          <div className="h-2.5 rounded-full bg-quiz-danger transition-all" style={{ width: `${monsterPct}%` }} />
+        <div className="p-3">
+          <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wide">
+            <span>{room.isBoss ? 'The Boss' : 'Monster'}</span>
+            <span>{room.monsterHp}/{room.monsterMaxHp} HP</span>
+          </div>
+          <div className="mt-1 h-2.5 w-full rounded-full bg-quiz-hpTrack">
+            <div className="h-2.5 rounded-full bg-quiz-danger transition-all" style={{ width: `${monsterPct}%` }} />
+          </div>
         </div>
       </div>
+
+      <PartyStatusBar roster={roster} players={players} playerId={playerId} />
 
       <div className="rounded-xl border-2 border-quiz-gold bg-quiz-panel p-5 text-center">
         <p className="font-display text-lg font-bold text-quiz-ink sm:text-xl">{room.question.question}</p>
