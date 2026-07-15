@@ -153,6 +153,24 @@ export default function JokeFactoryViews({
           {round < 3 ? (
             // Rounds 1 & 2: Pairwise Matchups
             currentMatch && (() => {
+              if (isDisplay) {
+                return (
+                  <div className="grid grid-cols-1 gap-4 w-full">
+                    <div className="bg-indigo-900/60 border border-yellow-400/20 rounded-3xl p-6 text-center shadow-lg min-h-[100px] flex flex-col justify-center">
+                      <span className="text-xs uppercase font-bold text-yellow-400/50 mb-1">Option A</span>
+                      <span className="text-lg font-bold font-serifDisplay italic">"{currentMatch.leftAnswer}"</span>
+                    </div>
+                    <div className="bg-indigo-900/60 border border-yellow-400/20 rounded-3xl p-6 text-center shadow-lg min-h-[100px] flex flex-col justify-center">
+                      <span className="text-xs uppercase font-bold text-yellow-400/50 mb-1">Option B</span>
+                      <span className="text-lg font-bold font-serifDisplay italic">"{currentMatch.rightAnswer}"</span>
+                    </div>
+                    <p className="text-center text-sm text-yellow-400/80 animate-pulse mt-4 font-bold tracking-wide">
+                      VOTE NOW ON YOUR DEVICE! 🗳️
+                    </p>
+                  </div>
+                );
+              }
+
               const isLeftAuthor = currentMatch.leftPlayerId === playerId;
               const isRightAuthor = currentMatch.rightPlayerId === playerId;
               const isAuthor = isLeftAuthor || isRightAuthor;
@@ -202,6 +220,24 @@ export default function JokeFactoryViews({
           ) : (
             // Round 3: Multi-answer Vote
             round3Data && (() => {
+              if (isDisplay) {
+                return (
+                  <div className="grid grid-cols-1 gap-3 w-full">
+                    <p className="text-xs text-yellow-400/60 font-bold uppercase tracking-wider text-center mb-1 animate-pulse">
+                      Vote for the funniest punchline on your device!
+                    </p>
+                    {shuffledR3Answers.map((ans) => (
+                      <div
+                        key={ans.playerId}
+                        className="bg-indigo-900/60 border border-yellow-400/20 rounded-2xl p-4 text-center min-h-[60px] flex items-center justify-center shadow-lg"
+                      >
+                        <span className="text-lg font-bold font-serifDisplay italic">"{ans.text}"</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              }
+
               if (myVote) {
                 return (
                   <div className="bg-indigo-900/40 border border-white/10 rounded-3xl p-8 text-center space-y-3">
