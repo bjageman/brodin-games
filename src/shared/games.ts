@@ -5,6 +5,7 @@ import FakeItLobby from '../apps/fake-it/components/FakeItLobby';
 import BombDisarmGame from '../apps/bomb-disarm/BombDisarmGame';
 import BombLobbySettings from '../apps/bomb-disarm/components/BombLobbySettings';
 import BombBadge from '../apps/bomb-disarm/components/BombBadge';
+import QuizQuestGame from '../apps/quiz-quest/QuizQuestGame';
 import { loadDictionary } from '../apps/memo-random/utils/dictionary';
 import type { GamePlayProps } from './GameShell';
 import type { LobbyExtraProps, LobbyProps, PlayerTagProps } from './components/Lobby';
@@ -77,6 +78,17 @@ const BOMB_THEME: GameTheme = {
   heading: 'text-white',
 };
 
+const QUIZ_THEME: GameTheme = {
+  lobbyBg: 'bg-quiz-bg text-quiz-ink',
+  pageBg: 'bg-quiz-bg text-quiz-ink',
+  panel: 'bg-quiz-stone border-quiz-gold/40 text-quiz-ink',
+  field: 'bg-quiz-panel border-quiz-gold/40 text-quiz-ink focus:border-quiz-gold',
+  accent: 'bg-quiz-gold hover:brightness-95 text-quiz-bg',
+  code: 'text-quiz-gold',
+  muted: 'text-quiz-ink/70',
+  heading: 'text-quiz-ink',
+};
+
 export interface GameConfig {
   id: string;
   title: string;
@@ -121,5 +133,15 @@ export const GAMES_REGISTRY: Record<string, GameConfig> = {
     lobbyExtra: BombLobbySettings,
     playerTag: BombBadge,
     theme: BOMB_THEME,
+  },
+  'quiz-quest': {
+    id: 'quiz-quest',
+    title: 'Quiz Quest',
+    // Playable solo — a lone player just has nobody to out-score, only the
+    // boss to beat.
+    minPlayers: 1,
+    maxPlayers: 6,
+    gamePlay: QuizQuestGame,
+    theme: QUIZ_THEME,
   },
 };
