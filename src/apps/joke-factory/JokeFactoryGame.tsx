@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useCountdown } from '../../shared/hooks/useCountdown';
 import type { Envelope } from '../../shared/types';
 import type { GamePlayProps } from '../../shared/GameShell';
@@ -7,7 +7,8 @@ import { useJokeFactoryHost } from './useJokeFactoryHost';
 import JokeFactoryViews from './components/JokeFactoryViews';
 import { WRITING_DURATION_MS, VOTING_DURATION_MS, RESULTS_DURATION_MS } from './constants';
 import { audioManager } from '../../shared/utils/audio';
-import type { DebugAction } from '../../shared/components/DebugWidget';
+import { DEBUG_MODE } from '../../shared/constants';
+import { useJokeFactoryDebug } from './useJokeFactoryDebug';
 
 interface JokeFactorySnapshot {
   gamePhase: JokeFactoryPhase;
@@ -89,7 +90,7 @@ export default function JokeFactoryGame({
   const { startRound } = useJokeFactoryHost(roster);
 
   // Helper to broadcast state from host
-  function broadcastState(fields: Partial<GameState>) {
+  const broadcastState = useCallback((fields: Partial<GameState>) => {
     const fullState: GameState = {
       phase,
       round,
@@ -110,7 +111,176 @@ export default function JokeFactoryGame({
       timestamp: Date.now(),
       payload: fullState,
     });
+  }, [
+    phase, round, playerPrompts, playerAnswers, matchups, currentMatchIndex,
+    round3Data, scores, roundPoints, writingEndTimestamp, votingEndTimestamp,
+    resultsEndTimestamp, sendMessage
+  ]);
+  const revealMatchupResults = useCallback((latestMatchups: PromptMatchup[]) => {
+    const currentMatch = latestMatchups[currentMatchIndexRef.current];
+
+    const leftVotes = Object.values(currentMatch.votes).filter((v) => v === 'left').length;
+    const rightVotes = Object.values(currentMatch.votes).filter((v) => v === 'right').length;
+    const totalVotes = leftVotes + rightVotes;
+
+    const ptsPerVote = 100;
+    const bonusPts = 200;
+
+    let leftPoints = leftVotes * ptsPerVote;
+    let rightPoints = rightVotes * ptsPerVote;
+
+    if (totalVotes > 0) {
+      if (leftVotes === totalVotes) leftPoints += bonusPts;
+      if (rightVotes === totalVotes) rightPoints += bonusPts;
+    }
+
+    const nextRoundPoints = { ...roundPointsRef.current };
+    nextRoundPoints[currentMatch.leftPlayerId] = (nextRoundPoints[currentMatch.leftPlayerId] || 0) + leftPoints;
+    nextRoundPoints[currentMatch.rightPlayerId] = (nextRoundPoints[currentMatch.rightPlayerId] || 0) + rightPoints;
+
+    const nextScores = { ...scoresRef.current };
+    nextScores[currentMatch.leftPlayerId] = (nextScores[currentMatch.leftPlayerId] || 0) + leftPoints;
+    nextScores[currentMatch.rightPlayerId] = (nextScores[currentMatch.rightPlayerId] || 0) + rightPoints;
+
+    const endTimestamp = Date.now() + RESULTS_DURATION_MS;
+
+    setPhase('results');
+    setVotingEndTimestamp(null);
+    setResultsEndTimestamp(endTimestamp);
+    setRoundPoints(nextRoundPoints);
+    setScores(nextScores);
+
+    broadcastState({
+      phase: 'results',
+      votingEndTimestamp: null,
+      resultsEndTimestamp: endTimestamp,
+      roundPoints: nextRoundPoints,
+      scores: nextScores,
+      matchups: latestMatchups,
+    });
+  }, [broadcastState]);
+
+  const revealRound3Results = useCallback((latestR3Data: Round3State) => {
+    const totalVotes = Object.keys(latestR3Data.votes).length;
+
+    const nextRoundPoints = { ...roundPointsRef.current };
+    const nextScores = { ...scoresRef.current };
+
+    roster.forEach((p) => {
+      const vCount = Object.values(latestR3Data.votes).filter((v) => v === p.id).length;
+
+      const ptsPerVote = 200; // doubled
+      const bonusPts = 400; // doubled
+
+      const isQuiplash = totalVotes > 0 && vCount === totalVotes;
+      const points = vCount * ptsPerVote + (isQuiplash ? bonusPts : 0);
+
+      nextRoundPoints[p.id] = (nextRoundPoints[p.id] || 0) + points;
+      nextScores[p.id] = (nextScores[p.id] || 0) + points;
+    });
+
+    const endTimestamp = Date.now() + RESULTS_DURATION_MS;
+
+    setPhase('results');
+    setVotingEndTimestamp(null);
+    setResultsEndTimestamp(endTimestamp);
+    setRoundPoints(nextRoundPoints);
+    setScores(nextScores);
+
+    broadcastState({
+      phase: 'results',
+      votingEndTimestamp: null,
+      resultsEndTimestamp: endTimestamp,
+      roundPoints: nextRoundPoints,
+      scores: nextScores,
+      round3Data: latestR3Data,
+    });
+  }, [roster, broadcastState]);
+
+  function simulateAnswers() {
+    const finalAnswers = { ...answersRef.current };
+    roster.forEach((p) => {
+      if (p.id !== playerId) {
+        const prompts = promptsRef.current[p.id] || [];
+        const answers: Record<string, string> = {};
+        prompts.forEach((pr, idx) => {
+          answers[pr.id] = `Funny joke ${idx + 1} from ${p.name}!`;
+        });
+        finalAnswers[p.id] = answers;
+      }
+    });
+
+    setPlayerAnswers(finalAnswers);
+
+    const activePlayers = roster.length;
+    const submittedCount = Object.keys(finalAnswers).length;
+
+    if (submittedCount >= activePlayers) {
+      advanceToVoting(finalAnswers);
+    } else {
+      broadcastState({ playerAnswers: finalAnswers });
+    }
   }
+
+  function simulateVotes() {
+    if (roundRef.current === 3) {
+      if (!round3Data) return;
+      const nextVotes = { ...round3Data.votes };
+      roster.forEach((p) => {
+        if (p.id !== playerId) {
+          const options = roster.filter((item) => item.id !== p.id);
+          if (options.length > 0) {
+            const pick = options[Math.floor(Math.random() * options.length)].id;
+            nextVotes[p.id] = pick;
+          }
+        }
+      });
+      const nextR3Data = { ...round3Data, votes: nextVotes };
+      setRound3Data(nextR3Data);
+
+      const voterCount = Object.keys(nextVotes).length;
+      const expectedVotes = roster.length;
+
+      if (voterCount >= expectedVotes) {
+        revealRound3Results(nextR3Data);
+      } else {
+        broadcastState({ round3Data: nextR3Data });
+      }
+    } else {
+      const currentMatch = matchupsRef.current[currentMatchIndexRef.current];
+      if (!currentMatch) return;
+      const nextVotes = { ...currentMatch.votes };
+      roster.forEach((p) => {
+        if (p.id !== currentMatch.leftPlayerId && p.id !== currentMatch.rightPlayerId && p.id !== playerId) {
+          const pick = Math.random() > 0.5 ? 'left' : 'right';
+          nextVotes[p.id] = pick;
+        }
+      });
+      const updatedMatchup = { ...currentMatch, votes: nextVotes };
+      const nextMatchups = [...matchupsRef.current];
+      nextMatchups[currentMatchIndexRef.current] = updatedMatchup;
+      setMatchups(nextMatchups);
+
+      const expectedVotes = roster.length - 2;
+      const voterCount = Object.keys(nextVotes).length;
+
+      if (voterCount >= expectedVotes) {
+        revealMatchupResults(nextMatchups);
+      } else {
+        broadcastState({ matchups: nextMatchups });
+      }
+    }
+  }
+
+  function skipMatchup() {
+    if (roundRef.current === 3) {
+      if (round3Data) revealRound3Results(round3Data);
+    } else {
+      revealMatchupResults(matchupsRef.current);
+    }
+  }
+
+
 
   // Save state snapshots on change
   useEffect(() => {
@@ -148,7 +318,7 @@ export default function JokeFactoryGame({
     }
   }
 
-  function advanceToVoting(finalAnswers: Record<string, Record<string, string>>) {
+  const advanceToVoting = useCallback((finalAnswers: Record<string, Record<string, string>>) => {
     if (roundRef.current === 3) {
       // Round 3: Multi-answer Vote
       const answers: Record<string, string> = {};
@@ -232,9 +402,9 @@ export default function JokeFactoryGame({
       writingEndTimestamp: null,
       votingEndTimestamp: endTimestamp,
     });
-  }
+  }, [roster, broadcastState]);
 
-  function autoSubmitAnswers() {
+  const autoSubmitAnswers = useCallback(() => {
     const finalAnswers = { ...answersRef.current };
     roster.forEach((p) => {
       if (!finalAnswers[p.id]) {
@@ -250,10 +420,10 @@ export default function JokeFactoryGame({
 
     setPlayerAnswers(finalAnswers);
     advanceToVoting(finalAnswers);
-  }
+  }, [roster, advanceToVoting]);
 
   // Host: Process client vote submission
-  function handleClientSubmitVote(senderId: string, choice: string) {
+  const handleClientSubmitVote = useCallback((senderId: string, choice: string) => {
     if (phaseRef.current !== 'voting') return;
 
     if (roundRef.current === 3) {
@@ -295,90 +465,11 @@ export default function JokeFactoryGame({
     } else {
       broadcastState({ matchups: nextMatchups });
     }
-  }
+  }, [roster, round3Data, broadcastState, revealRound3Results, revealMatchupResults]);
 
-  function revealMatchupResults(latestMatchups: PromptMatchup[]) {
-    const currentMatch = latestMatchups[currentMatchIndexRef.current];
 
-    const leftVotes = Object.values(currentMatch.votes).filter((v) => v === 'left').length;
-    const rightVotes = Object.values(currentMatch.votes).filter((v) => v === 'right').length;
-    const totalVotes = leftVotes + rightVotes;
 
-    const ptsPerVote = 100;
-    const bonusPts = 200;
-
-    let leftPoints = leftVotes * ptsPerVote;
-    let rightPoints = rightVotes * ptsPerVote;
-
-    if (totalVotes > 0) {
-      if (leftVotes === totalVotes) leftPoints += bonusPts;
-      if (rightVotes === totalVotes) rightPoints += bonusPts;
-    }
-
-    const nextRoundPoints = { ...roundPointsRef.current };
-    nextRoundPoints[currentMatch.leftPlayerId] = (nextRoundPoints[currentMatch.leftPlayerId] || 0) + leftPoints;
-    nextRoundPoints[currentMatch.rightPlayerId] = (nextRoundPoints[currentMatch.rightPlayerId] || 0) + rightPoints;
-
-    const nextScores = { ...scoresRef.current };
-    nextScores[currentMatch.leftPlayerId] = (nextScores[currentMatch.leftPlayerId] || 0) + leftPoints;
-    nextScores[currentMatch.rightPlayerId] = (nextScores[currentMatch.rightPlayerId] || 0) + rightPoints;
-
-    const endTimestamp = Date.now() + RESULTS_DURATION_MS;
-
-    setPhase('results');
-    setVotingEndTimestamp(null);
-    setResultsEndTimestamp(endTimestamp);
-    setRoundPoints(nextRoundPoints);
-    setScores(nextScores);
-
-    broadcastState({
-      phase: 'results',
-      votingEndTimestamp: null,
-      resultsEndTimestamp: endTimestamp,
-      roundPoints: nextRoundPoints,
-      scores: nextScores,
-      matchups: latestMatchups,
-    });
-  }
-
-  function revealRound3Results(latestR3Data: Round3State) {
-    const totalVotes = Object.keys(latestR3Data.votes).length;
-
-    const nextRoundPoints = { ...roundPointsRef.current };
-    const nextScores = { ...scoresRef.current };
-
-    roster.forEach((p) => {
-      const vCount = Object.values(latestR3Data.votes).filter((v) => v === p.id).length;
-
-      const ptsPerVote = 200; // doubled
-      const bonusPts = 400; // doubled
-
-      const isQuiplash = totalVotes > 0 && vCount === totalVotes;
-      const points = vCount * ptsPerVote + (isQuiplash ? bonusPts : 0);
-
-      nextRoundPoints[p.id] = (nextRoundPoints[p.id] || 0) + points;
-      nextScores[p.id] = (nextScores[p.id] || 0) + points;
-    });
-
-    const endTimestamp = Date.now() + RESULTS_DURATION_MS;
-
-    setPhase('results');
-    setVotingEndTimestamp(null);
-    setResultsEndTimestamp(endTimestamp);
-    setRoundPoints(nextRoundPoints);
-    setScores(nextScores);
-
-    broadcastState({
-      phase: 'results',
-      votingEndTimestamp: null,
-      resultsEndTimestamp: endTimestamp,
-      roundPoints: nextRoundPoints,
-      scores: nextScores,
-      round3Data: latestR3Data,
-    });
-  }
-
-  function handleResultsTimeout() {
+  const handleResultsTimeout = useCallback(() => {
     if (roundRef.current < 3) {
       if (currentMatchIndexRef.current + 1 < matchupsRef.current.length) {
         const nextIndex = currentMatchIndexRef.current + 1;
@@ -412,7 +503,7 @@ export default function JokeFactoryGame({
         resultsEndTimestamp: null,
       });
     }
-  }
+  }, [broadcastState]);
 
   // Host: Next Round Activation
   function handleNextRound() {
@@ -476,185 +567,131 @@ export default function JokeFactoryGame({
     if (isHost && (phase === 'starting' || freshStart)) {
       if (roster.length === 0) return;
 
-      const initialScores: Record<string, number> = {};
-      roster.forEach((p) => {
-        initialScores[p.id] = 0;
-      });
+      const timer = setTimeout(() => {
+        const initialScores: Record<string, number> = {};
+        roster.forEach((p) => {
+          initialScores[p.id] = 0;
+        });
 
-      const setup = startRound(1);
-      const revealEnd = Date.now() + 5000;
+        const setup = startRound(1);
+        const revealEnd = Date.now() + 5000;
 
-      setPhase('prompt-reveal');
-      setRound(1);
-      setPlayerPrompts(setup.playerPrompts);
-      setMatchups(setup.matchups);
-      setRound3Data(setup.round3Data);
-      setScores(initialScores);
-      setRoundPoints({});
-      setRevealEndTimestamp(revealEnd);
+        setPhase('prompt-reveal');
+        setRound(1);
+        setPlayerPrompts(setup.playerPrompts);
+        setMatchups(setup.matchups);
+        setRound3Data(setup.round3Data);
+        setScores(initialScores);
+        setRoundPoints({});
+        setRevealEndTimestamp(revealEnd);
 
-      const newState: GameState = {
-        phase: 'prompt-reveal',
-        round: 1,
-        playerPrompts: setup.playerPrompts,
-        playerAnswers: {},
-        matchups: setup.matchups,
-        currentMatchIndex: 0,
-        round3Data: setup.round3Data,
-        scores: initialScores,
-        roundPoints: {},
-        writingEndTimestamp: null,
-        votingEndTimestamp: null,
-        resultsEndTimestamp: null,
-      };
+        const newState: GameState = {
+          phase: 'prompt-reveal',
+          round: 1,
+          playerPrompts: setup.playerPrompts,
+          playerAnswers: {},
+          matchups: setup.matchups,
+          currentMatchIndex: 0,
+          round3Data: setup.round3Data,
+          scores: initialScores,
+          roundPoints: {},
+          writingEndTimestamp: null,
+          votingEndTimestamp: null,
+          resultsEndTimestamp: null,
+        };
 
-      sendMessage({
-        type: 'joke-factory-state-update',
-        timestamp: Date.now(),
-        payload: newState,
-      });
+        sendMessage({
+          type: 'joke-factory-state-update',
+          timestamp: Date.now(),
+          payload: newState,
+        });
+      }, 0);
+      return () => clearTimeout(timer);
     }
-  }, [isHost, freshStart, roster.length]);
+  }, [isHost, freshStart, roster, sendMessage, startRound, phase]);
 
   // Host transition: Reveal -> Writing
   useEffect(() => {
     if (isHost && phase === 'prompt-reveal' && revealEndTimestamp && revealExpired) {
       const endTimestamp = Date.now() + WRITING_DURATION_MS;
-      setPhase('writing');
-      setRevealEndTimestamp(null);
-      setWritingEndTimestamp(endTimestamp);
+      const timer = setTimeout(() => {
+        setPhase('writing');
+        setRevealEndTimestamp(null);
+        setWritingEndTimestamp(endTimestamp);
 
-      broadcastState({
-        phase: 'writing',
-        writingEndTimestamp: endTimestamp,
-      });
+        broadcastState({
+          phase: 'writing',
+          writingEndTimestamp: endTimestamp,
+        });
+      }, 0);
+      return () => clearTimeout(timer);
     }
-  }, [isHost, phase, revealEndTimestamp, revealExpired]);
+  }, [isHost, phase, revealEndTimestamp, revealExpired, broadcastState]);
 
   // Host transition: Writing Timeout
   useEffect(() => {
     if (isHost && phase === 'writing' && writingEndTimestamp && writingExpired) {
-      autoSubmitAnswers();
+      const timer = setTimeout(() => {
+        autoSubmitAnswers();
+      }, 0);
+      return () => clearTimeout(timer);
     }
-  }, [isHost, phase, writingEndTimestamp, writingExpired]);
+  }, [isHost, phase, writingEndTimestamp, writingExpired, autoSubmitAnswers]);
 
   // Host transition: Voting Timeout
   useEffect(() => {
     if (isHost && phase === 'voting' && votingEndTimestamp && votingExpired) {
-      if (roundRef.current < 3) {
-        revealMatchupResults(matchupsRef.current);
-      } else {
-        if (round3Data) revealRound3Results(round3Data);
-      }
+      const timer = setTimeout(() => {
+        if (roundRef.current < 3) {
+          revealMatchupResults(matchupsRef.current);
+        } else {
+          if (round3Data) revealRound3Results(round3Data);
+        }
+      }, 0);
+      return () => clearTimeout(timer);
     }
-  }, [isHost, phase, votingEndTimestamp, votingExpired, round3Data]);
+  }, [isHost, phase, votingEndTimestamp, votingExpired, round3Data, revealMatchupResults, revealRound3Results]);
 
   // Host transition: Results Timeout
   useEffect(() => {
     if (isHost && phase === 'results' && resultsEndTimestamp && resultsExpired) {
-      handleResultsTimeout();
+      const timer = setTimeout(() => {
+        handleResultsTimeout();
+      }, 0);
+      return () => clearTimeout(timer);
     }
-  }, [isHost, phase, resultsEndTimestamp, resultsExpired]);
+  }, [isHost, phase, resultsEndTimestamp, resultsExpired, handleResultsTimeout]);
+
+  const { isTimerPaused, handleDebugHostAction, getDebugActions } = useJokeFactoryDebug({
+    isHost,
+    playerId,
+    sendMessage,
+    phase,
+    round,
+    revealEndTimestamp,
+    writingEndTimestamp,
+    votingEndTimestamp,
+    resultsEndTimestamp,
+    setRevealEndTimestamp,
+    setWritingEndTimestamp,
+    setVotingEndTimestamp,
+    setResultsEndTimestamp,
+    simulateAnswers,
+    skipWriting: autoSubmitAnswers,
+    simulateVotes,
+    skipMatchup,
+    skipResults: handleResultsTimeout,
+    nextRound: handleNextRound,
+    endGameAction: onQuit,
+    broadcastState,
+  });
 
   // Register debug actions with GameShell
   useEffect(() => {
-    if (onRegisterDebugActions) {
-      const actions: DebugAction[] = [];
-
-      if (phase === 'writing') {
-        actions.push({
-          label: 'Simulate Answers for Others',
-          variant: 'success',
-          onClick: () => {
-            roster.forEach((p) => {
-              if (p.id !== playerId) {
-                const prompts = promptsRef.current[p.id] || [];
-                const answers: Record<string, string> = {};
-                prompts.forEach((pr, idx) => {
-                  answers[pr.id] = `Funny joke ${idx + 1} from ${p.name}!`;
-                });
-                handleClientSubmitAnswers(p.id, answers);
-              }
-            });
-          },
-        });
-        actions.push({
-          label: 'Skip Writing Phase',
-          variant: 'warning',
-          onClick: () => {
-            autoSubmitAnswers();
-          },
-        });
-      } else if (phase === 'voting') {
-        actions.push({
-          label: 'Simulate Votes for Others',
-          variant: 'success',
-          onClick: () => {
-            if (roundRef.current === 3) {
-              if (!round3Data) return;
-              roster.forEach((p) => {
-                if (p.id !== playerId) {
-                  const options = roster.filter((item) => item.id !== p.id);
-                  if (options.length > 0) {
-                    const pick = options[Math.floor(Math.random() * options.length)].id;
-                    handleClientSubmitVote(p.id, pick);
-                  }
-                }
-              });
-            } else {
-              const currentMatch = matchupsRef.current[currentMatchIndexRef.current];
-              if (!currentMatch) return;
-              roster.forEach((p) => {
-                if (p.id !== currentMatch.leftPlayerId && p.id !== currentMatch.rightPlayerId && p.id !== playerId) {
-                  const pick = Math.random() > 0.5 ? 'left' : 'right';
-                  handleClientSubmitVote(p.id, pick);
-                }
-              });
-            }
-          },
-        });
-        actions.push({
-          label: 'Skip Matchup',
-          variant: 'warning',
-          onClick: () => {
-            if (roundRef.current === 3) {
-              if (round3Data) revealRound3Results(round3Data);
-            } else {
-              revealMatchupResults(matchupsRef.current);
-            }
-          },
-        });
-      } else if (phase === 'results') {
-        actions.push({
-          label: 'Skip Results Display',
-          variant: 'warning',
-          onClick: () => {
-            handleResultsTimeout();
-          },
-        });
-      } else if (phase === 'leaderboard') {
-        if (round < 3) {
-          actions.push({
-            label: `Start Round ${round + 1}`,
-            variant: 'primary',
-            onClick: () => {
-              handleNextRound();
-            },
-          });
-        } else {
-          actions.push({
-            label: 'End Game',
-            variant: 'danger',
-            onClick: () => {
-              onQuit();
-            },
-          });
-        }
-      }
-
-      onRegisterDebugActions(actions, phase);
+    if (DEBUG_MODE && onRegisterDebugActions) {
+      onRegisterDebugActions(getDebugActions(), phase);
     }
-  }, [phase, roster, playerPrompts, matchups, currentMatchIndex, round3Data, round, onRegisterDebugActions]);
+  }, [phase, isTimerPaused, playerPrompts, matchups, currentMatchIndex, round3Data, round, onRegisterDebugActions, getDebugActions]);
 
   // Message Handler Registration
   useEffect(() => {
@@ -679,6 +716,11 @@ export default function JokeFactoryGame({
 
           setMyVote(null);
         }
+      } else if (type === 'debug-host-action') {
+        if (isHost) {
+          const payloadObj = payload as { action: string; [key: string]: unknown };
+          handleDebugHostAction(payloadObj.action, payloadObj);
+        }
       } else if (isHost) {
         if (type === 'submit-answers') {
           if (senderId) {
@@ -693,7 +735,7 @@ export default function JokeFactoryGame({
         }
       }
     });
-  }, [isHost, roster]);
+  });
 
   const prompts = playerPrompts[playerId] || [];
   const submissionCount = Object.keys(playerAnswers).length;
