@@ -218,6 +218,66 @@ describe('useDungeon', () => {
     expect(h.getState().players.a.score).toBe(scoreBefore + BOSS_CORRECT_ANSWER_SCORE);
   });
 
+  it('grants room-clear loot to whoever is behind and lets a Ward absorb the next wrong answer', () => {
+    const h = makeHarness();
+    h.startDungeon();
+
+    // Clear room 0: Alice always correct, Bob always wrong — Bob ends up
+    // furthest behind and gets the loot when the room's monster falls.
+    let correct = h.getState().room!.question.correctIndex;
+    h.submitAnswer('a', correct);
+    h.submitAnswer('b', (correct + 1) % 4);
+    h.tick(REVEAL_DURATION_MS);
+
+    correct = h.getState().room!.question.correctIndex;
+    h.submitAnswer('a', correct);
+    h.submitAnswer('b', (correct + 1) % 4);
+    const cleared = h.getState();
+    expect(cleared.lastReveal?.monsterDefeated).toBe(true);
+    expect(cleared.lastReveal?.lootRecipientId).toBe('b');
+    h.tick(REVEAL_DURATION_MS);
+
+    const afterLoot = h.getState();
+    expect(afterLoot.players.b.items).toBe(1);
+    expect(afterLoot.players.a.items).toBe(0);
+    const bobHpBeforeWard = afterLoot.players.b.hp;
+
+    // Room 1: Bob answers wrong again — his Ward should absorb it, not his HP.
+    correct = h.getState().room!.question.correctIndex;
+    h.submitAnswer('a', correct);
+    h.submitAnswer('b', (correct + 1) % 4);
+    const state = h.getState();
+    expect(state.lastReveal?.wardsUsed).toContain('b');
+    expect(state.lastReveal?.damageDealt.b).toBeUndefined();
+    expect(state.players.b.hp).toBe(bobHpBeforeWard);
+    expect(state.players.b.items).toBe(0);
+  });
+
+  it('drops no loot when a boss room is cleared', () => {
+    const h = makeHarness();
+    h.startDungeon();
+
+    while (!h.getState().room!.isBoss) {
+      const correct = h.getState().room!.question.correctIndex;
+      h.submitAnswer('a', correct);
+      h.submitAnswer('b', correct);
+      h.tick(REVEAL_DURATION_MS);
+    }
+
+    // Finish the boss.
+    let guard = 0;
+    while (h.getState().phase === 'question' && guard < 20) {
+      const correct = h.getState().room!.question.correctIndex;
+      h.submitAnswer('a', correct);
+      h.submitAnswer('b', correct);
+      h.tick(REVEAL_DURATION_MS);
+      guard++;
+    }
+
+    expect(h.getState().phase).toBe('game-over');
+    expect(h.getState().lastReveal?.lootRecipientId).toBeNull();
+  });
+
   it('resolves with whatever was submitted once the timer runs out', () => {
     const h = makeHarness();
     h.startDungeon();

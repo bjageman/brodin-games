@@ -1,7 +1,7 @@
 import { cn } from '../../../shared/utils/cn';
 import type { PlayerInfo } from '../../../shared/types';
 import type { ActiveRoom, PlayerCombat } from '../types';
-import { STARTING_HP } from '../constants';
+import { MAX_ITEMS, STARTING_HP } from '../constants';
 
 const ANSWER_LETTERS = ['A', 'B', 'C', 'D'];
 
@@ -20,6 +20,7 @@ export default function QuestionView({
 }) {
   const myHp = players[playerId]?.hp ?? 0;
   const myIsGhost = players[playerId]?.isGhost ?? false;
+  const myItems = players[playerId]?.items ?? 0;
   const monsterPct = Math.round((room.monsterHp / room.monsterMaxHp) * 100);
 
   return (
@@ -80,6 +81,11 @@ export default function QuestionView({
               className={cn('h-2 rounded-full transition-all', myIsGhost ? 'bg-quiz-ink/30' : 'bg-quiz-hp')}
               style={{ width: `${myIsGhost ? 100 : Math.round((myHp / STARTING_HP) * 100)}%` }}
             />
+          </div>
+          <div className="mt-1.5 flex items-center gap-1" title={`${myItems}/${MAX_ITEMS} Wards`}>
+            {Array.from({ length: MAX_ITEMS }, (_, i) => (
+              <span key={i} className={cn('text-sm', i < myItems ? 'opacity-100' : 'opacity-20 grayscale')}>🛡️</span>
+            ))}
           </div>
         </div>
         <p className="shrink-0 text-xs font-bold uppercase tracking-wide text-quiz-ink/70">
