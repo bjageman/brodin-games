@@ -59,3 +59,18 @@ export function rebelCountFor(playerCount: number): number {
 export function knownRebelCountFor(playerCount: number): number | null {
   return playerCount <= 7 ? rebelCountFor(playerCount) : null;
 }
+
+const HIDDEN_REBEL_RANGE = [2, 3];
+
+// `extraRebels` is the Opportunist once they've flipped to the rebels: they took
+// a peacekeeper's seat at deal time, and the flip is public, so the counter has
+// to move with them.
+export function teamCountLabels(playerCount: number, extraRebels = 0): { rebels: string; peacekeepers: string } {
+  const known = knownRebelCountFor(playerCount);
+  if (known !== null) {
+    const rebels = known + extraRebels;
+    return { rebels: String(rebels), peacekeepers: String(playerCount - rebels) };
+  }
+  const [lo, hi] = HIDDEN_REBEL_RANGE.map((n) => n + extraRebels);
+  return { rebels: `${lo}–${hi}`, peacekeepers: `${playerCount - hi}–${playerCount - lo}` };
+}

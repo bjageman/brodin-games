@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { cn } from '../../../shared/utils/cn';
 import type { Card } from '../types';
 import { CARD_META } from '../cards';
-import { WIRE_WIN_THRESHOLD } from '../constants';
+import { WIRE_WIN_THRESHOLD, teamCountLabels } from '../constants';
 import { CardArt, LightningBolt, WireIcon } from './BombArt';
 
 export function BombCard({ card, faceUp, tappable, maxWidth, onTap }: {
@@ -87,11 +87,8 @@ export function HandRow({ hand, faceUp, tappable, onTap }: {
   );
 }
 
-// At 8-10 players the rebel count is randomised (2 or 3) so rebels can't be sure
-// how many allies they have — printing the real number here would give it away.
-export function TeamCounts({ playerCount, rebelCount }: { playerCount: number; rebelCount: number | null }) {
-  const rebels = rebelCount === null ? '2–3' : String(rebelCount);
-  const peacekeepers = rebelCount === null ? `${playerCount - 3}–${playerCount - 2}` : String(playerCount - rebelCount);
+export function TeamCounts({ playerCount, extraRebels = 0 }: { playerCount: number; extraRebels?: number }) {
+  const { rebels, peacekeepers } = teamCountLabels(playerCount, extraRebels);
   return (
     <dl className="font-serifDisplay text-base font-bold leading-tight text-white sm:text-xl">
       <div className="flex gap-3">

@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { CARDS_PER_PLAYER, WIRES_IN_DECK, WIRE_WIN_THRESHOLD, deckCompositionFor, rebelCountFor } from './constants';
+import {
+  CARDS_PER_PLAYER, WIRES_IN_DECK, WIRE_WIN_THRESHOLD,
+  deckCompositionFor, rebelCountFor, teamCountLabels,
+} from './constants';
 
 describe('deckCompositionFor', () => {
   for (let n = 3; n <= 10; n++) {
@@ -30,6 +33,31 @@ describe('deckCompositionFor', () => {
 
   it('still leaves room for the blanks', () => {
     for (let n = 3; n <= 10; n++) expect(deckCompositionFor(n).blank).toBeGreaterThan(0);
+  });
+});
+
+describe('teamCountLabels', () => {
+  it('prints the exact split at 3-7 players', () => {
+    expect(teamCountLabels(7)).toEqual({ rebels: '2', peacekeepers: '5' });
+    expect(teamCountLabels(4)).toEqual({ rebels: '1', peacekeepers: '3' });
+  });
+
+  // The rebel count is randomised at 8-10, so the table only ever sees the range.
+  it('prints a range at 8-10 players', () => {
+    expect(teamCountLabels(9)).toEqual({ rebels: '2–3', peacekeepers: '6–7' });
+  });
+
+  it('always accounts for every player', () => {
+    for (let n = 3; n <= 7; n++) {
+      const { rebels, peacekeepers } = teamCountLabels(n);
+      expect(Number(rebels) + Number(peacekeepers)).toBe(n);
+    }
+  });
+
+  // A flipped Opportunist is public: they vacate a peacekeeper seat for a rebel one.
+  it('moves a declared Opportunist across', () => {
+    expect(teamCountLabels(7, 1)).toEqual({ rebels: '3', peacekeepers: '4' });
+    expect(teamCountLabels(9, 1)).toEqual({ rebels: '3–4', peacekeepers: '5–6' });
   });
 });
 

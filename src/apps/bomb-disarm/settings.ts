@@ -1,25 +1,37 @@
 import { gameSnapshotKey, loadSnapshot, saveSnapshot } from '../../shared/utils/sessionSnapshot';
 import { SPECIAL_CARD_TYPES } from './cards';
 import { maxSpecialsFor } from './constants';
-import type { SpecialCardType } from './types';
+import { SPECIAL_ROLES, maxSpecialRolesFor } from './roles';
+import type { SpecialCardType, SpecialRole } from './types';
 
-const KEY = 'bombSpecials';
+const CARDS_KEY = 'bombSpecials';
+const ROLES_KEY = 'bombSpecialRoles';
 
-// Host-only: the deck is dealt on the host and reaches everyone else as `hands`,
-// so the chosen specials never need to cross the wire.
-export function loadSpecials(code: string): SpecialCardType[] {
-  const saved = loadSnapshot<Record<string, unknown>>(gameSnapshotKey(code))?.[KEY];
-  if (!Array.isArray(saved)) return [...SPECIAL_CARD_TYPES];
-  return SPECIAL_CARD_TYPES.filter((t) => saved.includes(t));
+// Host-only: the deck and the roles are both dealt on the host and reach
+// everyone else inside the broadcast game state, so these never cross the wire.
+function load<T extends string>(code: string, key: string, all: T[]): T[] {
+  const saved = loadSnapshot<Record<string, unknown>>(gameSnapshotKey(code))?.[key];
+  if (!Array.isArray(saved)) return [...all];
+  return all.filter((t) => saved.includes(t));
 }
 
-export function saveSpecials(code: string, specials: SpecialCardType[]) {
+function save(code: string, key: string, value: string[]) {
   const snapshot = loadSnapshot<Record<string, unknown>>(gameSnapshotKey(code)) ?? {};
-  saveSnapshot(gameSnapshotKey(code), { ...snapshot, [KEY]: specials });
+  saveSnapshot(gameSnapshotKey(code), { ...snapshot, [key]: value });
 }
 
-// A player leaving after the host picked can shrink the deck below what they
-// chose, so the cap is re-applied at deal time rather than trusted from storage.
+export const loadSpecials = (code: string) => load(code, CARDS_KEY, SPECIAL_CARD_TYPES);
+export const saveSpecials = (code: string, v: SpecialCardType[]) => save(code, CARDS_KEY, v);
+
+export const loadSpecialRoles = (code: string) => load(code, ROLES_KEY, SPECIAL_ROLES);
+export const saveSpecialRoles = (code: string, v: SpecialRole[]) => save(code, ROLES_KEY, v);
+
+// A player leaving after the host picked can shrink the table below what they
+// chose, so the caps are re-applied at deal time rather than trusted from storage.
 export function specialsForDeal(code: string, playerCount: number): SpecialCardType[] {
   return loadSpecials(code).slice(0, maxSpecialsFor(playerCount));
+}
+
+export function specialRolesForDeal(code: string, playerCount: number): SpecialRole[] {
+  return loadSpecialRoles(code).slice(0, maxSpecialRolesFor(playerCount));
 }

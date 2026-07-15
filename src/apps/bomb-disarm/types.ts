@@ -12,7 +12,14 @@ export type CardType = 'blank' | 'wire' | 'explode' | SpecialCardType;
 
 export type Role = 'rebel' | 'peacekeeper';
 
+export type SpecialRole = 'procrastinator' | 'opportunist' | 'folk-hero';
+
 export type Winner = 'rebels' | 'peacekeepers';
+
+// How the game ended. The Procrastinator's whole win condition is 'timeout', so
+// it can't be inferred from `winner` alone — the rebels take both 'bomb' and
+// 'timeout'.
+export type EndReason = 'bomb' | 'wires' | 'timeout';
 
 export interface Card {
   type: CardType;
@@ -82,6 +89,15 @@ export interface GameState {
   // a given device is allowed to see. Not cheat-proof against devtools; fine
   // for a party game played around one table.
   roles: Record<string, Role>;
+  specialRoles: Record<string, SpecialRole>;
+  // Set once the Folk Hero has spent their save, or the Opportunist has flipped:
+  // both are public the moment they happen.
+  revealedRoleIds: string[];
+  folkHeroSpent: boolean;
+  opportunistTeam: Role | null;
+  // A bomb is on the table and the Folk Hero is being asked to stop it.
+  pendingRescue: { bombOwnerId: string; heroId: string } | null;
+  endReason: EndReason | null;
   hands: Record<string, Card[]>;
   activePlayerId: string;
   wiresRevealed: number;
