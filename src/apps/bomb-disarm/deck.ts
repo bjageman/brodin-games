@@ -10,8 +10,8 @@ export function shuffle<T>(arr: T[]): T[] {
   return out;
 }
 
-export function buildDeck(playerCount: number, specials: SpecialCardType[]): CardType[] {
-  const { explode, wire, special, blank } = deckCompositionFor(playerCount, specials.length);
+export function buildDeck(playerCount: number, specials: SpecialCardType[], folkHeroInPlay = false): CardType[] {
+  const { explode, wire, special, blank } = deckCompositionFor(playerCount, specials.length, folkHeroInPlay);
   return shuffle([
     ...Array<CardType>(explode).fill('explode'),
     ...Array<CardType>(wire).fill('wire'),

@@ -55,20 +55,20 @@ describe('didWin — ordinary players', () => {
 
 describe('didWin — Procrastinator', () => {
   it('wins only when the clock runs out', () => {
-    expect(outcome('peacekeeper', 'rebels', 'timeout', 'procrastinator')).toBe(true);
+    expect(outcome('rebel', 'rebels', 'timeout', 'procrastinator')).toBe(true);
   });
 
   it('loses when a bomb goes off, even though the rebels take that too', () => {
-    expect(outcome('peacekeeper', 'rebels', 'bomb', 'procrastinator')).toBe(false);
+    expect(outcome('rebel', 'rebels', 'bomb', 'procrastinator')).toBe(false);
   });
 
   it('loses when the wires are cut', () => {
-    expect(outcome('peacekeeper', 'peacekeepers', 'wires', 'procrastinator')).toBe(false);
+    expect(outcome('rebel', 'peacekeepers', 'wires', 'procrastinator')).toBe(false);
   });
 
   it('is credited alongside the rebels on a timeout', () => {
     const state = stateWith({
-      roles: { hero: 'rebel', slow: 'peacekeeper' },
+      roles: { hero: 'rebel', slow: 'rebel' },
       specialRoles: { slow: 'procrastinator' },
       winner: 'rebels',
       endReason: 'timeout',
@@ -113,17 +113,19 @@ describe('isSidelined', () => {
 });
 
 describe('maxSpecialRolesFor', () => {
-  it('always leaves a plain peacekeeper behind', () => {
-    for (let n = 3; n <= 10; n++) {
-      const rebels = n <= 4 ? 1 : n <= 7 ? 2 : 3;
-      expect(maxSpecialRolesFor(n)).toBeLessThanOrEqual(n - rebels - 1);
-    }
-  });
-
   it('never offers more than the three roles that exist', () => {
     for (let n = 3; n <= 10; n++) {
       expect(maxSpecialRolesFor(n)).toBeLessThanOrEqual(SPECIAL_ROLES.length);
     }
+  });
+
+  it('has no room for a Procrastinator at 3-4 players — there is only one rebel', () => {
+    expect(maxSpecialRolesFor(3)).toBe(1); // opportunist or folk-hero only
+    expect(maxSpecialRolesFor(4)).toBe(2); // both opportunist and folk-hero fit, still no Procrastinator
+  });
+
+  it('fits all three from 5 players up', () => {
+    for (let n = 5; n <= 10; n++) expect(maxSpecialRolesFor(n)).toBe(SPECIAL_ROLES.length);
   });
 });
 
@@ -135,12 +137,14 @@ describe('assignRoles', () => {
     ids.forEach((id) => expect(['rebel', 'peacekeeper']).toContain(roles[id]));
   });
 
-  // Special roles take peacekeeper seats, so the rebel count — and the win
-  // balance tuned around it — is identical whether they are on or off.
-  it('never hands a special role to a rebel', () => {
+  // The Procrastinator takes a rebel's seat; Opportunist and Folk Hero take a
+  // peacekeeper's — so the rebel count stays whatever it would've been anyway.
+  it('hands the Procrastinator to a rebel and the rest to peacekeepers', () => {
     for (let i = 0; i < 100; i++) {
       const { roles, specialRoles } = assignRoles(ids, [...SPECIAL_ROLES]);
-      Object.keys(specialRoles).forEach((id) => expect(roles[id]).toBe('peacekeeper'));
+      Object.entries(specialRoles).forEach(([id, role]) => {
+        expect(roles[id]).toBe(role === 'procrastinator' ? 'rebel' : 'peacekeeper');
+      });
     }
   });
 
@@ -164,6 +168,25 @@ describe('assignRoles', () => {
       const { roles, specialRoles } = assignRoles(players, [...SPECIAL_ROLES]);
       const plain = players.filter((p) => roles[p] === 'peacekeeper' && !specialRoles[p]);
       expect(plain.length).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it('leaves a plain rebel even with every role switched on', () => {
+    for (let n = 3; n <= 10; n++) {
+      const players = Array.from({ length: n }, (_, i) => `p${i}`);
+      const { roles, specialRoles } = assignRoles(players, [...SPECIAL_ROLES]);
+      const plain = players.filter((p) => roles[p] === 'rebel' && !specialRoles[p]);
+      expect(plain.length).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it('never hands a Procrastinator to the sole rebel at 3-4 players', () => {
+    for (const n of [3, 4]) {
+      const players = Array.from({ length: n }, (_, i) => `p${i}`);
+      for (let i = 0; i < 50; i++) {
+        const { specialRoles } = assignRoles(players, ['procrastinator']);
+        expect(Object.values(specialRoles)).not.toContain('procrastinator');
+      }
     }
   });
 });

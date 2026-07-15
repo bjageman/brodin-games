@@ -59,6 +59,12 @@ describe('buildDeck', () => {
     expect(deck.filter(isSpecial)).toHaveLength(maxSpecialsFor(3));
     expect(deck.filter((c) => c === 'blank').length).toBeGreaterThan(0);
   });
+
+  it('deals a second bomb when the Folk Hero is in play', () => {
+    const deck = buildDeck(6, [], true);
+    expect(deck).toHaveLength(6 * CARDS_PER_PLAYER);
+    expect(deck.filter((c) => c === 'explode')).toHaveLength(2);
+  });
 });
 
 describe('dealHands', () => {

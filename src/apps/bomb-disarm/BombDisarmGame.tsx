@@ -355,11 +355,12 @@ export default function BombDisarmGame({
   // ---- Host: deal a fresh game ----
   function dealGame(): GameState {
     const ids = roster.map((p) => p.id);
-    const deck = buildDeck(roster.length, specialsForDeal(code, roster.length));
     const { roles: nextRoles, specialRoles: nextSpecialRoles } = assignRoles(
       ids,
-      specialRolesForDeal(code, roster.length),
+      specialRolesForDeal(code),
     );
+    const folkHeroInPlay = Object.values(nextSpecialRoles).includes('folk-hero');
+    const deck = buildDeck(roster.length, specialsForDeal(code, roster.length), folkHeroInPlay);
 
     return {
       ...EMPTY,
