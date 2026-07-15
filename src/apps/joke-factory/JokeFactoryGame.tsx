@@ -7,7 +7,8 @@ import { useJokeFactoryHost } from './useJokeFactoryHost';
 import JokeFactoryViews from './components/JokeFactoryViews';
 import { WRITING_DURATION_MS, VOTING_DURATION_MS, RESULTS_DURATION_MS } from './constants';
 import { audioManager } from '../../shared/utils/audio';
-import type { DebugAction } from '../../shared/components/DebugWidget';
+import { DEBUG_MODE } from '../../shared/constants';
+import { useJokeFactoryDebug } from './useJokeFactoryDebug';
 
 interface JokeFactorySnapshot {
   gamePhase: JokeFactoryPhase;
@@ -111,6 +112,36 @@ export default function JokeFactoryGame({
       payload: fullState,
     });
   }
+
+  const { isTimerPaused, handleDebugHostAction, getDebugActions } = useJokeFactoryDebug({
+    isHost,
+    playerId,
+    sendMessage,
+    phase,
+    round,
+    roster,
+    promptsRef,
+    matchupsRef,
+    currentMatchIndexRef,
+    round3Data,
+    revealEndTimestamp,
+    writingEndTimestamp,
+    votingEndTimestamp,
+    resultsEndTimestamp,
+    setRevealEndTimestamp,
+    setWritingEndTimestamp,
+    setVotingEndTimestamp,
+    setResultsEndTimestamp,
+    handleClientSubmitAnswers,
+    autoSubmitAnswers,
+    handleClientSubmitVote,
+    revealRound3Results,
+    revealMatchupResults,
+    handleResultsTimeout,
+    handleNextRound,
+    onQuit,
+    broadcastState,
+  });
 
   // Save state snapshots on change
   useEffect(() => {
@@ -558,103 +589,11 @@ export default function JokeFactoryGame({
 
   // Register debug actions with GameShell
   useEffect(() => {
-    if (onRegisterDebugActions) {
-      const actions: DebugAction[] = [];
-
-      if (phase === 'writing') {
-        actions.push({
-          label: 'Simulate Answers for Others',
-          variant: 'success',
-          onClick: () => {
-            roster.forEach((p) => {
-              if (p.id !== playerId) {
-                const prompts = promptsRef.current[p.id] || [];
-                const answers: Record<string, string> = {};
-                prompts.forEach((pr, idx) => {
-                  answers[pr.id] = `Funny joke ${idx + 1} from ${p.name}!`;
-                });
-                handleClientSubmitAnswers(p.id, answers);
-              }
-            });
-          },
-        });
-        actions.push({
-          label: 'Skip Writing Phase',
-          variant: 'warning',
-          onClick: () => {
-            autoSubmitAnswers();
-          },
-        });
-      } else if (phase === 'voting') {
-        actions.push({
-          label: 'Simulate Votes for Others',
-          variant: 'success',
-          onClick: () => {
-            if (roundRef.current === 3) {
-              if (!round3Data) return;
-              roster.forEach((p) => {
-                if (p.id !== playerId) {
-                  const options = roster.filter((item) => item.id !== p.id);
-                  if (options.length > 0) {
-                    const pick = options[Math.floor(Math.random() * options.length)].id;
-                    handleClientSubmitVote(p.id, pick);
-                  }
-                }
-              });
-            } else {
-              const currentMatch = matchupsRef.current[currentMatchIndexRef.current];
-              if (!currentMatch) return;
-              roster.forEach((p) => {
-                if (p.id !== currentMatch.leftPlayerId && p.id !== currentMatch.rightPlayerId && p.id !== playerId) {
-                  const pick = Math.random() > 0.5 ? 'left' : 'right';
-                  handleClientSubmitVote(p.id, pick);
-                }
-              });
-            }
-          },
-        });
-        actions.push({
-          label: 'Skip Matchup',
-          variant: 'warning',
-          onClick: () => {
-            if (roundRef.current === 3) {
-              if (round3Data) revealRound3Results(round3Data);
-            } else {
-              revealMatchupResults(matchupsRef.current);
-            }
-          },
-        });
-      } else if (phase === 'results') {
-        actions.push({
-          label: 'Skip Results Display',
-          variant: 'warning',
-          onClick: () => {
-            handleResultsTimeout();
-          },
-        });
-      } else if (phase === 'leaderboard') {
-        if (round < 3) {
-          actions.push({
-            label: `Start Round ${round + 1}`,
-            variant: 'primary',
-            onClick: () => {
-              handleNextRound();
-            },
-          });
-        } else {
-          actions.push({
-            label: 'End Game',
-            variant: 'danger',
-            onClick: () => {
-              onQuit();
-            },
-          });
-        }
-      }
-
-      onRegisterDebugActions(actions, phase);
+    if (DEBUG_MODE && onRegisterDebugActions) {
+      onRegisterDebugActions(getDebugActions(), phase);
     }
-  }, [phase, roster, playerPrompts, matchups, currentMatchIndex, round3Data, round, onRegisterDebugActions]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, isTimerPaused, promptsRef.current, matchupsRef.current, currentMatchIndexRef.current, round3Data, round, onRegisterDebugActions]);
 
   // Message Handler Registration
   useEffect(() => {
@@ -679,6 +618,11 @@ export default function JokeFactoryGame({
 
           setMyVote(null);
         }
+      } else if (type === 'debug-host-action') {
+        if (isHost) {
+          const payloadObj = payload as { action: string; [key: string]: unknown };
+          handleDebugHostAction(payloadObj.action, payloadObj);
+        }
       } else if (isHost) {
         if (type === 'submit-answers') {
           if (senderId) {
@@ -693,7 +637,7 @@ export default function JokeFactoryGame({
         }
       }
     });
-  }, [isHost, roster]);
+  }, [isHost, roster, handleDebugHostAction]);
 
   const prompts = playerPrompts[playerId] || [];
   const submissionCount = Object.keys(playerAnswers).length;
