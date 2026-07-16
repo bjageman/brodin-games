@@ -37,3 +37,24 @@ export function clearSnapshot(key: string): void {
     // Nothing more to do.
   }
 }
+
+// Wipe every sessionStorage entry tied to a game session when a player
+// deliberately leaves, so nothing lingers to slow a later session or resume
+// stale state. This sweeps ALL keys scoped to the room code — not just
+// gameSnapshotKey — because some games (Fake It, Joke Factory) persist under
+// their own `*-snap-<code>` keys. The room code is uppercase and the retained
+// player id is lowercase, so this never touches player identity.
+export function clearGameSession(code: string): void {
+  try {
+    const doomed: string[] = [];
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const key = sessionStorage.key(i);
+      if (key && code && key.includes(code)) doomed.push(key);
+    }
+    doomed.forEach((key) => sessionStorage.removeItem(key));
+  } catch {
+    // Storage unavailable (private browsing, etc.) — nothing to clear.
+  }
+  clearSnapshot(HOST_ROUTE_KEY);
+  clearSnapshot(JOIN_ROUTE_KEY);
+}

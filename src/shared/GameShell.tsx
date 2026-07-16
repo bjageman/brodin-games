@@ -3,10 +3,8 @@ import { useGameSocket } from './hooks/useGameSocket';
 import {
   saveSnapshot,
   loadSnapshot,
-  clearSnapshot,
   gameSnapshotKey,
-  HOST_ROUTE_KEY,
-  JOIN_ROUTE_KEY,
+  clearGameSession,
 } from './utils/sessionSnapshot';
 import { JOIN_MAX_ATTEMPTS, JOIN_RETRY_INTERVAL_MS, GAME_START_RESENDS, GAME_START_RESEND_INTERVAL_MS, DEBUG_MODE } from './constants';
 import type { Envelope, JoinAckPayload, JoinRequestPayload, PlayerInfo, RosterUpdatePayload } from './types';
@@ -215,10 +213,10 @@ export default function GameShell({
   }
 
   const goToMainMenu = () => {
-    // Clear snapshots so a later Host/Join doesn't resume into a game we explicitly left.
-    clearSnapshot(gameSnapshotKey(code));
-    clearSnapshot(HOST_ROUTE_KEY);
-    clearSnapshot(JOIN_ROUTE_KEY);
+    // Wipe every snapshot tied to this room — including the games that persist
+    // under their own keys — so nothing lingers to slow a later session or
+    // resume into a game we explicitly left.
+    clearGameSession(code);
     window.location.hash = '#/';
   };
 
