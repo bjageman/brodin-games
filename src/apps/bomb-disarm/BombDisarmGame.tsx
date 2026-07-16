@@ -465,10 +465,22 @@ export default function BombDisarmGame({
   }
 
   // ---- Debug (host authority) ----
+  // ---- Host (debug only): cancel a pending special the auto-answer can't
+  // resolve — a User Manual or Crossed Wires with no valid face-down target
+  // left — so the debug panel never gets stuck on "Answer for …". Consumes the
+  // special's turn like a resolved effect would, so revealing can carry on.
+  function debugClearEffect() {
+    if (!pendingEffect) return;
+    advanceTurn(
+      { ...state, pendingEffect: null, peek: null, effectNote: '🧹 (debug) cleared a stuck special' },
+      lastReveal?.targetId ?? '',
+    );
+  }
+
   const { handleDebugHostAction, getDebugActions } = useDebugActions({
     isHost, playerId, roster, nameOf, sendMessage,
     phase, winner, hands, activePlayerId, pendingRescue, pendingEffect, peek, specialRoles, opportunistTeam,
-    resolveReveal, handleEffectChoice, handleRescue, handleDeclare, goToMemorize, goToTable,
+    resolveReveal, handleEffectChoice, handleRescue, handleDeclare, goToMemorize, goToTable, clearEffect: debugClearEffect,
   });
 
   // ---- Message handler ----
