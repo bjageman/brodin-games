@@ -79,30 +79,64 @@ export function RoundSummaryOverlay({ summary }: { summary: { blanks: number; wi
   );
 }
 
-// The cards cut in the round that just ended, shown face-up while everyone
-// studies the fresh deal — a between-rounds beat so the table sees what left
-// the deck (and can count the wires still out there).
-function DiscardRecap({ cards, className }: { cards: Card[]; className?: string }) {
+
+
+export function DiscardRecapView({
+  isHost, isDisplay, round, discardRecap, onStartNextRound, onQuit,
+}: {
+  isHost: boolean; isDisplay: boolean; round: number; discardRecap: Card[] | null;
+  onStartNextRound: () => void; onQuit: () => void;
+}) {
+  const showButton = isHost && !isDisplay;
   return (
-    <div className={cn('flex min-h-0 flex-col', className)}>
-      <span className="shrink-0 pb-1 text-center font-display text-[10px] font-black uppercase tracking-widest text-bomb-bolt sm:text-xs">
-        ✂️ Cut last round
-      </span>
-      <div className="min-h-0 flex-1">
-        <HandRow hand={cards} faceUp tappable={false} />
+    <BoardFrame onQuit={onQuit}>
+      <div className="flex h-full flex-col p-4 items-center justify-between">
+        <div className="text-center space-y-2 mt-4">
+          <h2 className="font-display text-lg font-black uppercase tracking-wider text-bomb-bolt sm:text-2xl animate-pulse">
+            Round {round - 1} ended
+          </h2>
+          <p className="text-sm font-semibold text-gray-300">
+            Discarded last round:
+          </p>
+        </div>
+
+        <div className="w-full max-w-2xl min-h-0 flex-1 flex items-center justify-center py-4">
+          {discardRecap && discardRecap.length > 0 ? (
+            <div className="w-full">
+              <HandRow hand={discardRecap} faceUp tappable={false} />
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400 italic">No cards were discarded (Smoke round or empty discard).</p>
+          )}
+        </div>
+
+        <div className="mb-4">
+          {showButton ? (
+            <button
+              type="button"
+              onClick={onStartNextRound}
+              className="rounded-full bg-bomb-bolt px-6 py-3 font-display text-sm font-black uppercase tracking-wider text-bomb-ink shadow-lg transition-transform hover:scale-[1.03] sm:text-base animate-pulse"
+            >
+              Start Next Round - Tell players to pick up their phone
+            </button>
+          ) : (
+            <p className="text-center text-sm font-bold uppercase tracking-widest text-bomb-bolt animate-pulse">
+              Waiting for host to start the next round...
+            </p>
+          )}
+        </div>
       </div>
-    </div>
+    </BoardFrame>
   );
 }
 
 export function MemorizeView({
-  role, special, hand, isDisplay, isHost, round, wiresRevealed, playerCount, extraRebels, discardRecap, onReady, onQuit,
+  role, special, hand, isDisplay, isHost, round, wiresRevealed, playerCount, extraRebels, onReady, onQuit,
 }: {
   role: Role | undefined; special?: SpecialRole; hand: Card[]; isDisplay: boolean; isHost: boolean;
   round: number; wiresRevealed: number; playerCount: number; extraRebels: number;
-  discardRecap: Card[] | null; onReady: () => void; onQuit: () => void;
+  onReady: () => void; onQuit: () => void;
 }) {
-  const hasRecap = round > 1 && !!discardRecap && discardRecap.length > 0;
   return (
     <BoardFrame onQuit={onQuit}>
       <div className="flex h-full flex-col p-3">
@@ -115,15 +149,12 @@ export function MemorizeView({
           </p>
         </div>
 
-        <div className="flex h-[58%] shrink-0 flex-col gap-2 py-2">
-          {hasRecap && (
-            <DiscardRecap cards={discardRecap} className={isDisplay ? 'flex-1' : 'flex-[2]'} />
-          )}
-          <div className="min-h-0 flex-[3]">
+        <div className="flex h-[58%] shrink-0 flex-col gap-2 py-2 justify-center">
+          <div className="min-h-0 flex-1">
             {isDisplay
               ? (
                 <p className="flex h-full items-center justify-center text-sm text-gray-300">
-                  {hasRecap ? 'Players are studying their new hands…' : 'Players are memorizing their hands…'}
+                  Players are studying their new hands…
                 </p>
               )
               : <HandRow hand={hand} faceUp tappable={false} />}
@@ -139,7 +170,7 @@ export function MemorizeView({
                 onClick={onReady}
                 className="rounded-full bg-bomb-bolt px-5 py-2 font-display text-xs font-black uppercase tracking-wider text-bomb-ink shadow-lg transition-transform hover:scale-[1.03] sm:text-sm"
               >
-                Everyone's Ready — Deal the Table
+                Everyone's Ready
               </button>
             )}
           </div>
