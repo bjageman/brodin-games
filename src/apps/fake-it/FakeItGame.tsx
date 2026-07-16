@@ -463,6 +463,7 @@ export default function FakeItGame({
         setDrawingRound(1);
         setLines([]);
         applyVotes({});
+        setMyVote(null); // host manages its own state, so reset its vote here too
         setScores(initialScores);
         setRoundPoints({});
         setRoleRevealEndTimestamp(revealEnd);
@@ -592,7 +593,11 @@ export default function FakeItGame({
           setVoteEndTimestamp(state.voteEndTimestamp);
           setGuessEndTimestamp(state.guessEndTimestamp);
 
-          setMyVote(null);
+          // Keep my own vote in sync with the authoritative tally instead of
+          // blanking it on every broadcast — otherwise the moment the host
+          // echoes my vote back, my UI drops it and asks me to vote again.
+          // A new round clears the tally, so this also resets it correctly.
+          setMyVote(state.votes[playerId] ?? null);
         }
       } else if (type === 'debug-host-action') {
         if (isHost) {
@@ -601,7 +606,8 @@ export default function FakeItGame({
       } else if (isHost) {
         if (type === 'submit-vote') {
           if (senderId) {
-            handleClientSubmitVote(senderId, (payload as { choice: string }).choice);
+            // handleVoteSubmit sends { targetId }, not { choice }.
+            handleClientSubmitVote(senderId, (payload as { targetId: string }).targetId);
           }
         } else if (type === 'draw-line') {
           if (senderId) {
