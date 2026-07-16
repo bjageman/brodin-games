@@ -1,4 +1,4 @@
-export type BombPhase = 'starting' | 'role-reveal' | 'memorize' | 'table' | 'results';
+export type BombPhase = 'starting' | 'role-reveal' | 'discard-recap' | 'memorize' | 'table' | 'results';
 
 export type SpecialCardType =
   | 'silence'
