@@ -241,7 +241,7 @@ export function TableView({
             <p className="flex h-full items-center justify-center text-sm text-gray-300">Watching the table…</p>
           ) : (
             <>
-              <HandRow hand={hand} faceUp={false} tappable={!isMyTurn && !pendingWinner} onTap={onTap} />
+              <HandRow hand={hand} faceUp={false} tappable={!isMyTurn && !pendingWinner} onTap={onTap} smokeActive={smokeActive} />
               {isMyTurn && !pendingWinner && (
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-bomb-bg/50 backdrop-blur-[1px]">
                   <span className="rounded-xl border border-white/15 bg-bomb-board/90 px-4 py-2 text-xs font-bold text-gray-100">

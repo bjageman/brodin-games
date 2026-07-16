@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { DiscardRecapView } from './components/BombViews';
+import { BombCard } from './components/BombBoard';
 import type { Card } from './types';
 
 function renderDiscardRecap(round: number, discardRecap: Card[] | null, isHost: boolean = true) {
@@ -39,5 +40,43 @@ describe('DiscardRecapView', () => {
   it('shows a wait message for non-host players', () => {
     renderDiscardRecap(2, [], false);
     expect(screen.getByText(/Waiting for host to start/i)).toBeInTheDocument();
+  });
+});
+
+describe('BombCard smoke bomb behavior', () => {
+  it('obscures blank cards as Smoke Screen when smokeActive is true', () => {
+    render(
+      <BombCard
+        card={{ type: 'blank', revealed: true }}
+        faceUp={false}
+        smokeActive={true}
+      />
+    );
+    expect(screen.getByText('Smoke Screen')).toBeInTheDocument();
+    expect(screen.queryByText('Blank')).not.toBeInTheDocument();
+  });
+
+  it('obscures wire cards as Smoke Screen when smokeActive is true', () => {
+    render(
+      <BombCard
+        card={{ type: 'wire', revealed: true }}
+        faceUp={false}
+        smokeActive={true}
+      />
+    );
+    expect(screen.getByText('Smoke Screen')).toBeInTheDocument();
+    expect(screen.queryByText('Cut Wire')).not.toBeInTheDocument();
+  });
+
+  it('does not obscure explode cards even when smokeActive is true', () => {
+    render(
+      <BombCard
+        card={{ type: 'explode', revealed: true }}
+        faceUp={false}
+        smokeActive={true}
+      />
+    );
+    expect(screen.getByText('Bomb')).toBeInTheDocument();
+    expect(screen.queryByText('Smoke Screen')).not.toBeInTheDocument();
   });
 });

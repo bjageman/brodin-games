@@ -34,3 +34,6 @@ dist-ssr
 
 # Design source (Canva exports) — art used at runtime lives in public/games/
 Design Docs/
+
+# Local testing and debug folder
+local-only/
