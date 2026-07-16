@@ -36,9 +36,21 @@ export function RoleReveal({ role, special, isDisplay, seconds }: {
 
 // Each phone only renders its own hand, so a losing flip on someone else's phone
 // would otherwise be invisible to everyone but its owner.
-export function VerdictOverlay({ reveal, winner }: { reveal: LastReveal | null; winner: Winner }) {
+export function VerdictOverlay({
+  reveal, winner, isDisplay, playerId, state,
+}: {
+  reveal: LastReveal | null; winner: Winner; isDisplay: boolean; playerId: string; state: GameState;
+}) {
   if (!reveal) return null;
   const rebelsWon = winner === 'rebels';
+  const won = !isDisplay ? didWin(playerId, state) : false;
+
+  const role = state.roles[playerId];
+  const special = state.specialRoles[playerId];
+  const roleLabel = special
+    ? special === 'procrastinator' ? 'Procrastinator' : special === 'folk-hero' ? 'Folk Hero' : 'Opportunist'
+    : role === 'rebel' ? 'Rebel' : 'Peacekeeper';
+
   return (
     <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-bomb-bg/90 backdrop-blur-sm">
       <div className="h-[38%]">
@@ -54,9 +66,21 @@ export function VerdictOverlay({ reveal, winner }: { reveal: LastReveal | null; 
             <>Out of rounds — the bomb was never disarmed</>
           )}
         </p>
-        <p className={cn('font-display text-2xl font-black uppercase tracking-widest', rebelsWon ? 'text-bomb-rebel' : 'text-bomb-bolt')}>
-          {rebelsWon ? 'Rebels Win' : 'Peacekeepers Win'}
-        </p>
+        
+        {isDisplay ? (
+          <p className={cn('font-display text-2xl font-black uppercase tracking-widest', rebelsWon ? 'text-bomb-rebel' : 'text-bomb-bolt')}>
+            {rebelsWon ? 'Rebels Win' : 'Peacekeepers Win'}
+          </p>
+        ) : (
+          <div className="space-y-1">
+            <p className={cn('font-display text-3xl font-black uppercase tracking-widest', won ? 'text-bomb-bolt' : 'text-bomb-rebel')}>
+              {won ? 'You Win' : 'You Lose'}
+            </p>
+            <p className="font-display text-sm font-black uppercase tracking-wider text-gray-300">
+              {roleLabel}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -293,7 +317,15 @@ export function TableView({
 
       {roundSummary && !pendingWinner && <RoundSummaryOverlay summary={roundSummary} />}
 
-      {pendingWinner && <VerdictOverlay reveal={lastReveal} winner={pendingWinner} />}
+      {pendingWinner && (
+        <VerdictOverlay
+          reveal={lastReveal}
+          winner={pendingWinner}
+          isDisplay={isDisplay}
+          playerId={playerId}
+          state={state}
+        />
+      )}
     </BoardFrame>
   );
 }
