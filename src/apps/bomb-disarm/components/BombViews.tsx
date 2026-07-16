@@ -102,7 +102,7 @@ export function DiscardRecapView({
 
         <div className="w-full max-w-2xl min-h-0 flex-1 flex items-center justify-center py-4">
           {discardRecap && discardRecap.length > 0 ? (
-            <div className="w-full">
+            <div className="w-full h-40 sm:h-52">
               <HandRow hand={discardRecap} faceUp tappable={false} />
             </div>
           ) : (
