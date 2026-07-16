@@ -32,10 +32,14 @@ export default function DebugWidget({
 }: DebugWidgetProps) {
   const [isExpanded, setIsExpanded] = useState(() => {
     try {
-      return localStorage.getItem('brodin_debug_expanded') !== 'false';
+      const stored = localStorage.getItem('brodin_debug_expanded');
+      if (stored !== null) return stored !== 'false';
     } catch {
-      return true;
+      // Ignore storage errors in private browsing modes
     }
+    // No saved preference yet: the host opens it for solo testing, but joiners
+    // start collapsed so it doesn't cover their screen.
+    return isHost;
   });
 
   const toggleExpand = () => {
