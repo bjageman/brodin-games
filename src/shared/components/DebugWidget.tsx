@@ -16,6 +16,9 @@ interface DebugWidgetProps {
   rosterCount: number;
   isConnected: boolean;
   actions: DebugAction[];
+  // When provided, a button fires resolveOnClick(idx) instead of the (possibly
+  // stale) action.onClick captured in the rendered list — see GameShell.
+  resolveOnClick?: (idx: number) => void;
 }
 
 export default function DebugWidget({
@@ -25,6 +28,7 @@ export default function DebugWidget({
   rosterCount,
   isConnected,
   actions,
+  resolveOnClick,
 }: DebugWidgetProps) {
   const [isExpanded, setIsExpanded] = useState(() => {
     try {
@@ -112,7 +116,7 @@ export default function DebugWidget({
                 {actions.map((act, idx) => (
                   <button
                     key={idx}
-                    onClick={act.onClick}
+                    onClick={resolveOnClick ? () => resolveOnClick(idx) : act.onClick}
                     disabled={act.disabled}
                     className={cn(
                       "w-full rounded-lg py-2 px-3 text-xs font-bold text-center transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-offset-slate-900",
