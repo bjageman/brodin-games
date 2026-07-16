@@ -12,6 +12,11 @@ export default {
         // script for the names painted on the lobby easels.
         serifDisplay: ['"Playfair Display"', 'Georgia', 'serif'],
         script: ['Caveat', 'cursive'],
+        // Quiz Quest's retro dungeon-crawler type system: Silkscreen is the
+        // chunky blocky-uppercase display face (names, labels, the question),
+        // Pixelify Sans the more readable pixel face for answer/body text.
+        pixel: ['"Pixelify Sans"', 'ui-monospace', 'monospace'],
+        pixelBlock: ['Silkscreen', 'ui-monospace', 'monospace'],
       },
       colors: {
         // Shared app palette, aligned with the bento homepage: navy surfaces,
@@ -50,6 +55,20 @@ export default {
         // background, so `dark`/`light` below are ours: the play screens
         // (prompt / drawing / round totals) use light type and need `dark`,
         // while the lobby / vote / final screens use brown type on `light`.
+        // Bomb Disarm palette, sampled from the Canva mockup
+        // (Design Docs/Bomb Defuse/Cards Landscape.png).
+        bomb: {
+          bg: '#262f71',
+          board: '#2d3782',
+          card: '#665adb',
+          cardEdge: '#4b3fc0',
+          face: '#9a95dd',
+          bolt: '#fcec79',
+          boltEdge: '#e0952c',
+          wire: '#1d97ad',
+          ink: '#1a1f4d',
+          rebel: '#f9749f',
+        },
         fakeit: {
           dark: '#17100d',
           light: '#ffffff',
@@ -60,6 +79,21 @@ export default {
           money: '#0c1a3b',  // navy currency figures
           easel: '#f6a554',  // easel wood
           easelDark: '#bf7337',
+        },
+        // Quiz Quest palette, sampled from the dungeon-crawler mockup
+        // (Design Docs/Quiz Quest/Quiz Quest Main Layout.png): grim stone walls,
+        // torchlit gold trim, blood-red danger, healthy green HP.
+        quiz: {
+          bg: '#1c1c1c',
+          stone: '#3a3a3a',
+          stoneLight: '#575757',
+          panel: '#141414',
+          gold: '#f4b324',
+          goldDark: '#a86f16',
+          hp: '#2f9f2a',
+          hpTrack: '#4a4a4a',
+          danger: '#c23b3b',
+          ink: '#e8e6df',
         },
       },
       keyframes: {
@@ -78,11 +112,29 @@ export default {
           '0%, 18%': { transform: 'translateX(0)' },
           '100%': { transform: 'translateX(100%)' },
         },
+        verdictIn: {
+          '0%': { transform: 'scale(0.7)', opacity: '0' },
+          '100%': { transform: 'scale(1)', opacity: '1' },
+        },
+        // Quiz Quest: the monster bobs in place, and torch/ember light breathes.
+        monsterFloat: {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-8px)' },
+        },
+        torchFlicker: {
+          '0%, 100%': { opacity: '0.85' },
+          '25%': { opacity: '1' },
+          '50%': { opacity: '0.7' },
+          '75%': { opacity: '0.95' },
+        },
       },
       animation: {
         shake: 'shake 0.3s ease-in-out',
         curtainLeft: 'curtainLeft 1.6s cubic-bezier(0.7, 0, 0.3, 1) forwards',
         curtainRight: 'curtainRight 1.6s cubic-bezier(0.7, 0, 0.3, 1) forwards',
+        verdictIn: 'verdictIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1)',
+        monsterFloat: 'monsterFloat 3.5s ease-in-out infinite',
+        torchFlicker: 'torchFlicker 1.8s ease-in-out infinite',
       },
     },
   },

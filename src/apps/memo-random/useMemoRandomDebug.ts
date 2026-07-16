@@ -298,7 +298,9 @@ export function useMemoRandomDebug(ctx: MemoDebugCtx) {
       });
     }
 
-    if (phase === 'round1') {
+    // The host's phase flips to '-waiting' the moment it submits, which is
+    // exactly when it still needs to answer for everyone who hasn't.
+    if (phase === 'round1' || phase === 'round1-waiting') {
       actionsList.push({
         label: '🤖 Simulate Words for Others',
         onClick: () => triggerAction('simulate-words'),
@@ -309,7 +311,7 @@ export function useMemoRandomDebug(ctx: MemoDebugCtx) {
         onClick: () => triggerAction('skip-round1'),
         variant: 'danger',
       });
-    } else if (phase === 'round2') {
+    } else if (phase === 'round2' || phase === 'round2-waiting') {
       actionsList.push({
         label: '🤖 Simulate Sheets for Others',
         onClick: () => triggerAction('simulate-sheets'),

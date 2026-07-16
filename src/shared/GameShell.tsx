@@ -3,10 +3,8 @@ import { useGameSocket } from './hooks/useGameSocket';
 import {
   saveSnapshot,
   loadSnapshot,
-  clearSnapshot,
   gameSnapshotKey,
-  HOST_ROUTE_KEY,
-  JOIN_ROUTE_KEY,
+  clearGameSession,
 } from './utils/sessionSnapshot';
 import { JOIN_MAX_ATTEMPTS, JOIN_RETRY_INTERVAL_MS, GAME_START_RESENDS, GAME_START_RESEND_INTERVAL_MS, DEBUG_MODE } from './constants';
 import type { Envelope, JoinAckPayload, JoinRequestPayload, PlayerInfo, RosterUpdatePayload } from './types';
@@ -100,8 +98,14 @@ export default function GameShell({
   // See GamePlayProps.freshStart above.
   const [freshStart, setFreshStart] = useState(false);
 
-  // Active game debug state
+  // Active game debug state. The rendered list (activeGameDebugActions) is only
+  // updated when the buttons actually change (label/variant/count) so registering
+  // fresh actions every render doesn't loop the shell. But each action's onClick
+  // is a fresh closure over current game state every render, so we also stash the
+  // latest actions in a ref and fire onClicks from there — otherwise a debug
+  // button would keep calling a stale closure and, e.g., undo a prior reveal.
   const [activeGameDebugActions, setActiveGameDebugActions] = useState<DebugAction[]>([]);
+  const activeGameDebugActionsRef = useRef<DebugAction[]>([]);
   const [activeGameDebugPhase, setActiveGameDebugPhase] = useState<string>('');
   // Set by the active game (see GamePlayProps.onGameBgChange). Tagged with the
   // game that set it so one game's palette can't bleed into another's.
@@ -123,16 +127,98 @@ export default function GameShell({
   // reaches it (mirrors useGameSocket's own onMessageRef idiom).
   const gameMessageHandlerRef = useRef<((envelope: Envelope) => void) | null>(null);
 
+  const sendMessageRef = useRef<((payload: unknown) => Promise<void>) | null>(null);
+  const sendMsg = (payload: unknown) => {
+    return sendMessageRef.current?.(payload) ?? Promise.resolve();
+  };
+
   useEffect(() => {
     if (phase === 'lobby') onIdlePrefetch?.();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, gameId]);
+  }, [phase, gameId, onIdlePrefetch]);
 
   // Merges into whatever the active game module saved under the same key.
   useEffect(() => {
     const current = loadSnapshot<Record<string, unknown>>(gameSnapshotKey(code)) ?? {};
     saveSnapshot(gameSnapshotKey(code), { ...current, phase, roster, gameId });
   }, [code, phase, roster, gameId]);
+
+  function hostReceiveJoinRequest(fromId: string, fromName: string) {
+    // Match by id only — two players can share a name, and matching by name would steal the wrong roster slot.
+    const existingMatch = rosterRef.current.find((p) => p.id === fromId);
+
+    // A retry from an already-joined player still gets re-acked, even mid-game.
+    if (phaseRef.current !== 'lobby' && phaseRef.current !== 'joining' && !existingMatch) {
+      sendMsg({
+        type: 'join-ack',
+        playerId: fromId,
+        timestamp: Date.now(),
+        payload: { accepted: false, reason: 'Game already in progress.' },
+      });
+      return;
+    }
+
+    if (!existingMatch && rosterRef.current.length >= maxPlayers) {
+      sendMsg({
+        type: 'join-ack',
+        playerId: fromId,
+        timestamp: Date.now(),
+        payload: { accepted: false, reason: `Room is full (max ${maxPlayers} players).` },
+      });
+      return;
+    }
+
+    // Reject duplicate names outright rather than merging — names are shown everywhere (voting, scoreboard).
+    const nameTaken = !existingMatch && rosterRef.current.some(
+      (p) => p.name.trim().toLowerCase() === fromName.trim().toLowerCase()
+    );
+    if (nameTaken) {
+      sendMsg({
+        type: 'join-ack',
+        playerId: fromId,
+        timestamp: Date.now(),
+        payload: { accepted: false, reason: 'That name is already taken in this room — pick a different one.' },
+      });
+      return;
+    }
+
+    const nextRoster = existingMatch
+      ? rosterRef.current.map((p) =>
+          p === existingMatch
+            ? { id: fromId, name: fromName }
+            : p
+        )
+      : [...rosterRef.current, { id: fromId, name: fromName }];
+    rosterRef.current = nextRoster;
+    setRoster(nextRoster);
+
+    sendMsg({
+      type: 'join-ack',
+      playerId: fromId,
+      timestamp: Date.now(),
+      payload: { accepted: true, gameId },
+    });
+    sendMsg({
+      type: 'roster-update',
+      timestamp: Date.now(),
+      payload: { players: nextRoster },
+    });
+  }
+
+  function hostReceiveLeaveLobby(fromId: string) {
+    if (!rosterRef.current.some((p) => p.id === fromId)) return;
+    const nextRoster = rosterRef.current.filter((p) => p.id !== fromId);
+    rosterRef.current = nextRoster;
+    setRoster(nextRoster);
+    sendMsg({ type: 'roster-update', timestamp: Date.now(), payload: { players: nextRoster } });
+  }
+
+  const goToMainMenu = () => {
+    // Wipe every snapshot tied to this room — including the games that persist
+    // under their own keys — so nothing lingers to slow a later session or
+    // resume into a game we explicitly left.
+    clearGameSession(code);
+    window.location.hash = '#/';
+  };
 
   const handleMessage = (data: unknown) => {
     const envelope = data as Envelope;
@@ -141,8 +227,25 @@ export default function GameShell({
       const payload = envelope.payload as JoinRequestPayload;
       const fromId = envelope.playerId;
       // Forward ref to hostReceiveJoinRequest (needs sendMessage, declared later) — fine, only called after mount.
-      // eslint-disable-next-line react-hooks/immutability
       if (fromId && payload?.name) hostReceiveJoinRequest(fromId, payload.name);
+    }
+
+    if (isHost && envelope.type === 'update-avatar') {
+      const payload = envelope.payload as { avatar: string };
+      const fromId = envelope.playerId;
+      if (fromId && payload?.avatar) {
+        const nextRoster = rosterRef.current.map((p) =>
+          p.id === fromId ? { ...p, avatar: payload.avatar } : p
+        );
+        rosterRef.current = nextRoster;
+        setRoster(nextRoster);
+        // Forward ref to sendMessage (declared later) — fine, only called after mount.
+        sendMsg({
+          type: 'roster-update',
+          timestamp: Date.now(),
+          payload: { players: nextRoster },
+        });
+      }
     }
 
     if (envelope.type === 'join-ack') {
@@ -169,7 +272,6 @@ export default function GameShell({
       if (isHost && phaseRef.current === 'lobby') {
         const fromId = envelope.playerId;
         // Forward ref to hostReceiveLeaveLobby (needs sendMessage, declared later) — fine, only called after mount.
-        // eslint-disable-next-line react-hooks/immutability
         if (fromId) hostReceiveLeaveLobby(fromId);
       }
     } else if (envelope.type === 'game-start') {
@@ -180,12 +282,20 @@ export default function GameShell({
     } else if (envelope.type === 'play-again') {
       // Roster stays untouched — everyone just returns to the same lobby.
       setPhase('lobby');
+    } else if (envelope.type === 'host-left') {
+      // The host quit, so there's no authority left to run the game — every
+      // other player is sent back to the main menu. (goToMainMenu is declared
+      // below; this handler only ever runs at message time, well after mount.)
+      if (!isHost) goToMainMenu();
     }
 
     gameMessageHandlerRef.current?.(envelope);
   };
 
   const { sendMessage, isConnected } = useGameSocket(code, handleMessage);
+  useEffect(() => {
+    sendMessageRef.current = sendMessage;
+  }, [sendMessage]);
 
   const addDebugBots = async (count: number) => {
     const BOT_NAMES = ['Bilbo', 'Frodo', 'Gandalf', 'Aragorn', 'Legolas', 'Gimli', 'Boromir', 'Samwise', 'Merry', 'Pippin', 'Galadriel', 'Elrond'];
@@ -203,76 +313,6 @@ export default function GameShell({
       });
     }
   };
-
-  function hostReceiveJoinRequest(fromId: string, fromName: string) {
-    // Match by id only — two players can share a name, and matching by name would steal the wrong roster slot.
-    const existingMatch = rosterRef.current.find((p) => p.id === fromId);
-
-    // A retry from an already-joined player still gets re-acked, even mid-game.
-    if (phaseRef.current !== 'lobby' && phaseRef.current !== 'joining' && !existingMatch) {
-      sendMessage({
-        type: 'join-ack',
-        playerId: fromId,
-        timestamp: Date.now(),
-        payload: { accepted: false, reason: 'Game already in progress.' },
-      });
-      return;
-    }
-
-    if (!existingMatch && rosterRef.current.length >= maxPlayers) {
-      sendMessage({
-        type: 'join-ack',
-        playerId: fromId,
-        timestamp: Date.now(),
-        payload: { accepted: false, reason: `Room is full (max ${maxPlayers} players).` },
-      });
-      return;
-    }
-
-    // Reject duplicate names outright rather than merging — names are shown everywhere (voting, scoreboard).
-    const nameTaken = !existingMatch && rosterRef.current.some(
-      (p) => p.name.trim().toLowerCase() === fromName.trim().toLowerCase()
-    );
-    if (nameTaken) {
-      sendMessage({
-        type: 'join-ack',
-        playerId: fromId,
-        timestamp: Date.now(),
-        payload: { accepted: false, reason: 'That name is already taken in this room — pick a different one.' },
-      });
-      return;
-    }
-
-    const nextRoster = existingMatch
-      ? rosterRef.current.map((p) =>
-          p === existingMatch
-            ? { id: fromId, name: fromName }
-            : p
-        )
-      : [...rosterRef.current, { id: fromId, name: fromName }];
-    rosterRef.current = nextRoster;
-    setRoster(nextRoster);
-
-    sendMessage({
-      type: 'join-ack',
-      playerId: fromId,
-      timestamp: Date.now(),
-      payload: { accepted: true, gameId },
-    });
-    sendMessage({
-      type: 'roster-update',
-      timestamp: Date.now(),
-      payload: { players: nextRoster },
-    });
-  }
-
-  function hostReceiveLeaveLobby(fromId: string) {
-    if (!rosterRef.current.some((p) => p.id === fromId)) return;
-    const nextRoster = rosterRef.current.filter((p) => p.id !== fromId);
-    rosterRef.current = nextRoster;
-    setRoster(nextRoster);
-    sendMessage({ type: 'roster-update', timestamp: Date.now(), payload: { players: nextRoster } });
-  }
 
   // Join handshake: retry until the host acks, mirrors botc's join-retry pattern.
   useEffect(() => {
@@ -308,12 +348,26 @@ export default function GameShell({
     setPhase('in-game');
   }
 
-  const goToMainMenu = () => {
-    // Clear snapshots so a later Host/Join doesn't resume into a game we explicitly left.
-    clearSnapshot(gameSnapshotKey(code));
-    clearSnapshot(HOST_ROUTE_KEY);
-    clearSnapshot(JOIN_ROUTE_KEY);
-    window.location.hash = '#/';
+  // A display host isn't on the roster, so it has no seat of its own to subtract.
+  const otherPlayerCount = Math.max(0, roster.length - (isHost && isDisplay ? 0 : 1));
+
+  const quit = () => {
+    if (isHost) {
+      // No host means no authority to run the game, so kick everyone back to the
+      // menu. ntfy is best-effort and we're about to tear down, so fire it a few
+      // times up front rather than on an interval that unmount would cancel.
+      for (let i = 0; i < GAME_START_RESENDS; i++) {
+        sendMessage({ type: 'host-left', playerId, timestamp: Date.now(), payload: {} });
+      }
+    } else {
+      sendMessage({ type: 'leave-lobby', playerId, timestamp: Date.now(), payload: {} });
+    }
+    goToMainMenu();
+  };
+
+  const requestQuit = () => {
+    if (otherPlayerCount === 0) quit();
+    else setShowQuitConfirm(true);
   };
 
 
@@ -361,7 +415,7 @@ export default function GameShell({
   const quitFromShell =
     phase === 'joining' || phase === 'join' || layoutProps.ownsHeader
       ? undefined
-      : () => setShowQuitConfirm(true);
+      : requestQuit;
 
   return (
     <PageLayout
@@ -393,10 +447,15 @@ export default function GameShell({
             minPlayers={minPlayers}
             roster={roster}
             isHost={isHost}
+            isDisplay={isDisplay}
             isConnected={isConnected}
             onStartGame={startGame}
-            onQuit={() => setShowQuitConfirm(true)}
+            onQuit={requestQuit}
             theme={theme}
+            lobbyExtra={gameConfig?.lobbyExtra}
+            playerTag={gameConfig?.playerTag}
+            playerId={playerId}
+            sendMessage={sendMessage}
           />
         )}
 
@@ -412,10 +471,21 @@ export default function GameShell({
             isDisplay={isDisplay}
             freshStart={freshStart}
             onRegisterMessageHandler={(handler) => { gameMessageHandlerRef.current = handler; }}
-            onQuit={goToMainMenu}
+            // Route through quit() so a host leaving mid-game broadcasts host-left
+            // and kicks the players, instead of just slipping out to the menu.
+            onQuit={quit}
             onRegisterDebugActions={(actions, gamePhase) => {
-              setActiveGameDebugActions(actions);
-              setActiveGameDebugPhase(gamePhase);
+              activeGameDebugActionsRef.current = actions; // always the freshest onClicks
+              setActiveGameDebugActions((prev) => {
+                if (
+                  prev.length === actions.length &&
+                  prev.every((act, idx) => act.label === actions[idx].label && act.variant === actions[idx].variant)
+                ) {
+                  return prev;
+                }
+                return actions;
+              });
+              setActiveGameDebugPhase((prev) => (prev === gamePhase ? prev : gamePhase));
             }}
             onGameBgChange={(className) => setGameBg({ gameId, className })}
           />
@@ -449,19 +519,21 @@ export default function GameShell({
                   ]
                 : activeGameDebugActions
             }
+            // In-game buttons fire the freshest closure from the ref (the rendered
+            // list can lag a render); the lobby buttons above own their onClicks.
+            resolveOnClick={
+              phase === 'lobby' ? undefined : (idx) => activeGameDebugActionsRef.current[idx]?.onClick()
+            }
           />
         )}
       </div>
 
       {showQuitConfirm && (
         <QuitConfirmModal
-          playerCount={Math.max(0, roster.length - (isHost && isDisplay ? 0 : 1))}
+          playerCount={otherPlayerCount}
           onConfirm={() => {
             setShowQuitConfirm(false);
-            if (!isHost) {
-              sendMessage({ type: 'leave-lobby', playerId, timestamp: Date.now(), payload: {} });
-            }
-            goToMainMenu();
+            quit();
           }}
           onCancel={() => setShowQuitConfirm(false)}
         />

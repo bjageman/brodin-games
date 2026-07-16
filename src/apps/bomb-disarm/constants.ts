@@ -1,29 +1,57 @@
-export const CARDS_PER_PLAYER = 6;
+export const CARDS_PER_PLAYER = 5;
+export const ROUNDS = 3;
 
-export const ROLE_REVEAL_DURATION_MS = 6000;   // show your team before the deal
-export const MEMORIZE_DURATION_MS = 60000;     // 60s to study your hand before it flips down
-
-// Peacekeepers always win at exactly 6 cut wires, regardless of player count
-// (big decks carry 8 wire cards, but only 6 are ever needed to disarm).
-export const WIRE_WIN_THRESHOLD = 6;
+export const ROLE_REVEAL_DURATION_MS = 6000;
+export const MEMORIZE_DURATION_MS = 60000;
+export const RESULT_REVEAL_DELAY_MS = 5000;
+// How long a User Manual holds a card face-up for the table before it turns back.
+export const PEEK_DURATION_MS = 5000;
+// How long the anonymous round tally sits after a Smoke Bomb round, before the
+// next round deals.
+export const ROUND_SUMMARY_DELAY_MS = 4000;
 
 // A client that missed the host's one-shot state broadcast (its message handler
 // wasn't registered yet when it landed) pulls current state on a retry loop.
 export const STATE_REQUEST_RETRY_INTERVAL_MS = 1000;
 export const STATE_REQUEST_MAX_ATTEMPTS = 10;
 
-// Deck: explode + wire + enough blanks that every player gets exactly 6 cards.
-export function deckCompositionFor(playerCount: number): {
+// The deck carries exactly one cut wire per player, and disarming the bomb means
+// cutting every one of them — so the number to win tracks the wire count.
+export function wiresToWin(playerCount: number): number {
+  return deckCompositionFor(playerCount).wire;
+}
+
+export function deckCompositionFor(
+  playerCount: number,
+  specialCount = 0,
+  folkHeroInPlay = false,
+): {
   explode: number;
   wire: number;
+  special: number;
   blank: number;
   total: number;
 } {
   const total = playerCount * CARDS_PER_PLAYER;
-  const explode = playerCount <= 7 ? 1 : 2;
-  const wire = playerCount <= 7 ? 6 : 8;
-  const blank = total - explode - wire;
-  return { explode, wire, blank, total };
+  const explode = (playerCount <= 7 ? 1 : 2) + (folkHeroInPlay ? 1 : 0);
+  // One cut wire per player.
+  const wire = playerCount;
+  const special = Math.min(specialCount, maxSpecialsFor(playerCount, folkHeroInPlay));
+  const blank = total - explode - wire - special;
+  return { explode, wire, special, blank, total };
+}
+
+// Specials are cut out of the blanks, so a small table can't hold all six: a
+// 3-player deck is 18 cards and 13 of them are already the bomb and the wires.
+// One blank is always left behind so the deck never turns into all-consequences.
+//
+// A Folk Hero can only spend their save once, so a deck with just one bomb
+// would have nothing left to threaten the table with after the first save.
+// An extra bomb keeps the danger alive for the rest of the game.
+export function maxSpecialsFor(playerCount: number, folkHeroInPlay = false): number {
+  const total = playerCount * CARDS_PER_PLAYER;
+  const explode = (playerCount <= 7 ? 1 : 2) + (folkHeroInPlay ? 1 : 0);
+  return Math.max(0, total - explode - playerCount - 1);
 }
 
 // Rebels: 1 for 3-4 players, 2 for 5-7, and a hidden 2-or-3 for 8-10 so the
@@ -32,4 +60,26 @@ export function rebelCountFor(playerCount: number): number {
   if (playerCount <= 4) return 1;
   if (playerCount <= 7) return 2;
   return Math.random() < 0.5 ? 2 : 3;
+}
+
+// What the table's team counter is allowed to print. Below 8 the count is fixed
+// by the player count anyway; at 8-10 it's randomised, so null means "show the
+// range" rather than handing the rebels their own headcount.
+export function knownRebelCountFor(playerCount: number): number | null {
+  return playerCount <= 7 ? rebelCountFor(playerCount) : null;
+}
+
+const HIDDEN_REBEL_RANGE = [2, 3];
+
+// `extraRebels` is the Opportunist once they've flipped to the rebels: they took
+// a peacekeeper's seat at deal time, and the flip is public, so the counter has
+// to move with them.
+export function teamCountLabels(playerCount: number, extraRebels = 0): { rebels: string; peacekeepers: string } {
+  const known = knownRebelCountFor(playerCount);
+  if (known !== null) {
+    const rebels = known + extraRebels;
+    return { rebels: String(rebels), peacekeepers: String(playerCount - rebels) };
+  }
+  const [lo, hi] = HIDDEN_REBEL_RANGE.map((n) => n + extraRebels);
+  return { rebels: `${lo}–${hi}`, peacekeepers: `${playerCount - hi}–${playerCount - lo}` };
 }

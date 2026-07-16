@@ -67,8 +67,24 @@ const FALLBACK_WORDS = JSON.parse(
 );
 
 function ntfyBaseUrl() {
-  const domain = NTFY_SERVER_URL.replace(/^(https?:\/\/)/, '');
-  const protocol = domain.startsWith('localhost') || domain.startsWith('127.0.0.1') ? 'http' : 'https';
+  const domain = NTFY_SERVER_URL.replace(/^(https?:\/\/|wss?:\/\/)/, '');
+  
+  let protocol = 'https';
+  if (NTFY_SERVER_URL.startsWith('http://') || NTFY_SERVER_URL.startsWith('ws://')) {
+    protocol = 'http';
+  } else if (NTFY_SERVER_URL.startsWith('https://') || NTFY_SERVER_URL.startsWith('wss://')) {
+    protocol = 'https';
+  } else {
+    const isLocal =
+      domain.startsWith('localhost') ||
+      domain.startsWith('127.0.0.1') ||
+      domain.startsWith('192.168.') ||
+      domain.startsWith('10.') ||
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(domain) ||
+      domain.endsWith('.local') ||
+      domain.includes('.local:');
+    protocol = isLocal ? 'http' : 'https';
+  }
   return `${protocol}://${domain}`;
 }
 
@@ -181,7 +197,7 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-class ApiBot {
+export class ApiBot {
   constructor(code, name, verbose) {
     this.name = name;
     this.verbose = verbose;
@@ -196,6 +212,7 @@ class ApiBot {
     this.currentMatchIndex = null;
     this.voteAcked = false;
     this.done = false;
+    this.lastCompletedPhase = null;
     this.abortController = new AbortController();
   }
 
@@ -273,6 +290,100 @@ class ApiBot {
       const won = envelope.payload.winnerPlayerIds.includes(this.playerId);
       this.log(`reached the winner screen (score: ${myScore}${won ? ', WINNER' : ''})`);
       this.finish('winner-announced');
+    } else if (envelope.type === 'joke-factory-state-update' && this.joined) {
+      this.handleJokeFactoryUpdate(envelope.payload);
+    }
+  }
+
+  async handleJokeFactoryUpdate(state) {
+    if (this.done) return;
+    const phase = state.phase;
+    const round = state.round;
+
+    if (phase === 'writing') {
+      const roundKey = `r${round}-writing`;
+      if (this.lastCompletedPhase === roundKey) return;
+
+      const myPrompts = state.playerPrompts[this.playerId];
+      if (!myPrompts || myPrompts.length === 0) return;
+
+      if (state.playerAnswers[this.playerId]) {
+        this.lastCompletedPhase = roundKey;
+        return;
+      }
+
+      this.lastCompletedPhase = roundKey;
+      const answers = {};
+      myPrompts.forEach((pr) => {
+        const adj = WORD_POOLS.adjective[Math.floor(Math.random() * WORD_POOLS.adjective.length)];
+        const noun = WORD_POOLS.noun[Math.floor(Math.random() * WORD_POOLS.noun.length)];
+        answers[pr.id] = `The ${adj} ${noun} (${this.name})`;
+      });
+
+      this.log(`submitting ${myPrompts.length} punchlines for round ${round}`);
+      await this.publish({
+        type: 'submit-answers',
+        playerId: this.playerId,
+        timestamp: Date.now(),
+        payload: { answers }
+      });
+    } else if (phase === 'voting') {
+      if (round === 3) {
+        const roundKey = `r3-voting`;
+        if (this.lastCompletedPhase === roundKey) return;
+
+        const r3Data = state.round3Data;
+        if (!r3Data) return;
+
+        if (r3Data.votes[this.playerId]) {
+          this.lastCompletedPhase = roundKey;
+          return;
+        }
+
+        this.lastCompletedPhase = roundKey;
+        const candidates = this.roster.filter((p) => p.id !== this.playerId);
+        if (candidates.length > 0) {
+          const choice = candidates[Math.floor(Math.random() * candidates.length)].id;
+          this.log(`voting for ${choice} in round 3`);
+          await this.publish({
+            type: 'submit-vote',
+            playerId: this.playerId,
+            timestamp: Date.now(),
+            payload: { choice }
+          });
+        }
+      } else {
+        const matchIdx = state.currentMatchIndex;
+        const roundKey = `r${round}-match-${matchIdx}`;
+        if (this.lastCompletedPhase === roundKey) return;
+
+        const matchup = state.matchups[matchIdx];
+        if (!matchup) return;
+
+        if (this.playerId === matchup.leftPlayerId || this.playerId === matchup.rightPlayerId) {
+          this.lastCompletedPhase = roundKey;
+          return;
+        }
+
+        if (matchup.votes[this.playerId]) {
+          this.lastCompletedPhase = roundKey;
+          return;
+        }
+
+        this.lastCompletedPhase = roundKey;
+        const choice = Math.random() > 0.5 ? 'left' : 'right';
+        this.log(`voting ${choice} on matchup ${matchIdx + 1}`);
+        await this.publish({
+          type: 'submit-vote',
+          playerId: this.playerId,
+          timestamp: Date.now(),
+          payload: { choice }
+        });
+      }
+    } else if (phase === 'leaderboard' && round === 3) {
+      const myScore = state.scores[this.playerId] ?? 0;
+      this.log(`reached final leaderboard (score: ${myScore})`);
+      this.finish('game-finished');
     }
   }
 
@@ -331,13 +442,15 @@ class ApiBot {
   }
 }
 
-const args = parseArgs(process.argv.slice(2));
-if (!args.code || args.code.length !== 4 || !Number.isInteger(args.players) || args.players < 1) {
-  console.error('Usage: npm run simulate:api -- --code=ABCD --players=5 [--verbose]');
-  process.exit(1);
-}
+if (process.argv[1] && process.argv[1].endsWith('simulate-players-api.js')) {
+  const args = parseArgs(process.argv.slice(2));
+  if (!args.code || args.code.length !== 4 || !Number.isInteger(args.players) || args.players < 1) {
+    console.error('Usage: npm run simulate:api -- --code=ABCD --players=5 [--verbose]');
+    process.exit(1);
+  }
 
-console.log(`Spawning ${args.players} API bot(s) into room ${args.code}...\n`);
-const bots = Array.from({ length: args.players }, (_, i) => new ApiBot(args.code, BOT_NAMES[i] ?? `Bot${i}`, args.verbose));
-await Promise.all(bots.map((b) => b.run()));
-console.log('\nAll bots finished their run.');
+  console.log(`Spawning ${args.players} API bot(s) into room ${args.code}...\n`);
+  const bots = Array.from({ length: args.players }, (_, i) => new ApiBot(args.code, BOT_NAMES[i] ?? `Bot${i}`, args.verbose));
+  await Promise.all(bots.map((b) => b.run()));
+  console.log('\nAll bots finished their run.');
+}

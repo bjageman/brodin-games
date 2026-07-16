@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { DEBUG_MODE } from '../constants';
 
 // Read endpoints and credentials from environment variables.
 // Leave USERNAME/PASSWORD blank when using the public ntfy.sh broker.
@@ -38,6 +39,40 @@ function buildQueryParams(sinceId: string | null): string {
   return params.length > 0 ? `?${params.join('&')}` : '';
 }
 
+/**
+ * Helper to determine the domain and protocols (ws/wss, http/https) based on NTFY_SERVER_URL.
+ */
+function resolveNtfyEndpoints(serverUrl: string): { domain: string; wsProtocol: string; httpProtocol: string } {
+  // Strip protocol prefix if provided in env
+  const domain = serverUrl.replace(/^(https?:\/\/|wss?:\/\/)/, '');
+  
+  let wsProtocol: string;
+  let httpProtocol: string;
+
+  if (serverUrl.startsWith('http://') || serverUrl.startsWith('ws://')) {
+    wsProtocol = 'ws';
+    httpProtocol = 'http';
+  } else if (serverUrl.startsWith('https://') || serverUrl.startsWith('wss://')) {
+    wsProtocol = 'wss';
+    httpProtocol = 'https';
+  } else {
+    // Detect based on domain pattern for local addresses
+    const isLocal =
+      domain.startsWith('localhost') ||
+      domain.startsWith('127.0.0.1') ||
+      domain.startsWith('192.168.') ||
+      domain.startsWith('10.') ||
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(domain) ||
+      domain.endsWith('.local') ||
+      domain.includes('.local:');
+      
+    wsProtocol = isLocal ? 'ws' : 'wss';
+    httpProtocol = isLocal ? 'http' : 'https';
+  }
+
+  return { domain, wsProtocol, httpProtocol };
+}
+
 export function useGameSocket(gameCode: string, onMessage: (data: unknown) => void) {
   const wsRef = useRef<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -56,13 +91,10 @@ export function useGameSocket(gameCode: string, onMessage: (data: unknown) => vo
     let lastMessageId: string | null = null;
 
     function connect() {
-      // Determine WebSocket protocol (ws: or wss:) based on secure/unsecure context
-      const protocol = NTFY_SERVER_URL.startsWith('localhost') || NTFY_SERVER_URL.startsWith('127.0.0.1') ? 'ws' : 'wss';
-      // Clean domain name string (strip protocol prefix if provided in env)
-      const domain = NTFY_SERVER_URL.replace(/^(https?:\/\/|wss?:\/\/)/, '');
+      const { domain, wsProtocol } = resolveNtfyEndpoints(NTFY_SERVER_URL);
 
-      const wsUrl = `${protocol}://${domain}/${topic}/ws${buildQueryParams(lastMessageId)}`;
-      console.log(`[ntfy] Connecting to: ${protocol}://${domain}/${topic}/ws${lastMessageId ? ` (since=${lastMessageId})` : ''}`);
+      const wsUrl = `${wsProtocol}://${domain}/${topic}/ws${buildQueryParams(lastMessageId)}`;
+      console.log(`[ntfy] Connecting to: ${wsProtocol}://${domain}/${topic}/ws${lastMessageId ? ` (since=${lastMessageId})` : ''}`);
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
@@ -79,7 +111,9 @@ export function useGameSocket(gameCode: string, onMessage: (data: unknown) => vo
           if (eventData.id) lastMessageId = eventData.id;
           if (eventData.message) {
             const payload = JSON.parse(eventData.message) as unknown;
-            console.log(`[ntfy] Message received on topic ${topic}:`, payload);
+            // Full-payload logging on every message is a real drag with devtools
+            // open (the whole GameState ships on each action), so gate it.
+            if (DEBUG_MODE) console.log(`[ntfy] Message received on topic ${topic}:`, payload);
             onMessageRef.current(payload);
           }
         } catch (e) {
@@ -116,12 +150,11 @@ export function useGameSocket(gameCode: string, onMessage: (data: unknown) => vo
   const sendMessage = useCallback(async (payload: unknown) => {
     if (!gameCode) return;
     const topic = `brodin-games-${gameCode.toLowerCase()}`;
-    const cleanDomain = NTFY_SERVER_URL.replace(/^(https?:\/\/|wss?:\/\/)/, '');
-    const protocol = cleanDomain.startsWith('localhost') || cleanDomain.startsWith('127.0.0.1') ? 'http' : 'https';
+    const { domain, httpProtocol } = resolveNtfyEndpoints(NTFY_SERVER_URL);
     // Use ?auth= query param instead of Authorization header to avoid CORS preflight.
-    const publishUrl = `${protocol}://${cleanDomain}/${topic}${buildQueryParams(null)}`;
+    const publishUrl = `${httpProtocol}://${domain}/${topic}${buildQueryParams(null)}`;
 
-    console.log(`[ntfy] Publishing message to: ${protocol}://${cleanDomain}/${topic}`, payload);
+    if (DEBUG_MODE) console.log(`[ntfy] Publishing message to: ${httpProtocol}://${domain}/${topic}`, payload);
     try {
       const response = await fetch(publishUrl, {
         method: 'POST',

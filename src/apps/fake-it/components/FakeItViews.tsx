@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import type { FormEvent } from 'react';
 import { cn } from '../../../shared/utils/cn';
 import type { PlayerInfo } from '../../../shared/types';
 import type { FakeItPhase, Line, Point, Topic } from '../types';
@@ -31,6 +33,49 @@ interface FakeItScreensProps {
   endGame: () => void;
   playAgain: () => void;
   onQuit: () => void;
+  guessSec?: number;
+  handleGuessSubmit?: (guess: string) => void;
+}
+
+function GuessInput({ onSubmit }: { onSubmit: (guess: string) => void }) {
+  const [guess, setGuess] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    if (!guess.trim() || submitted) return;
+    setSubmitted(true);
+    onSubmit(guess);
+  };
+
+  if (submitted) {
+    return (
+      <p className="rounded-lg bg-fakeit-panel px-4 py-3 text-center text-sm text-fakeit-dark w-full">
+        Guess submitted! Waiting for host...
+      </p>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex w-full gap-2">
+      <input
+        type="text"
+        value={guess}
+        onChange={(e) => setGuess(e.target.value)}
+        placeholder="Enter the word..."
+        autoFocus
+        required
+        className="flex-1 rounded-full border-2 border-white/20 bg-white/10 px-4 py-2 text-white placeholder-white/40 focus:border-white focus:outline-none"
+      />
+      <button
+        type="submit"
+        disabled={!guess.trim()}
+        className="rounded-full bg-emerald-500 px-6 py-2 font-display text-sm font-bold text-white transition-transform hover:scale-105 active:scale-95 disabled:scale-100 disabled:opacity-50"
+      >
+        Submit
+      </button>
+    </form>
+  );
 }
 
 /** The imposter is shown the category but never the word itself. */
@@ -57,6 +102,13 @@ function PromptPanel({ topic, isImposter }: { topic: Topic | null; isImposter: b
   );
 }
 
+/** "Alice", "Alice & Bob", "Alice, Bob & Cara" — for the tied-winner headline. */
+function formatNames(names: string[]): string {
+  if (names.length === 0) return '—';
+  if (names.length === 1) return names[0];
+  return `${names.slice(0, -1).join(', ')} & ${names[names.length - 1]}`;
+}
+
 /** Paper-canvas wrapper shared by the drawing / vote / results screens. */
 function Paper({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
@@ -71,6 +123,7 @@ export default function FakeItScreens({
   roster, playerId, imposterId, getPlayerColor, turnSec, turnMs, voteSec, lines,
   isMyTurn, handleDrawEnd, myVote, handleVoteSubmit, votes, scores, roundPoints,
   isHost, handleNextRound, endGame, playAgain, onQuit,
+  guessSec = 10, handleGuessSubmit = () => {},
 }: FakeItScreensProps) {
   const drawer = roster[drawerIndex];
   const imposter = roster.find((p) => p.id === imposterId);
@@ -260,6 +313,38 @@ export default function FakeItScreens({
         </div>
       )}
 
+      {/* Imposter Guessing */}
+      {phase === 'guessing' && (
+        <div className="mx-auto flex w-full max-w-xl flex-col items-center gap-5 px-4 pb-8 text-white">
+          <Paper className="mt-2 bg-fakeit-dark border-fakeit-ink">
+            <DrawingCanvas lines={lines} canDraw={false} onDrawEnd={() => {}} className="h-full w-full" />
+          </Paper>
+
+          <div className="w-full text-center">
+            <h3 className="font-serifDisplay text-3xl font-bold text-white mb-2">
+              {isImposter ? "You've been caught!" : "The Imposter is guessing..."}
+            </h3>
+            <p className="text-sm text-white/80">
+              {isImposter
+                ? "Can you guess the topic word to win the round?"
+                : "They have 10 seconds to guess the correct word."}
+            </p>
+            <div className="mt-4 flex items-center justify-center gap-3">
+              <span className="font-mono text-xl font-bold text-emerald-400">{guessSec}s remaining</span>
+            </div>
+          </div>
+
+          {isImposter ? (
+            <GuessInput onSubmit={handleGuessSubmit} />
+          ) : (
+            <div className="flex flex-col items-center py-6 animate-pulse">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-400 border-t-transparent mb-3" />
+              <p className="text-sm text-white/60">Waiting for guess...</p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Round Totals */}
       {phase === 'results' && (
         <div className="mx-auto flex w-full max-w-xl flex-col items-center gap-4 px-4 pb-8">
@@ -363,7 +448,12 @@ function FinalScore({
     .map((p) => ({ ...p, score: scores[p.id] ?? 0 }))
     .sort((a, b) => b.score - a.score);
 
-  const [winner, ...rest] = ranked;
+  // A tie at the top means everyone on it won — taking ranked[0] alone would
+  // crown whoever the sort happened to put first and bury their equals below.
+  const topScore = ranked[0]?.score ?? 0;
+  const winners = ranked.filter((p) => p.score === topScore);
+  const rest = ranked.filter((p) => p.score !== topScore);
+  const shared = winners.length > 1;
 
   return (
     <div className="mx-auto flex w-full max-w-xl flex-col items-center gap-6 px-4 pb-10 text-fakeit-ink">
@@ -376,28 +466,39 @@ function FinalScore({
         <h1 className="font-serifDisplay text-4xl font-bold">Final Scores</h1>
       </div>
 
-      <div className="flex w-full items-baseline justify-between">
+      <div className="flex w-full items-baseline justify-between gap-3">
         <h2 className="font-serifDisplay text-2xl font-bold uppercase tracking-wide">
-          Winner: {winner?.name ?? '—'}
+          {shared ? 'Winners' : 'Winner'}: {formatNames(winners.map((w) => w.name))}
         </h2>
-        <span className="font-display text-3xl font-extrabold text-fakeit-money">
-          {formatMoney(winner?.score ?? 0)}
+        <span className="shrink-0 font-display text-3xl font-extrabold text-fakeit-money">
+          {formatMoney(topScore)}
         </span>
       </div>
 
-      {winner && (
-        <div className="relative w-full max-w-[220px]">
-          <img src="/games/fake-it-easel-lobby.png" alt="" className="w-full" />
+      {/* Tied winners each get their own easel, side by side. */}
+      <div className="flex w-full flex-wrap items-start justify-center gap-3">
+        {winners.map((w) => (
           <div
-            className="absolute flex items-center justify-center overflow-hidden px-1"
-            style={{ left: '3.6%', top: '16.7%', width: '91.8%', height: '52%' }}
+            key={w.id}
+            className={cn('relative w-full', shared ? 'max-w-[150px]' : 'max-w-[220px]')}
           >
-            <span className="text-center font-script text-3xl font-bold text-[#1a1a1a]">
-              {winner.name}
-            </span>
+            <img src="/games/fake-it-easel-lobby.png" alt="" className="w-full" />
+            <div
+              className="absolute flex items-center justify-center overflow-hidden px-1"
+              style={{ left: '3.6%', top: '16.7%', width: '91.8%', height: '52%' }}
+            >
+              <span
+                className={cn(
+                  'text-center font-script font-bold leading-tight text-[#1a1a1a]',
+                  shared ? 'text-xl' : 'text-3xl'
+                )}
+              >
+                {w.name}
+              </span>
+            </div>
           </div>
-        </div>
-      )}
+        ))}
+      </div>
 
       <ul className="w-full space-y-2">
         {rest.map((p) => (

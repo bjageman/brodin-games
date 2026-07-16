@@ -1,6 +1,7 @@
 export interface PlayerInfo {
   id: string;
   name: string;
+  avatar?: string;
 }
 
 // Not a closed union: shared shell messages (join/roster/game-start/play-again)

@@ -3,9 +3,14 @@ import MemoRandomGame from '../apps/memo-random/MemoRandomGame';
 import FakeItGame from '../apps/fake-it/FakeItGame';
 import FakeItLobby from '../apps/fake-it/components/FakeItLobby';
 import BombDisarmGame from '../apps/bomb-disarm/BombDisarmGame';
+import BombLobbySettings from '../apps/bomb-disarm/components/BombLobbySettings';
+import BombBadge from '../apps/bomb-disarm/components/BombBadge';
+import QuizQuestGame from '../apps/quiz-quest/QuizQuestGame';
+import QuizTag from '../apps/quiz-quest/components/QuizTag';
+import JokeFactoryGame from '../apps/joke-factory/JokeFactoryGame';
 import { loadDictionary } from '../apps/memo-random/utils/dictionary';
 import type { GamePlayProps } from './GameShell';
-import type { LobbyProps } from './components/Lobby';
+import type { LobbyExtraProps, LobbyProps, PlayerTagProps } from './components/Lobby';
 
 /**
  * Palette for the chrome *around* a game — the host's create-room page, the
@@ -64,6 +69,38 @@ const FAKE_IT_THEME: GameTheme = {
   heading: 'text-fakeit-ink',
 };
 
+const BOMB_THEME: GameTheme = {
+  lobbyBg: 'bg-bomb-bg text-white',
+  pageBg: 'bg-bomb-bg text-white',
+  panel: 'bg-bomb-board border-white/15 text-white',
+  field: 'bg-bomb-bg border-white/25 text-white focus:border-bomb-bolt',
+  accent: 'bg-bomb-bolt hover:brightness-95 text-bomb-ink',
+  code: 'text-bomb-bolt',
+  muted: 'text-white/70',
+  heading: 'text-white',
+};
+const QUIZ_THEME: GameTheme = {
+  lobbyBg: 'bg-quiz-bg text-quiz-ink',
+  pageBg: 'bg-quiz-bg text-quiz-ink',
+  panel: 'bg-quiz-stone border-quiz-gold/40 text-quiz-ink',
+  field: 'bg-quiz-panel border-quiz-gold/40 text-quiz-ink focus:border-quiz-gold',
+  accent: 'bg-quiz-gold hover:brightness-95 text-quiz-bg',
+  code: 'text-quiz-gold',
+  muted: 'text-quiz-ink/70',
+  heading: 'text-quiz-ink',
+};
+
+const JOKE_THEME: GameTheme = {
+  lobbyBg: 'bg-indigo-950 text-white',
+  pageBg: 'bg-indigo-950 text-white',
+  panel: 'bg-indigo-900 border-yellow-400/40 text-white shadow-xl',
+  field: 'bg-indigo-950 border-white/20 text-white focus:border-yellow-400',
+  accent: 'bg-yellow-500 hover:bg-yellow-600 text-indigo-950 font-bold',
+  code: 'text-yellow-400',
+  muted: 'text-white/70',
+  heading: 'text-yellow-400',
+};
+
 export interface GameConfig {
   id: string;
   title: string;
@@ -72,6 +109,10 @@ export interface GameConfig {
   gamePlay: ComponentType<GamePlayProps>;
   /** Overrides the shared lobby. Games without one get the default lobby. */
   lobby?: ComponentType<LobbyProps>;
+  /** Host-only pre-game options, rendered inside the shared lobby. */
+  lobbyExtra?: ComponentType<LobbyExtraProps>;
+  /** Overrides the sticky-note player tag in the shared lobby's roster grid. */
+  playerTag?: ComponentType<PlayerTagProps>;
   /** Colours the chrome around the game. Falls back to DEFAULT_THEME. */
   theme?: GameTheme;
   onIdlePrefetch?: () => void;
@@ -101,5 +142,28 @@ export const GAMES_REGISTRY: Record<string, GameConfig> = {
     minPlayers: 3,
     maxPlayers: 10,
     gamePlay: BombDisarmGame,
+    lobbyExtra: BombLobbySettings,
+    playerTag: BombBadge,
+    theme: BOMB_THEME,
+  },
+  'quiz-quest': {
+    id: 'quiz-quest',
+    title: 'Quiz Quest',
+    // Playable solo — a lone player just has nobody to out-score, only the
+    // boss to beat. Up to a full party of 6 (matches PARTY_SLOTS / the party
+    // panel's six seats).
+    minPlayers: 1,
+    maxPlayers: 6,
+    gamePlay: QuizQuestGame,
+    playerTag: QuizTag,
+    theme: QUIZ_THEME,
+  },
+  'joke-factory': {
+    id: 'joke-factory',
+    title: 'Joke Factory',
+    minPlayers: 3,
+    maxPlayers: 8,
+    gamePlay: JokeFactoryGame,
+    theme: JOKE_THEME,
   },
 };

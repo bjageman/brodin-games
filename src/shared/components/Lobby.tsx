@@ -1,9 +1,22 @@
-import { useState } from 'react';
+import { useState, type ComponentType } from 'react';
 import type { PlayerInfo } from '../types';
 import { DEFAULT_THEME, type GameTheme } from '../games';
 import { cn } from '../utils/cn';
 import RoomCodeModal from './RoomCodeModal';
 import PlayerNote from './PlayerNote';
+
+// Host-only pre-game options a game can hang off the shared lobby (see
+// GameConfig.lobbyExtra). Whatever it collects is the host's to keep — the host
+// deals, so its choices reach the table inside the game state it broadcasts.
+export interface LobbyExtraProps {
+  code: string;
+  roster: PlayerInfo[];
+}
+
+export interface PlayerTagProps {
+  name: string;
+  index: number;
+}
 
 export interface LobbyProps {
   code: string;
@@ -18,9 +31,17 @@ export interface LobbyProps {
   // GameConfig.lobby). The shared lobby leaves Quit to PageLayout.
   onQuit?: () => void;
   theme?: GameTheme;
+  lobbyExtra?: ComponentType<LobbyExtraProps>;
+  /** Overrides the sticky-note player tag (see GameConfig.playerTag). */
+  playerTag?: ComponentType<PlayerTagProps>;
+  playerId?: string;
+  sendMessage?: (payload: unknown) => Promise<void>;
 }
 
-export default function Lobby({ code, title, minPlayers, roster, isHost, isConnected, onStartGame, theme }: LobbyProps) {
+export default function Lobby({
+  code, title, minPlayers, roster, isHost, isConnected, onStartGame, theme,
+  lobbyExtra: LobbyExtra, playerTag: PlayerTag = PlayerNote,
+}: LobbyProps) {
   const [showModal, setShowModal] = useState(false);
   const joinUrl = `${window.location.origin}${window.location.pathname}#/join?code=${code}`;
   const t = theme ?? DEFAULT_THEME;
@@ -63,12 +84,14 @@ export default function Lobby({ code, title, minPlayers, roster, isHost, isConne
           ) : (
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
               {roster.map((player, index) => (
-                <PlayerNote key={player.id} name={player.name} index={index} />
+                <PlayerTag key={player.id} name={player.name} index={index} />
               ))}
             </div>
           )}
         </div>
       </div>
+
+      {isHost && LobbyExtra && <LobbyExtra code={code} roster={roster} />}
 
       {/* Footer controls */}
       <footer className="flex flex-col items-center gap-3 px-4 pb-8 pt-2">

@@ -1,229 +1,308 @@
 import { cn } from '../../../shared/utils/cn';
 import WaitingForHost from '../../../shared/components/WaitingForHost';
+import { useCountdown } from '../../../shared/hooks/useCountdown';
 import type { GamePlayProps } from '../../../shared/GameShell';
-import type { Card, CardType, LastReveal, Role, Winner } from '../types';
-import { WIRE_WIN_THRESHOLD } from '../constants';
+import type { Card, EffectChoice, GameState, LastReveal, Role, SpecialRole, Winner } from '../types';
+import { CARD_META } from '../cards';
+import { ROUNDS, wiresToWin } from '../constants';
+import { didWin } from '../roles';
+import { LightningBolt } from './BombArt';
+import { BoardFrame, BombCard, HandRow, TeamCounts, WiresPanel } from './BombBoard';
+import { EffectPrompt, EffectWaiting, PeekOverlay } from './BombEffects';
+import { DeclarePrompt, RescuePrompt, RescueWaiting, RoleBadge, RoleCard } from './BombRoles';
 
-export function CardFace({ card, faceUp, onTap, tappable }: { card: Card; faceUp: boolean; onTap?: () => void; tappable?: boolean }) {
-  const shown = faceUp || card.revealed;
-  const meta: Record<CardType, { icon: string; label: string; cls: string }> = {
-    explode: { icon: '💥', label: 'BOMB', cls: 'from-red-500/30 to-brodin-panel border-red-500 text-red-300' },
-    wire: { icon: '✂️', label: 'Cut Wire', cls: 'from-emerald-500/25 to-brodin-panel border-emerald-500 text-emerald-300' },
-    blank: { icon: '▢', label: 'Blank', cls: 'from-white/5 to-brodin-panel border-white/10 text-gray-400' },
-  };
-  const m = meta[card.type];
-  return (
-    <button
-      type="button"
-      disabled={!tappable}
-      onClick={onTap}
-      className={cn(
-        'aspect-[3/4] w-full rounded-2xl border-2 flex flex-col items-center justify-center gap-1 font-black transition-all select-none',
-        shown
-          ? cn('bg-gradient-to-br', m.cls)
-          : 'bg-gradient-to-br from-brodin-panel to-brodin-field border-white/10 text-white/70',
-        tappable && 'hover:scale-[1.03] active:scale-95 cursor-pointer shadow-lg shadow-black/30 ring-2 ring-brodin-accent/40',
-        !tappable && !shown && 'opacity-90'
-      )}
-    >
-      {shown ? (
-        <>
-          <span className="text-3xl sm:text-4xl">{m.icon}</span>
-          <span className="text-[10px] sm:text-xs uppercase tracking-widest">{m.label}</span>
-        </>
-      ) : (
-        <span className="text-3xl sm:text-4xl opacity-40">?</span>
-      )}
-    </button>
-  );
-}
-
-export function HandGrid({ hand, faceUp, tappable, onTap }: { hand: Card[]; faceUp: boolean; tappable: boolean; onTap?: (i: number) => void }) {
-  return (
-    <div className="grid grid-cols-6 grid-rows-1 gap-2 sm:gap-3 w-full max-w-5xl mx-auto">
-      {hand.map((card, i) => (
-        <CardFace
-          key={i}
-          card={card}
-          faceUp={faceUp}
-          tappable={tappable && !card.revealed}
-          onTap={onTap ? () => onTap(i) : undefined}
-        />
-      ))}
-    </div>
-  );
-}
-
-function RoleBadge({ role }: { role: Role | undefined }) {
-  if (!role) return null;
-  const rebel = role === 'rebel';
-  return (
-    <div
-      className={cn(
-        'inline-flex items-center gap-2 px-4 py-1.5 rounded-full border font-black uppercase tracking-widest text-xs',
-        rebel ? 'bg-bento-pink/15 border-bento-pink text-bento-pink' : 'bg-brodin-accent/15 border-brodin-accent text-brodin-accent'
-      )}
-    >
-      <span>{rebel ? '🧨' : '🛡️'}</span>
-      {rebel ? 'Rebel' : 'Peacekeeper'}
-    </div>
-  );
-}
-
-export function RoleReveal({ role, isDisplay, seconds }: { role: Role | undefined; isDisplay: boolean; seconds: number }) {
+export function RoleReveal({ role, special, isDisplay, seconds }: {
+  role: Role | undefined; special?: SpecialRole; isDisplay: boolean; seconds: number;
+}) {
   if (isDisplay) {
     return (
-      <div className="w-full max-w-md mx-auto py-10 px-4 text-center space-y-4 animate-fadeIn">
-        <h2 className="font-display text-2xl font-extrabold text-white uppercase tracking-wider">Dealing roles…</h2>
-        <p className="text-sm text-gray-400">Players are learning their team. Cards deal in {seconds}s.</p>
+      <div className="mx-auto w-full max-w-md space-y-4 px-4 py-10 text-center">
+        <h2 className="font-display text-2xl font-extrabold uppercase tracking-wider text-white">Dealing roles…</h2>
+        <p className="text-sm text-gray-300">Players are learning their team. Cards deal in {seconds}s.</p>
       </div>
     );
   }
-  const rebel = role === 'rebel';
   return (
-    <div className="w-full max-w-md mx-auto py-8 px-4 text-center space-y-8 animate-fadeIn">
-      <h2 className="font-display text-2xl font-extrabold text-white tracking-wider uppercase">Your Team</h2>
-      <div
-        className={cn(
-          'p-8 rounded-3xl border shadow-2xl space-y-5',
-          rebel ? 'bg-gradient-to-br from-bento-pink/20 to-brodin-panel border-bento-pink'
-                : 'bg-gradient-to-br from-brodin-accent/20 to-brodin-panel border-brodin-accent'
-        )}
-      >
-        <span className="text-5xl">{rebel ? '🧨' : '🛡️'}</span>
-        <h3 className={cn('font-display text-3xl font-black uppercase tracking-widest', rebel ? 'text-bento-pink' : 'text-brodin-accent')}>
-          {rebel ? 'Rebel' : 'Peacekeeper'}
-        </h3>
-        <p className="text-gray-300 text-sm leading-relaxed">
-          {rebel
-            ? 'Sabotage the disarm. You win the moment a bomb is revealed — steer the table toward it.'
-            : 'Disarm the bomb. Reveal 6 cut wires before any bomb turns up, and avoid the explode cards.'}
+    <div className="mx-auto w-full max-w-md space-y-8 px-4 py-8 text-center">
+      <h2 className="font-display text-2xl font-extrabold uppercase tracking-wider text-white">Your Role</h2>
+      <RoleCard role={role} special={special} />
+      <div className="space-y-2">
+        <div className="animate-bounce font-display text-4xl font-black text-bomb-bolt">{seconds}</div>
+        <p className="text-xs uppercase tracking-widest text-gray-300">Dealing cards…</p>
+      </div>
+    </div>
+  );
+}
+
+// Each phone only renders its own hand, so a losing flip on someone else's phone
+// would otherwise be invisible to everyone but its owner.
+export function VerdictOverlay({ reveal, winner }: { reveal: LastReveal | null; winner: Winner }) {
+  if (!reveal) return null;
+  const rebelsWon = winner === 'rebels';
+  return (
+    <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-bomb-bg/90 backdrop-blur-sm">
+      <div className="h-[38%]">
+        <BombCard card={{ type: reveal.type, revealed: true }} faceUp={false} />
+      </div>
+      <div className="animate-verdictIn space-y-1 text-center">
+        <p className="text-sm font-bold text-gray-200">
+          {reveal.type === 'explode' ? (
+            <>💥 Bomb revealed on <span className="text-white">{reveal.targetName}</span></>
+          ) : winner === 'peacekeepers' ? (
+            <>✂️ Final wire cut on <span className="text-white">{reveal.targetName}</span></>
+          ) : (
+            <>Out of rounds — the bomb was never disarmed</>
+          )}
+        </p>
+        <p className={cn('font-display text-2xl font-black uppercase tracking-widest', rebelsWon ? 'text-bomb-rebel' : 'text-bomb-bolt')}>
+          {rebelsWon ? 'Rebels Win' : 'Peacekeepers Win'}
         </p>
       </div>
-      <div className="space-y-2">
-        <div className="text-4xl font-black text-brodin-gold animate-bounce">{seconds}</div>
-        <p className="text-xs uppercase tracking-widest text-gray-400">Dealing cards…</p>
-      </div>
     </div>
   );
 }
 
-function StatusBar({ wiresRevealed, lastReveal, subtitle }: { wiresRevealed: number; lastReveal: LastReveal | null; subtitle: string }) {
+// The smoke clears at round's end: an anonymous tally, never who held what.
+export function RoundSummaryOverlay({ summary }: { summary: { blanks: number; wires: number } }) {
   return (
-    <div className="w-full flex items-center justify-between gap-3 px-4 py-2 bg-brodin-panel/70 backdrop-blur rounded-2xl border border-white/5">
-      <div className="flex items-center gap-1.5">
-        {Array.from({ length: WIRE_WIN_THRESHOLD }).map((_, i) => (
-          <span key={i} className={cn('w-3 h-3 rounded-full border', i < wiresRevealed ? 'bg-emerald-400 border-emerald-300' : 'bg-transparent border-white/25')} />
-        ))}
-        <span className="ml-2 text-xs font-bold text-emerald-300">{wiresRevealed}/{WIRE_WIN_THRESHOLD} wires</span>
-      </div>
-      <p className="text-xs font-semibold text-gray-300 truncate">
-        {lastReveal
-          ? lastReveal.type === 'explode'
-            ? '💥 Bomb revealed!'
-            : `${lastReveal.type === 'wire' ? '✂️ Cut wire' : '▢ Blank'} on ${lastReveal.targetName}`
-          : subtitle}
+    <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-bomb-bg/92 p-4 backdrop-blur-sm">
+      <span className="text-4xl">💨</span>
+      <h3 className="text-center font-display text-sm font-black uppercase tracking-widest text-bomb-bolt sm:text-base">
+        The smoke clears
+      </h3>
+      <p className="max-w-xs text-center text-sm text-gray-200">
+        This round: <span className="font-black text-white">{summary.wires}</span>{' '}
+        {summary.wires === 1 ? 'cut wire' : 'cut wires'}, <span className="font-black text-white">{summary.blanks}</span>{' '}
+        {summary.blanks === 1 ? 'blank' : 'blanks'} — no telling which was whose.
       </p>
     </div>
   );
 }
 
-export function MemorizeView({ role, hand, seconds, isDisplay, onQuit }: { role: Role | undefined; hand: Card[]; seconds: number; isDisplay: boolean; onQuit: () => void }) {
+// The cards cut in the round that just ended, shown face-up while everyone
+// studies the fresh deal — a between-rounds beat so the table sees what left
+// the deck (and can count the wires still out there).
+function DiscardRecap({ cards, className }: { cards: Card[]; className?: string }) {
   return (
-    <div className="flex flex-col h-full w-full p-3 sm:p-5 gap-3">
-      <div className="flex items-center justify-between gap-3">
-        <RoleBadge role={role} />
-        <div className={cn('font-mono font-black text-lg', seconds <= 10 ? 'text-bento-pink animate-pulse' : 'text-brodin-gold')}>{seconds}s</div>
-        <button onClick={onQuit} className="text-[11px] text-gray-400 underline">Quit</button>
-      </div>
-      <p className="text-center text-xs uppercase tracking-widest text-gray-400 font-bold">
-        Memorize your hand — it flips face-down and shuffles when the timer ends
-      </p>
-      <div className="flex-1 flex items-center justify-center">
-        {isDisplay
-          ? <p className="text-sm text-gray-400">Players are memorizing their hands…</p>
-          : <HandGrid hand={hand} faceUp tappable={false} />}
+    <div className={cn('flex min-h-0 flex-col', className)}>
+      <span className="shrink-0 pb-1 text-center font-display text-[10px] font-black uppercase tracking-widest text-bomb-bolt sm:text-xs">
+        ✂️ Cut last round
+      </span>
+      <div className="min-h-0 flex-1">
+        <HandRow hand={cards} faceUp tappable={false} />
       </div>
     </div>
+  );
+}
+
+export function MemorizeView({
+  role, special, hand, isDisplay, isHost, round, wiresRevealed, playerCount, extraRebels, discardRecap, onReady, onQuit,
+}: {
+  role: Role | undefined; special?: SpecialRole; hand: Card[]; isDisplay: boolean; isHost: boolean;
+  round: number; wiresRevealed: number; playerCount: number; extraRebels: number;
+  discardRecap: Card[] | null; onReady: () => void; onQuit: () => void;
+}) {
+  const hasRecap = round > 1 && !!discardRecap && discardRecap.length > 0;
+  return (
+    <BoardFrame onQuit={onQuit}>
+      <div className="flex h-full flex-col p-3">
+        <div className="flex shrink-0 items-center justify-between gap-3">
+          <RoleBadge role={role} special={special} />
+          <p className="hidden text-center text-[10px] font-bold uppercase tracking-widest text-gray-300 sm:block">
+            {round === 1
+              ? 'Memorize your hand — it shuffles face-down when the table is dealt'
+              : 'Fresh deal — study your new hand'}
+          </p>
+        </div>
+
+        <div className="flex h-[58%] shrink-0 flex-col gap-2 py-2">
+          {hasRecap && (
+            <DiscardRecap cards={discardRecap} className={isDisplay ? 'flex-1' : 'flex-[2]'} />
+          )}
+          <div className="min-h-0 flex-[3]">
+            {isDisplay
+              ? (
+                <p className="flex h-full items-center justify-center text-sm text-gray-300">
+                  {hasRecap ? 'Players are studying their new hands…' : 'Players are memorizing their hands…'}
+                </p>
+              )
+              : <HandRow hand={hand} faceUp tappable={false} />}
+          </div>
+        </div>
+
+        <div className="flex min-h-0 flex-1 items-end justify-between gap-4">
+          <div className="space-y-2">
+            <TeamCounts playerCount={playerCount} extraRebels={extraRebels} />
+            {isHost && (
+              <button
+                type="button"
+                onClick={onReady}
+                className="rounded-full bg-bomb-bolt px-5 py-2 font-display text-xs font-black uppercase tracking-wider text-bomb-ink shadow-lg transition-transform hover:scale-[1.03] sm:text-sm"
+              >
+                Everyone's Ready — Deal the Table
+              </button>
+            )}
+          </div>
+          <div className="-mb-3 -mr-3">
+            <WiresPanel wiresRevealed={wiresRevealed} target={wiresToWin(playerCount)} />
+          </div>
+        </div>
+      </div>
+    </BoardFrame>
   );
 }
 
 export function TableView({
-  hand, isMyTurn, activeName, wiresRevealed, lastReveal, isDisplay, onTap, onQuit,
+  hand, isMyTurn, activeName, wiresRevealed, lastReveal, isDisplay,
+  round, revealsThisRound, revealsPerRound, pendingWinner, playerCount, extraRebels,
+  state, playerId, roster, onChooseEffect, onChooseRescue, onDeclare, onTap, onQuit,
 }: {
   hand: Card[]; isMyTurn: boolean; activeName: string; wiresRevealed: number; lastReveal: LastReveal | null;
-  isDisplay: boolean; onTap: (i: number) => void; onQuit: () => void;
+  isDisplay: boolean; round: number; revealsThisRound: number; revealsPerRound: number;
+  pendingWinner: Winner | null; playerCount: number; extraRebels: number;
+  state: GameState; playerId: string; roster: GamePlayProps['roster'];
+  onChooseEffect: (choice: EffectChoice) => void;
+  onChooseRescue: (save: boolean) => void;
+  onDeclare: (team: Role) => void;
+  onTap: (i: number) => void; onQuit: () => void;
 }) {
+  const picksLeft = revealsPerRound - revealsThisRound;
+  const {
+    pendingEffect, peek, effectNote, rogueAgentId, pendingRescue, specialRoles, opportunistTeam,
+    smokeActive, roundSummary,
+  } = state;
+  const { msRemaining: peekMs } = useCountdown(peek?.endTimestamp ?? null);
+
+  // The Opportunist may flip on their own turn, any time before the game ends.
+  const canDeclare =
+    !isDisplay && isMyTurn && !pendingWinner && !pendingEffect && !peek && !pendingRescue &&
+    specialRoles[playerId] === 'opportunist' && !opportunistTeam;
+
+  // A Smoke Bomb keeps blank/wire reveals anonymous on the shared status line
+  // for the rest of the round — your own hand still shows you the truth.
+  const obfuscated = smokeActive && lastReveal && (lastReveal.type === 'blank' || lastReveal.type === 'wire');
+  const status = effectNote
+    ?? (lastReveal
+      ? obfuscated
+        ? `Last: ??? on ${lastReveal.targetName}`
+        : `Last: ${CARD_META[lastReveal.type].title} on ${lastReveal.targetName}`
+      : 'Cards are face-down on the table');
+
   return (
-    <div className="flex flex-col h-full w-full p-3 sm:p-5 gap-3">
-      <div className="flex items-center gap-3">
-        <div className="flex-1"><StatusBar wiresRevealed={wiresRevealed} lastReveal={lastReveal} subtitle="Cards are face-down on the table" /></div>
-        <button onClick={onQuit} className="text-[11px] text-gray-400 underline shrink-0">Quit</button>
-      </div>
+    <BoardFrame onQuit={onQuit}>
+      <div className="flex h-full flex-col p-3">
+        <div className="flex shrink-0 items-center justify-between gap-3 text-[10px] font-bold uppercase tracking-widest sm:text-xs">
+          <span className="text-bomb-bolt">
+            Round {round}/{ROUNDS} · {picksLeft} {picksLeft === 1 ? 'pick' : 'picks'} left
+            {rogueAgentId && ' · 🕶️ Rogue Agent'}
+          </span>
+          <span className="truncate text-gray-300">{status}</span>
+        </div>
 
-      <div className="text-center">
-        {isDisplay ? (
-          <p className="text-sm font-bold text-white"><span className="text-brodin-accent">{activeName || '…'}</span> is choosing a card to reveal</p>
-        ) : isMyTurn ? (
-          <p className="text-sm font-black text-brodin-accent animate-pulse uppercase tracking-wider">Your turn — reach over and tap a card on someone else's phone</p>
-        ) : (
-          <p className="text-sm font-bold text-white"><span className="text-brodin-accent">{activeName || '…'}</span> is choosing — your cards are tappable</p>
-        )}
-      </div>
+        <div className="relative h-[58%] shrink-0 py-2">
+          {isDisplay ? (
+            <p className="flex h-full items-center justify-center text-sm text-gray-300">Watching the table…</p>
+          ) : (
+            <>
+              <HandRow hand={hand} faceUp={false} tappable={!isMyTurn && !pendingWinner} onTap={onTap} />
+              {isMyTurn && !pendingWinner && (
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-bomb-bg/50 backdrop-blur-[1px]">
+                  <span className="rounded-xl border border-white/15 bg-bomb-board/90 px-4 py-2 text-xs font-bold text-gray-100">
+                    🔒 Your own cards are locked
+                  </span>
+                </div>
+              )}
+            </>
+          )}
+        </div>
 
-      <div className="flex-1 flex items-center justify-center">
-        {isDisplay ? (
-          <p className="text-sm text-gray-400">Watching the table…</p>
-        ) : (
-          <div className="relative w-full">
-            <HandGrid hand={hand} faceUp={false} tappable={!isMyTurn} onTap={onTap} />
-            {isMyTurn && (
-              <div className="absolute inset-0 rounded-2xl bg-gray-950/40 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
-                <span className="bg-brodin-panel/90 px-4 py-2 rounded-xl border border-white/10 text-xs text-gray-200 font-bold">🔒 Your own cards are locked</span>
-              </div>
-            )}
+        <div className="flex min-h-0 flex-1 items-end justify-between gap-4">
+          <div className="space-y-1.5">
+            <TeamCounts playerCount={playerCount} extraRebels={extraRebels} />
+            <p className="text-[11px] font-bold sm:text-sm">
+              {isDisplay || !isMyTurn ? (
+                <span className="text-gray-200">
+                  <span className="text-bomb-bolt">{activeName || '…'}</span> is choosing
+                </span>
+              ) : (
+                <span className="animate-pulse uppercase tracking-wider text-bomb-bolt">
+                  Your turn — tap a card on someone else's phone
+                </span>
+              )}
+            </p>
+            {canDeclare && <DeclarePrompt onDeclare={onDeclare} />}
           </div>
-        )}
+          <div className="-mb-3 -mr-3">
+            <WiresPanel wiresRevealed={wiresRevealed} target={wiresToWin(playerCount)} />
+          </div>
+        </div>
       </div>
-    </div>
+
+      {peek && !pendingWinner && (
+        <PeekOverlay type={peek.type} ownerName={peek.ownerName} seconds={Math.ceil(peekMs / 1000)} />
+      )}
+
+      {pendingRescue && !pendingWinner && !isDisplay && (
+        pendingRescue.heroId === playerId
+          ? <RescuePrompt bombOwnerName={roster.find((p) => p.id === pendingRescue.bombOwnerId)?.name ?? '?'} onChoose={onChooseRescue} />
+          : <RescueWaiting />
+      )}
+
+      {pendingEffect && !pendingWinner && !isDisplay && (
+        pendingEffect.actorId === playerId
+          ? <EffectPrompt effect={pendingEffect} state={state} roster={roster} onChoose={onChooseEffect} />
+          : <EffectWaiting effect={pendingEffect} actorName={roster.find((p) => p.id === pendingEffect.actorId)?.name ?? '?'} />
+      )}
+
+      {roundSummary && !pendingWinner && <RoundSummaryOverlay summary={roundSummary} />}
+
+      {pendingWinner && <VerdictOverlay reveal={lastReveal} winner={pendingWinner} />}
+    </BoardFrame>
   );
 }
 
+const END_BLURB: Record<string, string> = {
+  bomb: 'A bomb was revealed — the disarm failed.',
+  wires: 'Every wire was cut — the bomb is disarmed!',
+  timeout: 'The clock ran out. The bomb was never disarmed.',
+};
+
 export function ResultsView({
-  winner, roles, roster, isHost, onPlayAgain, onQuit,
+  state, roster, isHost, onPlayAgain, onQuit,
 }: {
-  winner: Winner | null; roles: Record<string, Role>; roster: GamePlayProps['roster'];
+  state: GameState; roster: GamePlayProps['roster'];
   isHost: boolean; onPlayAgain: () => void; onQuit: () => void;
 }) {
+  const { winner, roles, specialRoles, endReason } = state;
   const rebelsWon = winner === 'rebels';
   return (
-    <div className="w-full max-w-xl mx-auto px-4 flex flex-col items-center space-y-6 animate-fadeIn py-6">
+    <div className="mx-auto flex w-full max-w-xl flex-col items-center space-y-6 px-4 py-6">
       <div
         className={cn(
-          'w-full rounded-3xl p-6 text-center space-y-3 border shadow-xl',
-          rebelsWon ? 'bg-gradient-to-br from-bento-pink/20 to-brodin-panel border-bento-pink'
-                    : 'bg-gradient-to-br from-brodin-accent/20 to-brodin-panel border-brodin-accent'
+          'w-full space-y-3 rounded-3xl border p-6 text-center shadow-xl',
+          rebelsWon ? 'border-bomb-rebel bg-bomb-rebel/15' : 'border-bomb-wire bg-bomb-wire/20'
         )}
       >
-        <span className="text-5xl">{rebelsWon ? '💥' : '🛡️'}</span>
-        <h2 className={cn('font-display text-3xl font-black uppercase tracking-widest', rebelsWon ? 'text-bento-pink' : 'text-brodin-accent')}>
+        <span className="mx-auto block h-12 w-12">
+          <LightningBolt />
+        </span>
+        <h2 className={cn('font-display text-3xl font-black uppercase tracking-widest', rebelsWon ? 'text-bomb-rebel' : 'text-bomb-bolt')}>
           {rebelsWon ? 'Rebels Win' : 'Peacekeepers Win'}
         </h2>
-        <p className="text-sm text-gray-300">
-          {rebelsWon ? 'A bomb was revealed — the disarm failed.' : `${WIRE_WIN_THRESHOLD} cut wires revealed — the bomb is disarmed!`}
-        </p>
+        <p className="text-sm text-gray-200">{endReason ? END_BLURB[endReason] : ''}</p>
       </div>
 
-      <div className="w-full bg-brodin-panel p-5 rounded-2xl border border-white/5 space-y-2 shadow-lg">
-        <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400 border-b border-white/5 pb-2">Roles Revealed</h4>
+      <div className="w-full space-y-2 rounded-2xl border border-white/10 bg-bomb-board p-5 shadow-lg">
+        <h4 className="border-b border-white/10 pb-2 text-xs font-bold uppercase tracking-wider text-gray-300">Roles Revealed</h4>
         {roster.map((p) => {
-          const rebel = roles[p.id] === 'rebel';
+          const won = didWin(p.id, state);
           return (
-            <div key={p.id} className="flex justify-between items-center text-sm">
-              <span className="font-bold text-white">{p.name}</span>
-              <span className={cn('text-xs font-black uppercase tracking-wider px-2 py-0.5 rounded', rebel ? 'bg-bento-pink/15 text-bento-pink' : 'bg-brodin-accent/15 text-brodin-accent')}>
-                {rebel ? '🧨 Rebel' : '🛡️ Peacekeeper'}
+            <div key={p.id} className="flex items-center justify-between gap-2 text-sm">
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className={cn('shrink-0', won ? 'opacity-100' : 'opacity-0')}>🏆</span>
+                <span className={cn('truncate font-bold', won ? 'text-bomb-bolt' : 'text-white/60')}>{p.name}</span>
               </span>
+              <RoleBadge role={roles[p.id]} special={specialRoles[p.id]} />
             </div>
           );
         })}
@@ -231,10 +310,16 @@ export function ResultsView({
 
       {isHost ? (
         <div className="w-full space-y-2">
-          <button onClick={onPlayAgain} className="w-full bg-brodin-primary hover:bg-brodin-primaryDark text-white rounded-lg py-3 font-bold transition-colors uppercase tracking-wider text-sm shadow-lg shadow-brodin-primary/20">
+          <button
+            onClick={onPlayAgain}
+            className="w-full rounded-lg bg-bomb-bolt py-3 font-display text-sm font-black uppercase tracking-wider text-bomb-ink shadow-lg transition-transform hover:scale-[1.02]"
+          >
             Play Again
           </button>
-          <button onClick={onQuit} className="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg py-3 font-semibold transition-colors uppercase tracking-wider text-sm">
+          <button
+            onClick={onQuit}
+            className="w-full rounded-lg bg-white/10 py-3 text-sm font-semibold uppercase tracking-wider text-gray-200 transition-colors hover:bg-white/20"
+          >
             Quit Game
           </button>
         </div>
@@ -244,3 +329,5 @@ export function ResultsView({
     </div>
   );
 }
+
+export { BombCard };
