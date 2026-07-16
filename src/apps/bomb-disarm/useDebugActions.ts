@@ -89,6 +89,7 @@ export function useDebugActions(deps: DebugActionsDeps) {
   function handleDebugHostAction(action: string) {
     if (!isHost) return;
     if (action === 'skip-role' && phase === 'role-reveal') return goToMemorize();
+    if (action === 'skip-recap' && phase === 'discard-recap') return goToMemorize();
     if (action === 'skip-memorize' && phase === 'memorize') return goToTable();
     if (phase !== 'table' || winner) return;
     if (action === 'answer-effect') return autoAnswerEffect();
@@ -112,6 +113,7 @@ export function useDebugActions(deps: DebugActionsDeps) {
   function getDebugActions(): DebugAction[] {
     const list: DebugAction[] = [];
     if (phase === 'role-reveal') list.push({ label: '⏭️ Skip to Memorize', onClick: () => triggerAction('skip-role'), variant: 'warning' });
+    if (phase === 'discard-recap') list.push({ label: '⏭️ Skip to Memorize', onClick: () => triggerAction('skip-recap'), variant: 'warning' });
     if (phase === 'memorize') list.push({ label: '⏭️ Skip to Table', onClick: () => triggerAction('skip-memorize'), variant: 'warning' });
     if (phase === 'table' && !winner) {
       const opportunist = Object.entries(specialRoles).find(([, r]) => r === 'opportunist')?.[0];

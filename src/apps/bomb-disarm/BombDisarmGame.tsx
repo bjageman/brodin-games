@@ -20,7 +20,7 @@ import { redeal, swapCards } from './deck';
 import { useDebugActions } from './useDebugActions';
 import { usePhaseTransitions } from './usePhaseTransitions';
 import LandscapeStage from './components/LandscapeStage';
-import { RoleReveal, MemorizeView, TableView, ResultsView } from './components/BombViews';
+import { RoleReveal, MemorizeView, TableView, ResultsView, DiscardRecapView } from './components/BombViews';
 
 interface BombSnapshot {
   bomb: GameState;
@@ -146,7 +146,7 @@ export default function BombDisarmGame({
     const cut = Object.values(base.hands).flat().filter((c) => c.revealed);
     publish({
       ...base,
-      phase: 'memorize',
+      phase: 'discard-recap',
       hands: redeal(roster.map((p) => p.id), base.hands, base.deckAdditions),
       round: base.round + 1,
       revealsThisRound: 0,
@@ -576,6 +576,19 @@ export default function BombDisarmGame({
         <RoleReveal role={roles[playerId]} special={specialRoles[playerId]} isDisplay={isDisplay} seconds={roleSec} />
       )}
 
+      {phase === 'discard-recap' && (
+        <LandscapeStage>
+          <DiscardRecapView
+            isHost={isHost}
+            isDisplay={isDisplay}
+            round={round}
+            discardRecap={discardRecap}
+            onStartNextRound={goToMemorize}
+            onQuit={onQuit}
+          />
+        </LandscapeStage>
+      )}
+
       {phase === 'memorize' && (
         <LandscapeStage>
           <MemorizeView
@@ -588,7 +601,6 @@ export default function BombDisarmGame({
             wiresRevealed={wiresRevealed}
             playerCount={roster.length}
             extraRebels={extraRebels}
-            discardRecap={discardRecap}
             onReady={goToTable}
             onQuit={onQuit}
           />

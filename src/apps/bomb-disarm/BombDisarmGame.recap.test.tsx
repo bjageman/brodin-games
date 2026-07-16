@@ -1,55 +1,43 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { MemorizeView } from './components/BombViews';
+import { DiscardRecapView } from './components/BombViews';
 import type { Card } from './types';
 
-// Between rounds the just-cut cards ride into the memorize beat as a recap so the
-// whole table can see what left the deck. These guard that scene: it shows the
-// cut cards from round 2 on, and never leaks in on the opening deal.
-const hand: Card[] = [
-  { type: 'blank', revealed: false },
-  { type: 'wire', revealed: false },
-];
-
-function renderMemorize(round: number, discardRecap: Card[] | null) {
+function renderDiscardRecap(round: number, discardRecap: Card[] | null, isHost: boolean = true) {
   return render(
-    <MemorizeView
-      role="rebel"
-      hand={hand}
+    <DiscardRecapView
+      isHost={isHost}
       isDisplay={false}
-      isHost
       round={round}
-      wiresRevealed={0}
-      playerCount={4}
-      extraRebels={0}
       discardRecap={discardRecap}
-      onReady={() => {}}
+      onStartNextRound={() => {}}
       onQuit={() => {}}
     />
   );
 }
 
-describe('MemorizeView discard recap', () => {
+describe('DiscardRecapView', () => {
   it('shows the cut cards from the round that just ended', () => {
     const cut: Card[] = [
       { type: 'wire', revealed: true },
       { type: 'blank', revealed: true },
-      { type: 'wire', revealed: true },
     ];
-    renderMemorize(2, cut);
-    expect(screen.getByText(/Cut last round/i)).toBeInTheDocument();
-    // Both card faces are always in the DOM (a 3D flip hides one), so the recap
-    // renders a face per cut card on top of the hand's own faces.
-    expect(screen.getAllByText('Cut Wire').length).toBeGreaterThanOrEqual(2);
+    renderDiscardRecap(2, cut);
+    expect(screen.getByText(/Round 1 ended/i)).toBeInTheDocument();
+    expect(screen.getByText(/Discarded last round:/i)).toBeInTheDocument();
+    
+    // Check that cut cards are visible in the DOM
+    expect(screen.getAllByText('Cut Wire').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Blank').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('does not show the recap on the opening deal', () => {
-    renderMemorize(1, null);
-    expect(screen.queryByText(/Cut last round/i)).not.toBeInTheDocument();
+  it('shows the Start Next Round button for the host', () => {
+    renderDiscardRecap(2, [], true);
+    expect(screen.getByRole('button', { name: /Start Next Round/i })).toBeInTheDocument();
   });
 
-  it('does not show the recap when a smoke round left it anonymous', () => {
-    renderMemorize(2, null);
-    expect(screen.queryByText(/Cut last round/i)).not.toBeInTheDocument();
+  it('shows a wait message for non-host players', () => {
+    renderDiscardRecap(2, [], false);
+    expect(screen.getByText(/Waiting for host to start/i)).toBeInTheDocument();
   });
 });
