@@ -4,7 +4,7 @@ import { useCountdown } from '../../../shared/hooks/useCountdown';
 import type { GamePlayProps } from '../../../shared/GameShell';
 import type { Card, EffectChoice, GameState, LastReveal, Role, SpecialRole, Winner } from '../types';
 import { CARD_META } from '../cards';
-import { ROUNDS, WIRE_WIN_THRESHOLD } from '../constants';
+import { ROUNDS, wiresToWin } from '../constants';
 import { didWin } from '../roles';
 import { LightningBolt } from './BombArt';
 import { BoardFrame, BombCard, HandRow, TeamCounts, WiresPanel } from './BombBoard';
@@ -121,7 +121,7 @@ export function MemorizeView({
             )}
           </div>
           <div className="-mb-3 -mr-3">
-            <WiresPanel wiresRevealed={wiresRevealed} />
+            <WiresPanel wiresRevealed={wiresRevealed} target={wiresToWin(playerCount)} />
           </div>
         </div>
       </div>
@@ -210,7 +210,7 @@ export function TableView({
             {canDeclare && <DeclarePrompt onDeclare={onDeclare} />}
           </div>
           <div className="-mb-3 -mr-3">
-            <WiresPanel wiresRevealed={wiresRevealed} />
+            <WiresPanel wiresRevealed={wiresRevealed} target={wiresToWin(playerCount)} />
           </div>
         </div>
       </div>
@@ -240,7 +240,7 @@ export function TableView({
 
 const END_BLURB: Record<string, string> = {
   bomb: 'A bomb was revealed — the disarm failed.',
-  wires: `${WIRE_WIN_THRESHOLD} cut wires revealed — the bomb is disarmed!`,
+  wires: 'Every wire was cut — the bomb is disarmed!',
   timeout: 'The clock ran out. The bomb was never disarmed.',
 };
 

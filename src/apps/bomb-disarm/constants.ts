@@ -1,4 +1,4 @@
-export const CARDS_PER_PLAYER = 6;
+export const CARDS_PER_PLAYER = 5;
 export const ROUNDS = 3;
 
 export const ROLE_REVEAL_DURATION_MS = 6000;
@@ -10,16 +10,16 @@ export const PEEK_DURATION_MS = 5000;
 // next round deals.
 export const ROUND_SUMMARY_DELAY_MS = 4000;
 
-export const WIRE_WIN_THRESHOLD = 6;
-
 // A client that missed the host's one-shot state broadcast (its message handler
 // wasn't registered yet when it landed) pulls current state on a retry loop.
 export const STATE_REQUEST_RETRY_INTERVAL_MS = 1000;
 export const STATE_REQUEST_MAX_ATTEMPTS = 10;
 
-// Three rounds only reveal half the deck, so it must carry more wires than the
-// 6 you need. At 12 the odds of cutting 6 hold at 63-69% for any player count.
-export const WIRES_IN_DECK = 12;
+// The deck carries exactly one cut wire per player, and disarming the bomb means
+// cutting every one of them — so the number to win tracks the wire count.
+export function wiresToWin(playerCount: number): number {
+  return deckCompositionFor(playerCount).wire;
+}
 
 export function deckCompositionFor(
   playerCount: number,
@@ -34,7 +34,8 @@ export function deckCompositionFor(
 } {
   const total = playerCount * CARDS_PER_PLAYER;
   const explode = (playerCount <= 7 ? 1 : 2) + (folkHeroInPlay ? 1 : 0);
-  const wire = WIRES_IN_DECK;
+  // One cut wire per player.
+  const wire = playerCount;
   const special = Math.min(specialCount, maxSpecialsFor(playerCount, folkHeroInPlay));
   const blank = total - explode - wire - special;
   return { explode, wire, special, blank, total };
@@ -50,7 +51,7 @@ export function deckCompositionFor(
 export function maxSpecialsFor(playerCount: number, folkHeroInPlay = false): number {
   const total = playerCount * CARDS_PER_PLAYER;
   const explode = (playerCount <= 7 ? 1 : 2) + (folkHeroInPlay ? 1 : 0);
-  return Math.max(0, total - explode - WIRES_IN_DECK - 1);
+  return Math.max(0, total - explode - playerCount - 1);
 }
 
 // Rebels: 1 for 3-4 players, 2 for 5-7, and a hidden 2-or-3 for 8-10 so the

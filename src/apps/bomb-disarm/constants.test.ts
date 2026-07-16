@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  CARDS_PER_PLAYER, WIRES_IN_DECK, WIRE_WIN_THRESHOLD,
-  deckCompositionFor, rebelCountFor, teamCountLabels,
+  CARDS_PER_PLAYER,
+  deckCompositionFor, rebelCountFor, teamCountLabels, wiresToWin,
 } from './constants';
 
 describe('deckCompositionFor', () => {
@@ -19,15 +19,14 @@ describe('deckCompositionFor', () => {
     for (let n = 8; n <= 10; n++) expect(deckCompositionFor(n).explode).toBe(2);
   });
 
-  it('carries WIRES_IN_DECK wires at every player count', () => {
-    for (let n = 3; n <= 10; n++) expect(deckCompositionFor(n).wire).toBe(WIRES_IN_DECK);
+  it('carries one cut wire per player', () => {
+    for (let n = 3; n <= 10; n++) expect(deckCompositionFor(n).wire).toBe(n);
   });
 
-  // Three rounds only reveal half the deck, so a deck holding exactly
-  // WIRE_WIN_THRESHOLD wires would make the peacekeepers' win a ~1% fluke.
-  it('holds more wires than the peacekeepers need to cut', () => {
+  // Disarming means cutting every wire, so the win target is the wire count.
+  it('needs every wire cut to win', () => {
     for (let n = 3; n <= 10; n++) {
-      expect(deckCompositionFor(n).wire).toBeGreaterThan(WIRE_WIN_THRESHOLD);
+      expect(wiresToWin(n)).toBe(deckCompositionFor(n).wire);
     }
   });
 

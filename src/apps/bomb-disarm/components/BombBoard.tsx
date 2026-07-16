@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { cn } from '../../../shared/utils/cn';
 import type { Card } from '../types';
 import { CARD_META } from '../cards';
-import { WIRE_WIN_THRESHOLD, teamCountLabels } from '../constants';
+import { teamCountLabels } from '../constants';
 import { CardArt, LightningBolt, WireIcon } from './BombArt';
 
 export function BombCard({ card, faceUp, tappable, maxWidth, onTap }: {
@@ -121,14 +121,14 @@ export function TeamCounts({ playerCount, extraRebels = 0 }: { playerCount: numb
   );
 }
 
-export function WiresPanel({ wiresRevealed }: { wiresRevealed: number }) {
+export function WiresPanel({ wiresRevealed, target }: { wiresRevealed: number; target: number }) {
   return (
     <div className="rounded-tl-3xl bg-bomb-wire px-4 py-3 pr-6 sm:px-6 sm:py-4">
       <p className="font-display text-sm font-black tracking-wide text-white sm:text-lg">
-        Wires Cut {wiresRevealed}/{WIRE_WIN_THRESHOLD}:
+        Wires Cut {wiresRevealed}/{target}:
       </p>
       <div className="mt-1 flex items-end gap-1 sm:gap-2">
-        {Array.from({ length: WIRE_WIN_THRESHOLD }).map((_, i) => (
+        {Array.from({ length: target }).map((_, i) => (
           <span key={i} className="w-7 sm:w-10">
             <WireIcon cut={i < wiresRevealed} />
           </span>

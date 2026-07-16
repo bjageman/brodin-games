@@ -14,7 +14,7 @@ import {
   PEEK_DURATION_MS,
   ROUND_SUMMARY_DELAY_MS,
   ROUNDS,
-  WIRE_WIN_THRESHOLD,
+  wiresToWin,
 } from './constants';
 import { folkHeroId, isSidelined } from './roles';
 import { redeal, swapCards } from './deck';
@@ -214,7 +214,7 @@ export default function BombDisarmGame({
       }
       return finishWith(base, 'rebels', 'bomb');
     }
-    if (base.wiresRevealed >= WIRE_WIN_THRESHOLD) return finishWith(base, 'peacekeepers', 'wires');
+    if (base.wiresRevealed >= wiresToWin(roster.length)) return finishWith(base, 'peacekeepers', 'wires');
 
     if (card.type === 'rogue-agent') {
       return advanceTurn(

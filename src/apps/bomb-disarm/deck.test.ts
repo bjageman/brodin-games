@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildDeck, dealHands, redeal, swapCards } from './deck';
-import { CARDS_PER_PLAYER, WIRES_IN_DECK, maxSpecialsFor, deckCompositionFor } from './constants';
+import { CARDS_PER_PLAYER, maxSpecialsFor, deckCompositionFor } from './constants';
 import { SPECIAL_CARD_TYPES, isSpecial } from './cards';
 import type { Card, CardType } from './types';
 
@@ -13,12 +13,10 @@ describe('maxSpecialsFor', () => {
     }
   });
 
-  it('has no room for every special at 3 players', () => {
-    expect(maxSpecialsFor(3)).toBeLessThan(ALL_SPECIALS.length);
-  });
-
-  it('fits every special from 5 players up', () => {
-    for (let n = 5; n <= 10; n++) {
+  // Only one wire per player leaves the deck mostly blanks, so there's now room
+  // for every special at any table size.
+  it('fits every special at every player count', () => {
+    for (let n = 3; n <= 10; n++) {
       expect(maxSpecialsFor(n)).toBeGreaterThanOrEqual(ALL_SPECIALS.length);
     }
   });
@@ -30,7 +28,7 @@ describe('buildDeck', () => {
       for (const specials of [[], ALL_SPECIALS]) {
         const deck = buildDeck(n, specials);
         expect(deck).toHaveLength(n * CARDS_PER_PLAYER);
-        expect(deck.filter((c) => c === 'wire')).toHaveLength(WIRES_IN_DECK);
+        expect(deck.filter((c) => c === 'wire')).toHaveLength(n); // one wire per player
         expect(deck.filter((c) => c === 'explode').length).toBeGreaterThanOrEqual(1);
       }
     }
@@ -54,10 +52,11 @@ describe('buildDeck', () => {
     expect(new Set(specials).size).toBe(specials.length);
   });
 
-  it('clamps to what a small deck can hold', () => {
+  it('fits every eligible special even in a small deck', () => {
     const deck = buildDeck(3, ALL_SPECIALS);
     expect(deck).toHaveLength(3 * CARDS_PER_PLAYER);
-    expect(deck.filter(isSpecial)).toHaveLength(maxSpecialsFor(3));
+    // Double Agent is gated to 8+ players, so a 3-player deck carries the other 7.
+    expect(deck.filter(isSpecial)).toHaveLength(ALL_SPECIALS.length - 1);
     expect(deck.filter((c) => c === 'blank').length).toBeGreaterThan(0);
   });
 

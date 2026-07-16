@@ -4,7 +4,7 @@ test.setTimeout(180_000);
 
 // Drives a full Bomb Disarm game with three real browser contexts talking over
 // the live ntfy broker, using the debug widget to skip the 60s memorize timer
-// and to force a deterministic Peacekeeper win (revealing all 6 cut wires).
+// and to force a deterministic Peacekeeper win (revealing all cut wires).
 test('host + 2 players play a full Bomb Disarm game (peacekeepers disarm)', async ({ browser }: { browser: Browser }) => {
   const contexts = await Promise.all([browser.newContext(), browser.newContext(), browser.newContext()]);
   const [host, p1, p2] = await Promise.all(contexts.map((c) => c.newPage()));
@@ -40,7 +40,7 @@ test('host + 2 players play a full Bomb Disarm game (peacekeepers disarm)', asyn
   // Skip the 60s memorize timer → table phase, cards face-down.
   await host.getByRole('button', { name: 'Skip to Table' }).click();
   for (const page of [host, p1, p2]) {
-    await expect(page.getByText(/\d\/6 wires/)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/\d\/3 wires/)).toBeVisible({ timeout: 15_000 });
   }
 
   // Turn gating: every client shows either the "your turn" or the "someone else
@@ -49,14 +49,14 @@ test('host + 2 players play a full Bomb Disarm game (peacekeepers disarm)', asyn
     await expect(page.getByText('Your turn').or(page.getByText('is choosing'))).toBeVisible({ timeout: 15_000 });
   }
 
-  // Force a Peacekeeper win by cutting all 6 wires. Wait for each cut to register
+  // Force a Peacekeeper win by cutting all the wires. Wait for each cut to register
   // (serializing the debug reveals) before triggering the next.
-  for (let i = 1; i <= 6; i++) {
+  for (let i = 1; i <= 3; i++) {
     const btn = host.getByRole('button', { name: 'Reveal a Cut Wire' });
     await expect(btn).toBeVisible({ timeout: 10_000 });
     await btn.click();
-    if (i < 6) {
-      await expect(host.getByText(new RegExp(`${i}/6 wires`))).toBeVisible({ timeout: 10_000 });
+    if (i < 3) {
+      await expect(host.getByText(new RegExp(`${i}/3 wires`))).toBeVisible({ timeout: 10_000 });
     }
   }
 
