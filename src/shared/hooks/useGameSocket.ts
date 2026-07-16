@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { DEBUG_MODE } from '../constants';
 
 // Read endpoints and credentials from environment variables.
 // Leave USERNAME/PASSWORD blank when using the public ntfy.sh broker.
@@ -110,7 +111,9 @@ export function useGameSocket(gameCode: string, onMessage: (data: unknown) => vo
           if (eventData.id) lastMessageId = eventData.id;
           if (eventData.message) {
             const payload = JSON.parse(eventData.message) as unknown;
-            console.log(`[ntfy] Message received on topic ${topic}:`, payload);
+            // Full-payload logging on every message is a real drag with devtools
+            // open (the whole GameState ships on each action), so gate it.
+            if (DEBUG_MODE) console.log(`[ntfy] Message received on topic ${topic}:`, payload);
             onMessageRef.current(payload);
           }
         } catch (e) {
@@ -151,7 +154,7 @@ export function useGameSocket(gameCode: string, onMessage: (data: unknown) => vo
     // Use ?auth= query param instead of Authorization header to avoid CORS preflight.
     const publishUrl = `${httpProtocol}://${domain}/${topic}${buildQueryParams(null)}`;
 
-    console.log(`[ntfy] Publishing message to: ${httpProtocol}://${domain}/${topic}`, payload);
+    if (DEBUG_MODE) console.log(`[ntfy] Publishing message to: ${httpProtocol}://${domain}/${topic}`, payload);
     try {
       const response = await fetch(publishUrl, {
         method: 'POST',
