@@ -732,7 +732,13 @@ export default function JokeFactoryGame({
           setVotingEndTimestamp(state.votingEndTimestamp);
           setResultsEndTimestamp(state.resultsEndTimestamp);
 
-          setMyVote(null);
+          if (
+            state.phase !== phaseRef.current ||
+            state.round !== roundRef.current ||
+            state.currentMatchIndex !== currentMatchIndexRef.current
+          ) {
+            setMyVote(null);
+          }
         }
       } else if (type === 'debug-host-action') {
         if (isHost) {
