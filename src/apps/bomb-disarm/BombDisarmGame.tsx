@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import { useCountdown } from '../../shared/hooks/useCountdown';
 import { loadSnapshot, saveSnapshot, gameSnapshotKey } from '../../shared/utils/sessionSnapshot';
@@ -74,6 +74,14 @@ export default function BombDisarmGame({
 }: GamePlayProps) {
   const restored = freshStart ? null : loadSnapshot<BombSnapshot>(gameSnapshotKey(code))?.bomb ?? null;
 
+  const transitionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
+    };
+  }, []);
+
   // One object rather than a field-per-useState: every host transition ships the
   // whole state anyway, and a missing field here is a desync on someone's phone.
   const [state, setState] = useState<GameState>({ ...EMPTY, ...restored });
@@ -117,7 +125,11 @@ export default function BombDisarmGame({
   const finishWith = useCallback((base: GameState, won: Winner, reason: EndReason) => {
     const held: GameState = { ...base, pendingWinner: won, endReason: reason, pendingRescue: null };
     publish(held);
-    setTimeout(() => publish({ ...held, phase: 'results', winner: won }), RESULT_REVEAL_DELAY_MS);
+    if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
+    transitionTimeoutRef.current = setTimeout(() => {
+      transitionTimeoutRef.current = null;
+      publish({ ...held, phase: 'results', winner: won });
+    }, RESULT_REVEAL_DELAY_MS);
   }, [publish]);
 
   // A Folk Hero who spent their save keeps their cards on the table but never
@@ -164,7 +176,11 @@ export default function BombDisarmGame({
     };
     const withSummary = { ...base, roundSummary: summary };
     publish(withSummary);
-    setTimeout(() => endRound({ ...withSummary, roundSummary: null }, lastOwnerId), ROUND_SUMMARY_DELAY_MS);
+    if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
+    transitionTimeoutRef.current = setTimeout(() => {
+      transitionTimeoutRef.current = null;
+      endRound({ ...withSummary, roundSummary: null }, lastOwnerId);
+    }, ROUND_SUMMARY_DELAY_MS);
   }, [publish, endRound]);
 
   // ---- Host: hand the pick to the next phone, or close out the round ----

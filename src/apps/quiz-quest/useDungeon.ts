@@ -1,3 +1,4 @@
+import { useRef, useEffect } from 'react';
 import type { PlayerInfo } from '../../shared/types';
 import {
   ANSWER_DURATION_MS, BOSS_ANSWER_DURATION_MS, BOSS_CORRECT_ANSWER_SCORE, CORRECT_ANSWER_DAMAGE,
@@ -31,6 +32,14 @@ function topScorerIds(players: Record<string, PlayerCombat>, roster: PlayerInfo[
 // resolve a round (HP + monster damage), and roll into the next question,
 // room, or game-over. Host-authoritative, same shape as Bomb Disarm's.
 export function useDungeon({ roster, state, publish }: DungeonDeps) {
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
+
   function askQuestion(base: GameState, room: ActiveRoom): GameState {
     return {
       ...base,
@@ -154,7 +163,11 @@ export function useDungeon({ roster, state, publish }: DungeonDeps) {
       revealEndTimestamp: Date.now() + REVEAL_DURATION_MS,
     };
     publish(withReveal);
-    setTimeout(() => advanceAfterReveal(withReveal), REVEAL_DURATION_MS);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      timeoutRef.current = null;
+      advanceAfterReveal(withReveal);
+    }, REVEAL_DURATION_MS);
   }
 
   // ---- Host: the monster's still up -> another question; dead -> next room

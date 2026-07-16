@@ -153,6 +153,14 @@ export default function MemoRandomGame({ code, playerId, isHost, roster, isConne
   const remainingTimeRef = useRef<number | null>(null);
   const [isTimerPaused, setIsTimerPaused] = useState(false);
 
+  useEffect(() => {
+    return () => {
+      if (activeTimeoutRef.current) {
+        clearTimeout(activeTimeoutRef.current.id);
+      }
+    };
+  }, []);
+
   const setGameTimeout = useCallback((callback: () => void, delayMs: number) => {
     if (activeTimeoutRef.current) {
       clearTimeout(activeTimeoutRef.current.id);
