@@ -8,6 +8,9 @@ export const VOTE_DURATION_MS = 30000;        // 30 seconds to vote
 // imposter's escape is worth 1.5x a correct vote, preserving the old 3:2 ratio.
 export const PAYOUT_CORRECT_VOTE = 500;
 export const PAYOUT_IMPOSTER_ESCAPED = 750;
+// Consolation for fingering the imposter when they still get away — the group
+// voted out someone else, or the imposter was caught but guessed the topic.
+export const PAYOUT_CORRECT_VOTE_ESCAPED = 100;
 
 export function formatMoney(amount: number): string {
   return `$${amount.toLocaleString('en-US')}`;

@@ -15,6 +15,7 @@ import {
   STATE_REQUEST_RETRY_INTERVAL_MS,
   STATE_REQUEST_MAX_ATTEMPTS,
   PAYOUT_CORRECT_VOTE,
+  PAYOUT_CORRECT_VOTE_ESCAPED,
   PAYOUT_IMPOSTER_ESCAPED,
 } from './constants';
 import FakeItScreens from './components/FakeItViews';
@@ -301,7 +302,14 @@ export default function FakeItGame({
     });
 
     if (maxVotes > 0) {
-      // Imposter escaped!
+      // Imposter escaped the vote — the group convicted someone else. Still pay
+      // a consolation to anyone who fingered the imposter correctly.
+      Object.entries(finalVotes).forEach(([voterId, votedId]) => {
+        if (votedId === imposterId) {
+          newRoundPoints[voterId] = PAYOUT_CORRECT_VOTE_ESCAPED;
+        }
+      });
+      // Set the imposter's payout last so a self-vote can't clobber it.
       newRoundPoints[imposterId] = PAYOUT_IMPOSTER_ESCAPED;
     }
 
@@ -336,7 +344,14 @@ export default function FakeItGame({
     });
 
     if (correct) {
-      // Imposter guessed correctly! They win the round.
+      // Imposter was caught but guessed the topic and got away. The players who
+      // caught them still earn the consolation for fingering the imposter.
+      Object.entries(votes).forEach(([voterId, votedId]) => {
+        if (votedId === imposterId) {
+          newRoundPoints[voterId] = PAYOUT_CORRECT_VOTE_ESCAPED;
+        }
+      });
+      // Set the imposter's payout last so a self-vote can't clobber it.
       newRoundPoints[imposterId] = PAYOUT_IMPOSTER_ESCAPED;
     } else {
       // Imposter failed! Artists win.
