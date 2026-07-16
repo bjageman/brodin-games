@@ -173,8 +173,8 @@ export default function JokeFactoryGame({
       const ptsPerVote = 200; // doubled
       const bonusPts = 400; // doubled
 
-      const isQuiplash = totalVotes > 0 && vCount === totalVotes;
-      const points = vCount * ptsPerVote + (isQuiplash ? bonusPts : 0);
+      const isCleanSweep = totalVotes > 0 && vCount === totalVotes;
+      const points = vCount * ptsPerVote + (isCleanSweep ? bonusPts : 0);
 
       nextRoundPoints[p.id] = (nextRoundPoints[p.id] || 0) + points;
       nextScores[p.id] = (nextScores[p.id] || 0) + points;
@@ -719,6 +719,23 @@ export default function JokeFactoryGame({
       if (type === 'joke-factory-state-update') {
         if (!isHost) {
           const state = payload as GameState;
+
+          // Reset local locks when transitioning to a new matchup, round, or phase
+          if (
+            state.phase !== phase ||
+            state.round !== round ||
+            state.currentMatchIndex !== currentMatchIndex
+          ) {
+            setMyVote(null);
+          }
+
+          if (
+            state.phase === 'writing' &&
+            (phase !== 'writing' || state.round !== round)
+          ) {
+            setAnswersSubmitted(false);
+          }
+
           setPhase(state.phase);
           setRound(state.round);
           setPlayerPrompts(state.playerPrompts);
@@ -731,8 +748,6 @@ export default function JokeFactoryGame({
           setWritingEndTimestamp(state.writingEndTimestamp);
           setVotingEndTimestamp(state.votingEndTimestamp);
           setResultsEndTimestamp(state.resultsEndTimestamp);
-
-          setMyVote(null);
         }
       } else if (type === 'debug-host-action') {
         if (isHost) {
