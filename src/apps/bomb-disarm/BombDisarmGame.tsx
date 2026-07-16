@@ -48,6 +48,7 @@ const EMPTY: GameState = {
   endReason: null,
   smokeActive: false,
   roundSummary: null,
+  discardRecap: null,
   hands: {},
   activePlayerId: '',
   wiresRevealed: 0,
@@ -78,7 +79,7 @@ export default function BombDisarmGame({
   const [state, setState] = useState<GameState>({ ...EMPTY, ...restored });
   const {
     phase, roles, specialRoles, hands, activePlayerId, wiresRevealed, turn, round, revealsThisRound,
-    roleRevealEndTimestamp, memorizeEndTimestamp, winner, lastReveal,
+    roleRevealEndTimestamp, memorizeEndTimestamp, winner, lastReveal, discardRecap,
     pendingWinner, pendingEffect, peek, deckAdditions, pendingRescue, opportunistTeam, leftoverRole,
   } = state;
 
@@ -127,6 +128,10 @@ export default function BombDisarmGame({
 
   // ---- Host: drop the revealed cards, reshuffle the rest, redeal, re-memorize ----
   const endRound = useCallback((base: GameState, lastOwnerId: string) => {
+    // The cards cut this round are about to be dropped by redeal; carry them into
+    // the memorize beat so the table can see what left the deck. A smoke round
+    // keeps its anonymous tally instead, so don't spoil it here.
+    const cut = Object.values(base.hands).flat().filter((c) => c.revealed);
     publish({
       ...base,
       phase: 'memorize',
@@ -134,6 +139,7 @@ export default function BombDisarmGame({
       round: base.round + 1,
       revealsThisRound: 0,
       activePlayerId: lastOwnerId,
+      discardRecap: base.smokeActive ? null : cut,
       // No timer during the memorize/flip phase — the host deals when ready.
       memorizeEndTimestamp: null,
       rogueAgentId: null,
@@ -555,6 +561,7 @@ export default function BombDisarmGame({
             wiresRevealed={wiresRevealed}
             playerCount={roster.length}
             extraRebels={extraRebels}
+            discardRecap={discardRecap}
             onReady={goToTable}
             onQuit={onQuit}
           />
