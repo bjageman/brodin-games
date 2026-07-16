@@ -21,12 +21,12 @@ function save(code: string, key: string, value: string[]) {
   saveSnapshot(gameSnapshotKey(code), { ...snapshot, [key]: value });
 }
 
-// Special cards are off by default — a host opts into each one. Special roles
-// keep their existing default of all-on.
+// Both special cards and special roles are off by default — a host opts into
+// each one they want.
 export const loadSpecials = (code: string) => load(code, CARDS_KEY, SPECIAL_CARD_TYPES, []);
 export const saveSpecials = (code: string, v: SpecialCardType[]) => save(code, CARDS_KEY, v);
 
-export const loadSpecialRoles = (code: string) => load(code, ROLES_KEY, SPECIAL_ROLES, [...SPECIAL_ROLES]);
+export const loadSpecialRoles = (code: string) => load(code, ROLES_KEY, SPECIAL_ROLES, []);
 export const saveSpecialRoles = (code: string, v: SpecialRole[]) => save(code, ROLES_KEY, v);
 
 // A player leaving after the host picked can shrink the table below what they
