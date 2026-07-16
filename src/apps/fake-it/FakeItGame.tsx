@@ -380,6 +380,7 @@ export default function FakeItGame({
     setDrawingRound(1);
     setLines([]);
     applyVotes({});
+    setMyVote(null); // host skips the client sync path, so clear its old vote here
     setRoundPoints({});
     setRoleRevealEndTimestamp(revealEnd);
     setTurnEndTimestamp(null);
