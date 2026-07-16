@@ -68,3 +68,57 @@ describe('BombDisarmGame reveals', () => {
     expect(s.hands.p1[0].revealed).toBe(true);
   });
 });
+
+describe('BombDisarmGame interrogate', () => {
+  it("saves the target player's special role in pendingEffect when interrogated", () => {
+    const INTERROGATE_STATE: GameState = {
+      ...TABLE_STATE,
+      specialRoles: { p1: 'folk-hero' },
+      pendingEffect: {
+        type: 'interrogate',
+        actorId: 'h',
+        firstPick: null,
+        role: null,
+        roleTargetName: null,
+      },
+      lastReveal: {
+        targetId: 'p2',
+        targetName: 'Bob',
+        cardIndex: 0,
+        type: 'interrogate',
+      },
+    };
+
+    const code = 'INT1';
+    sessionStorage.setItem(`brodin-game-${code}`, JSON.stringify({ bomb: INTERROGATE_STATE }));
+    let handler: ((e: Envelope) => void) | null = null;
+    const sent: Envelope[] = [];
+
+    render(
+      <BombDisarmGame
+        code={code} playerId="h" name="Host" isHost roster={roster} isConnected
+        sendMessage={(p) => { sent.push(p as Envelope); return Promise.resolve(); }}
+        isDisplay={false} freshStart={false}
+        onRegisterMessageHandler={(h) => { handler = h; }}
+        onQuit={() => {}} onRegisterDebugActions={() => {}} onGameBgChange={() => {}}
+      />
+    );
+
+    act(() => {
+      handler!({
+        type: 'bomb-effect-choice',
+        playerId: 'h',
+        timestamp: 0,
+        payload: { kind: 'player', playerId: 'p1' },
+      } as Envelope);
+    });
+
+    const lastUpdate = sent.filter((e) => e.type === 'bomb-state-update').pop();
+    expect(lastUpdate).toBeDefined();
+    const payload = lastUpdate!.payload as GameState;
+    expect(payload.pendingEffect).toBeDefined();
+    expect(payload.pendingEffect!.role).toBe('peacekeeper');
+    expect(payload.pendingEffect!.specialRole).toBe('folk-hero');
+    expect(payload.pendingEffect!.roleTargetName).toBe('Alice');
+  });
+});
