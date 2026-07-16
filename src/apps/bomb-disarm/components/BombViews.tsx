@@ -80,9 +80,9 @@ export function RoundSummaryOverlay({ summary }: { summary: { blanks: number; wi
 }
 
 export function MemorizeView({
-  role, special, hand, seconds, isDisplay, isHost, round, wiresRevealed, playerCount, extraRebels, onReady, onQuit,
+  role, special, hand, isDisplay, isHost, round, wiresRevealed, playerCount, extraRebels, onReady, onQuit,
 }: {
-  role: Role | undefined; special?: SpecialRole; hand: Card[]; seconds: number; isDisplay: boolean; isHost: boolean;
+  role: Role | undefined; special?: SpecialRole; hand: Card[]; isDisplay: boolean; isHost: boolean;
   round: number; wiresRevealed: number; playerCount: number; extraRebels: number;
   onReady: () => void; onQuit: () => void;
 }) {
@@ -94,11 +94,8 @@ export function MemorizeView({
           <p className="hidden text-center text-[10px] font-bold uppercase tracking-widest text-gray-300 sm:block">
             {round === 1
               ? 'Memorize your hand — it shuffles face-down when the table is dealt'
-              : 'Fresh deal — the revealed cards are gone'}
+              : 'Fresh deal — study your new hand'}
           </p>
-          <span className={cn('font-display text-lg font-black', seconds <= 10 ? 'animate-pulse text-bomb-rebel' : 'text-bomb-bolt')}>
-            {seconds}s
-          </span>
         </div>
 
         <div className="h-[58%] shrink-0 py-2">

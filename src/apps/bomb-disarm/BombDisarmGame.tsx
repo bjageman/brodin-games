@@ -9,7 +9,6 @@ import type {
   EffectChoice, EndReason, GameState, LastReveal, PendingEffect, Role, Winner,
 } from './types';
 import {
-  MEMORIZE_DURATION_MS,
   RESULT_REVEAL_DELAY_MS,
   PEEK_DURATION_MS,
   ROUND_SUMMARY_DELAY_MS,
@@ -93,9 +92,10 @@ export default function BombDisarmGame({
 
   // ---- Timers ----
   const { msRemaining: roleMs, expired: roleExpired } = useCountdown(roleRevealEndTimestamp);
-  const { msRemaining: memoMs, expired: memoExpired } = useCountdown(memorizeEndTimestamp);
+  // Memorize has no timer now (the host deals when ready); we still read the
+  // countdown so a stale timestamp from an older snapshot still resolves cleanly.
+  const { expired: memoExpired } = useCountdown(memorizeEndTimestamp);
   const { expired: peekExpired } = useCountdown(peek?.endTimestamp ?? null);
-  const memoSec = Math.ceil(memoMs / 1000);
   const roleSec = Math.ceil(roleMs / 1000);
 
   const publish = useCallback((next: GameState) => {
@@ -134,7 +134,8 @@ export default function BombDisarmGame({
       round: base.round + 1,
       revealsThisRound: 0,
       activePlayerId: lastOwnerId,
-      memorizeEndTimestamp: Date.now() + MEMORIZE_DURATION_MS,
+      // No timer during the memorize/flip phase — the host deals when ready.
+      memorizeEndTimestamp: null,
       rogueAgentId: null,
       pendingEffect: null,
       peek: null,
@@ -548,7 +549,6 @@ export default function BombDisarmGame({
             role={roles[playerId]}
             special={specialRoles[playerId]}
             hand={myHand}
-            seconds={memoSec}
             isDisplay={isDisplay}
             isHost={isHost}
             round={round}
