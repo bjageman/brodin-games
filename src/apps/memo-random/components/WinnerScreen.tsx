@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import confetti from 'canvas-confetti';
 import type { PlayerSheetResult } from '../types';
 import { cn } from '../../../shared/utils/cn';
+import { computeLeaderboard } from '../../../shared/utils/leaderboard';
 import EmailCard from './EmailCard';
 
 const CONFETTI_COLORS = ['#7c3aed', '#22d3ee', '#facc15'];
@@ -30,9 +31,12 @@ export default function WinnerScreen({
   const winners = winnerPlayerIds.map((id) => sheets[id]).filter((s): s is PlayerSheetResult => !!s);
   const formatContributors = (names: string[]) =>
     names.length === 2 ? `${names[0]} and ${names[1]}` : names.join(', ');
-  const leaderboard = Object.entries(scores)
-    .sort((a, b) => b[1] - a[1])
-    .map(([playerId, score]) => ({ playerId, score, name: sheets[playerId]?.playerName ?? 'Unknown' }));
+
+  const roster = Object.keys(scores).map((id) => ({
+    id,
+    name: sheets[id]?.playerName ?? 'Unknown',
+  }));
+  const { rankedPlayers, winnerNamesFormatted, hasTies } = computeLeaderboard(roster, scores);
 
   useEffect(() => {
     if (winners.length === 0) return;
@@ -42,7 +46,7 @@ export default function WinnerScreen({
   return (
     <div className="w-full max-w-md sm:max-w-lg md:max-w-xl mx-auto space-y-4">
       <h2 className="text-center font-display text-lg font-bold text-brodin-gold uppercase tracking-wide">
-        {winners.length === 0 ? 'No Scores Recorded' : winners.length > 1 ? "It's a Tie!" : 'Winner!'}
+        {winners.length === 0 ? 'No Scores Recorded' : hasTies ? `Tie: ${winnerNamesFormatted}` : `Winner: ${winnerNamesFormatted}`}
       </h2>
 
       {winners.length === 0 && (
@@ -70,19 +74,19 @@ export default function WinnerScreen({
         ))}
       </div>
 
-      {leaderboard.length > 0 && (
+      {rankedPlayers.length > 0 && (
         <div className="bg-brodin-panel border border-brodin-primary/30 rounded-xl p-4 space-y-1.5">
           <p className="text-xs uppercase tracking-widest text-gray-400 mb-1">Final Scoreboard</p>
-          {leaderboard.map(({ playerId, score, name }) => (
+          {rankedPlayers.map((p) => (
             <div
-              key={playerId}
+              key={p.id}
               className={cn(
                 "flex justify-between text-sm",
-                winnerPlayerIds.includes(playerId) ? "text-brodin-gold font-bold" : "text-gray-300"
+                p.isWinner ? "text-brodin-gold font-bold" : "text-gray-300"
               )}
             >
-              <span>{name}</span>
-              <span>{score} pts</span>
+              <span>#{p.rank} {p.name}</span>
+              <span>{p.score} pts</span>
             </div>
           ))}
         </div>

@@ -1,9 +1,10 @@
 import { cn } from '../../../shared/utils/cn';
+import { computeLeaderboard } from '../../../shared/utils/leaderboard';
 import type { PlayerInfo } from '../../../shared/types';
 import type { PlayerCombat } from '../types';
 
 export default function GameOverView({
-  players, roster, winnerIds, partyWiped, isHost, onQuit,
+  players, roster, partyWiped, isHost, onQuit,
 }: {
   players: Record<string, PlayerCombat>;
   roster: PlayerInfo[];
@@ -12,11 +13,13 @@ export default function GameOverView({
   isHost: boolean;
   onQuit: () => void;
 }) {
-  const ranked = [...roster].sort((a, b) => (players[b.id]?.score ?? 0) - (players[a.id]?.score ?? 0));
-  const winnerNames = roster.filter((p) => winnerIds.includes(p.id)).map((p) => p.name);
-  const winLine = winnerNames.length > 1
-    ? `${winnerNames.join(' & ')} tie on points`
-    : `${winnerNames[0]} tops the scoreboard`;
+  const scores = Object.fromEntries(
+    roster.map((p) => [p.id, players[p.id]?.score ?? 0])
+  );
+  const { rankedPlayers, winnerNamesFormatted, hasTies } = computeLeaderboard(roster, scores);
+  const winLine = hasTies
+    ? `${winnerNamesFormatted} tie on points`
+    : `${winnerNamesFormatted} tops the scoreboard`;
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col items-center gap-6 px-4 py-10 text-center font-pixel">
@@ -36,16 +39,16 @@ export default function GameOverView({
       </div>
 
       <div className="w-full space-y-1.5">
-        {ranked.map((p, i) => (
+        {rankedPlayers.map((p) => (
           <div
             key={p.id}
             className={cn(
               'flex items-center justify-between border-2 px-4 py-2 text-sm font-semibold',
-              winnerIds.includes(p.id) ? 'border-quiz-gold bg-quiz-gold/15 text-quiz-gold' : 'border-quiz-goldDark text-quiz-ink'
+              p.isWinner ? 'border-quiz-gold bg-quiz-gold/15 text-quiz-gold' : 'border-quiz-goldDark text-quiz-ink'
             )}
           >
-            <span className="truncate">{i + 1}. {p.name}</span>
-            <span>{players[p.id]?.score ?? 0} pts</span>
+            <span className="truncate">{p.rank}. {p.name}</span>
+            <span>{p.score} pts</span>
           </div>
         ))}
       </div>
