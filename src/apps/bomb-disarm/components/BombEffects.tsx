@@ -106,6 +106,11 @@ export function EffectPrompt({ effect, state, roster, onChoose }: {
             )}>
               {effect.role === 'rebel' ? '🧨 Rebel' : '🛡️ Peacekeeper'}
             </p>
+            {effect.specialRole && (
+              <p className="font-display text-base font-bold tracking-wide text-bomb-bolt mt-0.5">
+                ({effect.specialRole === 'procrastinator' ? '⏳ Procrastinator' : effect.specialRole === 'folk-hero' ? '🦸 Folk Hero' : '🎭 Opportunist'})
+              </p>
+            )}
             <p className="text-center text-[10px] font-bold uppercase tracking-widest text-gray-400">
               Keep it to yourself
             </p>

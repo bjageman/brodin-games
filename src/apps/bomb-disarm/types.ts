@@ -53,6 +53,7 @@ export interface PendingEffect {
   // Interrogate's answer. Broadcast like everything else, but only ever drawn on
   // the actor's phone — the same trust model as roles and hands.
   role: Role | null;
+  specialRole?: SpecialRole | null;
   roleTargetName: string | null;
 }
 
