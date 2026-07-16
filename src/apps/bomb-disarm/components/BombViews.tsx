@@ -7,7 +7,7 @@ import { CARD_META } from '../cards';
 import { ROUNDS, WIRE_WIN_THRESHOLD } from '../constants';
 import { didWin } from '../roles';
 import { LightningBolt } from './BombArt';
-import { BoardFrame, BombCard, HandRow, TeamCounts, WiresPanel } from './BombBoard';
+import { BoardFrame, BombCard, HandRow, RevealedTable, TeamCounts, WiresPanel } from './BombBoard';
 import { EffectPrompt, EffectWaiting, PeekOverlay } from './BombEffects';
 import { DeclarePrompt, RescuePrompt, RescueWaiting, RoleBadge, RoleCard } from './BombRoles';
 
@@ -148,6 +148,10 @@ export function TableView({
     pendingEffect, peek, effectNote, rogueAgentId, pendingRescue, specialRoles, opportunistTeam,
     smokeActive, roundSummary,
   } = state;
+
+  // Every revealed card across the table, face-up for all to see. Public info —
+  // only cards already flipped, so rendering them on every screen leaks nothing.
+  const revealedCards = roster.flatMap((p) => (state.hands[p.id] ?? []).filter((c) => c.revealed));
   const { msRemaining: peekMs } = useCountdown(peek?.endTimestamp ?? null);
 
   // The Opportunist may flip on their own turn, any time before the game ends.
@@ -176,11 +180,15 @@ export function TableView({
           <span className="truncate text-gray-300">{status}</span>
         </div>
 
-        <div className="relative h-[58%] shrink-0 py-2">
-          {isDisplay ? (
-            <p className="flex h-full items-center justify-center text-sm text-gray-300">Watching the table…</p>
-          ) : (
-            <>
+        <div className="flex h-[58%] shrink-0 flex-col gap-2 py-2">
+          {/* Shared table: revealed cards stay face-up for the whole table. */}
+          <div className={cn('min-h-0', isDisplay ? 'flex-1' : 'flex-[2]')}>
+            <RevealedTable revealed={revealedCards} />
+          </div>
+
+          {/* Your own hand — face-down for others to tap on your phone. */}
+          {!isDisplay && (
+            <div className="relative min-h-0 flex-[3]">
               <HandRow hand={hand} faceUp={false} tappable={!isMyTurn && !pendingWinner} onTap={onTap} />
               {isMyTurn && !pendingWinner && (
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-bomb-bg/50 backdrop-blur-[1px]">
@@ -189,7 +197,7 @@ export function TableView({
                   </span>
                 </div>
               )}
-            </>
+            </div>
           )}
         </div>
 

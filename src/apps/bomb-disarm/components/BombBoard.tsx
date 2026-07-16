@@ -105,6 +105,29 @@ export function HandRow({ hand, faceUp, tappable, onTap }: {
   );
 }
 
+// The shared table everyone watches: every card revealed so far this round,
+// face-up. Unlike a private hand these are public, so the table renders the
+// same on every phone and on the display.
+export function RevealedTable({ revealed }: { revealed: Card[] }) {
+  if (revealed.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center rounded-xl border-2 border-dashed border-white/15 px-4 text-center text-[10px] font-bold uppercase tracking-widest text-gray-400 sm:text-xs">
+        Revealed cards stay face-up here
+      </div>
+    );
+  }
+  // Cap each card at its equal share of the width so a full round of reveals
+  // all stays visible instead of running off the edge.
+  const maxWidth = `calc((100% - ${(revealed.length - 1) * HAND_GAP_PX}px) / ${revealed.length})`;
+  return (
+    <div className="flex h-full items-center justify-center px-1" style={{ gap: `${HAND_GAP_PX}px` }}>
+      {revealed.map((card, i) => (
+        <BombCard key={i} card={card} faceUp maxWidth={maxWidth} />
+      ))}
+    </div>
+  );
+}
+
 export function TeamCounts({ playerCount, extraRebels = 0 }: { playerCount: number; extraRebels?: number }) {
   const { rebels, peacekeepers } = teamCountLabels(playerCount, extraRebels);
   return (
