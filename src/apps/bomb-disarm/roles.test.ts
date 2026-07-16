@@ -8,6 +8,7 @@ function stateWith(fields: Partial<GameState>): GameState {
     peek: null, rogueAgentId: null, deckAdditions: [], effectNote: null,
     roles: {}, specialRoles: {}, revealedRoleIds: [], folkHeroSpent: false, opportunistTeam: null,
     leftoverRole: null, pendingRescue: null, endReason: null, smokeActive: false, roundSummary: null,
+    discardRecap: null,
     hands: {}, activePlayerId: '', wiresRevealed: 0, turn: 0,
     roleRevealEndTimestamp: null, memorizeEndTimestamp: null, winner: null, lastReveal: null,
     ...fields,

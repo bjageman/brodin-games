@@ -9,7 +9,6 @@ import type {
   EffectChoice, EndReason, GameState, LastReveal, PendingEffect, Role, Winner,
 } from './types';
 import {
-  MEMORIZE_DURATION_MS,
   RESULT_REVEAL_DELAY_MS,
   PEEK_DURATION_MS,
   ROUND_SUMMARY_DELAY_MS,
@@ -49,6 +48,7 @@ const EMPTY: GameState = {
   endReason: null,
   smokeActive: false,
   roundSummary: null,
+  discardRecap: null,
   hands: {},
   activePlayerId: '',
   wiresRevealed: 0,
@@ -79,7 +79,7 @@ export default function BombDisarmGame({
   const [state, setState] = useState<GameState>({ ...EMPTY, ...restored });
   const {
     phase, roles, specialRoles, hands, activePlayerId, wiresRevealed, turn, round, revealsThisRound,
-    roleRevealEndTimestamp, memorizeEndTimestamp, winner, lastReveal,
+    roleRevealEndTimestamp, memorizeEndTimestamp, winner, lastReveal, discardRecap,
     pendingWinner, pendingEffect, peek, deckAdditions, pendingRescue, opportunistTeam, leftoverRole,
   } = state;
 
@@ -93,9 +93,10 @@ export default function BombDisarmGame({
 
   // ---- Timers ----
   const { msRemaining: roleMs, expired: roleExpired } = useCountdown(roleRevealEndTimestamp);
-  const { msRemaining: memoMs, expired: memoExpired } = useCountdown(memorizeEndTimestamp);
+  // Memorize has no timer now (the host deals when ready); we still read the
+  // countdown so a stale timestamp from an older snapshot still resolves cleanly.
+  const { expired: memoExpired } = useCountdown(memorizeEndTimestamp);
   const { expired: peekExpired } = useCountdown(peek?.endTimestamp ?? null);
-  const memoSec = Math.ceil(memoMs / 1000);
   const roleSec = Math.ceil(roleMs / 1000);
 
   const publish = useCallback((next: GameState) => {
@@ -127,6 +128,10 @@ export default function BombDisarmGame({
 
   // ---- Host: drop the revealed cards, reshuffle the rest, redeal, re-memorize ----
   const endRound = useCallback((base: GameState, lastOwnerId: string) => {
+    // The cards cut this round are about to be dropped by redeal; carry them into
+    // the memorize beat so the table can see what left the deck. A smoke round
+    // keeps its anonymous tally instead, so don't spoil it here.
+    const cut = Object.values(base.hands).flat().filter((c) => c.revealed);
     publish({
       ...base,
       phase: 'memorize',
@@ -134,7 +139,9 @@ export default function BombDisarmGame({
       round: base.round + 1,
       revealsThisRound: 0,
       activePlayerId: lastOwnerId,
-      memorizeEndTimestamp: Date.now() + MEMORIZE_DURATION_MS,
+      discardRecap: base.smokeActive ? null : cut,
+      // No timer during the memorize/flip phase — the host deals when ready.
+      memorizeEndTimestamp: null,
       rogueAgentId: null,
       pendingEffect: null,
       peek: null,
@@ -559,13 +566,13 @@ export default function BombDisarmGame({
             role={roles[playerId]}
             special={specialRoles[playerId]}
             hand={myHand}
-            seconds={memoSec}
             isDisplay={isDisplay}
             isHost={isHost}
             round={round}
             wiresRevealed={wiresRevealed}
             playerCount={roster.length}
             extraRebels={extraRebels}
+            discardRecap={discardRecap}
             onReady={goToTable}
             onQuit={onQuit}
           />

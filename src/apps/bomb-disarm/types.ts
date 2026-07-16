@@ -110,6 +110,10 @@ export interface GameState {
   // Set for a beat between rounds when smoke was active, so the table gets an
   // anonymous tally of the round instead of the ordinary per-turn status line.
   roundSummary: { blanks: number; wires: number } | null;
+  // The cards cut in the round that just ended, carried into the next round's
+  // memorize beat so everyone can see what left the deck. Left null on a smoke
+  // round (its anonymous tally stands in) and on the opening deal.
+  discardRecap: Card[] | null;
   hands: Record<string, Card[]>;
   activePlayerId: string;
   wiresRevealed: number;

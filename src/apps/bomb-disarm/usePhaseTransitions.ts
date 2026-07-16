@@ -1,7 +1,7 @@
 import { useEffect, useCallback } from 'react';
 import type { PlayerInfo } from '../../shared/types';
 import {
-  MEMORIZE_DURATION_MS, ROLE_REVEAL_DURATION_MS, STATE_REQUEST_MAX_ATTEMPTS, STATE_REQUEST_RETRY_INTERVAL_MS,
+  ROLE_REVEAL_DURATION_MS, STATE_REQUEST_MAX_ATTEMPTS, STATE_REQUEST_RETRY_INTERVAL_MS,
 } from './constants';
 import { assignRoles } from './roles';
 import { buildDeck, dealHands, shuffle } from './deck';
@@ -59,7 +59,9 @@ export function usePhaseTransitions(deps: PhaseTransitionsDeps) {
   }, [code, roster, emptyState]);
 
   const goToMemorize = useCallback(() => {
-    patch({ phase: 'memorize', roleRevealEndTimestamp: null, memorizeEndTimestamp: Date.now() + MEMORIZE_DURATION_MS });
+    // No memorize/flip-phase timer — players study their hands and the host
+    // deals the table when everyone's ready.
+    patch({ phase: 'memorize', roleRevealEndTimestamp: null, memorizeEndTimestamp: null });
   }, [patch]);
 
   const goToTable = useCallback(() => {

@@ -16,7 +16,7 @@ const TABLE_STATE: GameState = {
   peek: null, rogueAgentId: null, deckAdditions: [], effectNote: null,
   roles: { h: 'peacekeeper', p1: 'peacekeeper', p2: 'rebel' },
   specialRoles: {}, revealedRoleIds: [], folkHeroSpent: false, opportunistTeam: null, leftoverRole: null,
-  pendingRescue: null, endReason: null, smokeActive: false, roundSummary: null,
+  pendingRescue: null, endReason: null, smokeActive: false, roundSummary: null, discardRecap: null,
   hands: {
     h: [card('blank'), card('blank')],
     p1: [card('blank'), card('blank')],

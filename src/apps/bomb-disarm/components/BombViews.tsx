@@ -79,13 +79,30 @@ export function RoundSummaryOverlay({ summary }: { summary: { blanks: number; wi
   );
 }
 
+// The cards cut in the round that just ended, shown face-up while everyone
+// studies the fresh deal — a between-rounds beat so the table sees what left
+// the deck (and can count the wires still out there).
+function DiscardRecap({ cards, className }: { cards: Card[]; className?: string }) {
+  return (
+    <div className={cn('flex min-h-0 flex-col', className)}>
+      <span className="shrink-0 pb-1 text-center font-display text-[10px] font-black uppercase tracking-widest text-bomb-bolt sm:text-xs">
+        ✂️ Cut last round
+      </span>
+      <div className="min-h-0 flex-1">
+        <HandRow hand={cards} faceUp tappable={false} />
+      </div>
+    </div>
+  );
+}
+
 export function MemorizeView({
-  role, special, hand, seconds, isDisplay, isHost, round, wiresRevealed, playerCount, extraRebels, onReady, onQuit,
+  role, special, hand, isDisplay, isHost, round, wiresRevealed, playerCount, extraRebels, discardRecap, onReady, onQuit,
 }: {
-  role: Role | undefined; special?: SpecialRole; hand: Card[]; seconds: number; isDisplay: boolean; isHost: boolean;
+  role: Role | undefined; special?: SpecialRole; hand: Card[]; isDisplay: boolean; isHost: boolean;
   round: number; wiresRevealed: number; playerCount: number; extraRebels: number;
-  onReady: () => void; onQuit: () => void;
+  discardRecap: Card[] | null; onReady: () => void; onQuit: () => void;
 }) {
+  const hasRecap = round > 1 && !!discardRecap && discardRecap.length > 0;
   return (
     <BoardFrame onQuit={onQuit}>
       <div className="flex h-full flex-col p-3">
@@ -94,17 +111,23 @@ export function MemorizeView({
           <p className="hidden text-center text-[10px] font-bold uppercase tracking-widest text-gray-300 sm:block">
             {round === 1
               ? 'Memorize your hand — it shuffles face-down when the table is dealt'
-              : 'Fresh deal — the revealed cards are gone'}
+              : 'Fresh deal — study your new hand'}
           </p>
-          <span className={cn('font-display text-lg font-black', seconds <= 10 ? 'animate-pulse text-bomb-rebel' : 'text-bomb-bolt')}>
-            {seconds}s
-          </span>
         </div>
 
-        <div className="h-[58%] shrink-0 py-2">
-          {isDisplay
-            ? <p className="flex h-full items-center justify-center text-sm text-gray-300">Players are memorizing their hands…</p>
-            : <HandRow hand={hand} faceUp tappable={false} />}
+        <div className="flex h-[58%] shrink-0 flex-col gap-2 py-2">
+          {hasRecap && (
+            <DiscardRecap cards={discardRecap} className={isDisplay ? 'flex-1' : 'flex-[2]'} />
+          )}
+          <div className="min-h-0 flex-[3]">
+            {isDisplay
+              ? (
+                <p className="flex h-full items-center justify-center text-sm text-gray-300">
+                  {hasRecap ? 'Players are studying their new hands…' : 'Players are memorizing their hands…'}
+                </p>
+              )
+              : <HandRow hand={hand} faceUp tappable={false} />}
+          </div>
         </div>
 
         <div className="flex min-h-0 flex-1 items-end justify-between gap-4">
