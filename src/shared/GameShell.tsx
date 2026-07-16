@@ -100,8 +100,14 @@ export default function GameShell({
   // See GamePlayProps.freshStart above.
   const [freshStart, setFreshStart] = useState(false);
 
-  // Active game debug state
+  // Active game debug state. The rendered list (activeGameDebugActions) is only
+  // updated when the buttons actually change (label/variant/count) so registering
+  // fresh actions every render doesn't loop the shell. But each action's onClick
+  // is a fresh closure over current game state every render, so we also stash the
+  // latest actions in a ref and fire onClicks from there — otherwise a debug
+  // button would keep calling a stale closure and, e.g., undo a prior reveal.
   const [activeGameDebugActions, setActiveGameDebugActions] = useState<DebugAction[]>([]);
+  const activeGameDebugActionsRef = useRef<DebugAction[]>([]);
   const [activeGameDebugPhase, setActiveGameDebugPhase] = useState<string>('');
   // Set by the active game (see GamePlayProps.onGameBgChange). Tagged with the
   // game that set it so one game's palette can't bleed into another's.
@@ -457,6 +463,7 @@ export default function GameShell({
             onRegisterMessageHandler={(handler) => { gameMessageHandlerRef.current = handler; }}
             onQuit={goToMainMenu}
             onRegisterDebugActions={(actions, gamePhase) => {
+              activeGameDebugActionsRef.current = actions; // always the freshest onClicks
               setActiveGameDebugActions((prev) => {
                 if (
                   prev.length === actions.length &&
@@ -499,6 +506,11 @@ export default function GameShell({
                     },
                   ]
                 : activeGameDebugActions
+            }
+            // In-game buttons fire the freshest closure from the ref (the rendered
+            // list can lag a render); the lobby buttons above own their onClicks.
+            resolveOnClick={
+              phase === 'lobby' ? undefined : (idx) => activeGameDebugActionsRef.current[idx]?.onClick()
             }
           />
         )}

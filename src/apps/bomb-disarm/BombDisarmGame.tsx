@@ -509,19 +509,30 @@ export default function BombDisarmGame({
   });
 
   // ---- Register debug actions ----
+  // getDebugActions and onRegisterDebugActions are fresh functions every render,
+  // so depending on them re-registers each render — and since registering does a
+  // setState up in the shell, that's an infinite render loop. Worse, the churn
+  // leaves the debug buttons holding a stale closure, so a debug reveal can
+  // republish pre-reveal state and flip an already-revealed card back down.
+  // Re-register only when the state the actions actually read changes.
   useEffect(() => {
     if (DEBUG_MODE && onRegisterDebugActions) onRegisterDebugActions(getDebugActions(), phase);
-  }, [phase, turn, winner, activePlayerId, wiresRevealed, pendingEffect, peek, pendingRescue, opportunistTeam, specialRoles, getDebugActions, onRegisterDebugActions]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, turn, winner, activePlayerId, wiresRevealed, pendingEffect, peek, pendingRescue, opportunistTeam, specialRoles]);
 
   // ---- Confetti on a win ----
   useEffect(() => {
     if (phase === 'results') confetti({ particleCount: 150, spread: 80, origin: { y: 0.4 }, colors: CONFETTI_COLORS });
   }, [phase]);
 
+  // onGameBgChange is a fresh function every shell render, and calling it does a
+  // setState up in the shell — so depending on it re-runs this effect every
+  // render (an infinite loop). Set the background once on mount, clear on unmount.
   useEffect(() => {
     onGameBgChange?.('bg-bomb-bg');
     return () => onGameBgChange?.(null);
-  }, [onGameBgChange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ============================ RENDER ============================
   const myHand = hands[playerId] ?? [];
