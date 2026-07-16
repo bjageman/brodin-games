@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { DiscardRecapView } from './components/BombViews';
+import { DiscardRecapView, VerdictOverlay } from './components/BombViews';
 import { BombCard } from './components/BombBoard';
-import type { Card } from './types';
+import type { Card, GameState } from './types';
 
 function renderDiscardRecap(round: number, discardRecap: Card[] | null, isHost: boolean = true) {
   return render(
@@ -78,5 +78,58 @@ describe('BombCard smoke bomb behavior', () => {
     );
     expect(screen.getByText('Bomb')).toBeInTheDocument();
     expect(screen.queryByText('Smoke Screen')).not.toBeInTheDocument();
+  });
+});
+
+describe('VerdictOverlay', () => {
+  const dummyState = (roles: Record<string, string>, specialRoles: Record<string, string> = {}) => ({
+    roles,
+    specialRoles,
+    winner: 'rebels',
+    endReason: 'bomb',
+  } as unknown as GameState);
+
+  it('renders standard Rebels Win/Peacekeepers Win title on display device', () => {
+    render(
+      <VerdictOverlay
+        reveal={{ targetId: 'p1', targetName: 'Alice', cardIndex: 0, type: 'explode' }}
+        winner="rebels"
+        isDisplay={true}
+        playerId="h"
+        state={dummyState({ h: 'rebel', p1: 'peacekeeper' })}
+      />
+    );
+    expect(screen.getByText('Rebels Win')).toBeInTheDocument();
+    expect(screen.queryByText('You Win')).not.toBeInTheDocument();
+  });
+
+  it('renders You Win and role name on a winning player device', () => {
+    render(
+      <VerdictOverlay
+        reveal={{ targetId: 'p1', targetName: 'Alice', cardIndex: 0, type: 'explode' }}
+        winner="rebels"
+        isDisplay={false}
+        playerId="p2"
+        state={dummyState({ p2: 'rebel' })}
+      />
+    );
+    expect(screen.getByText('You Win')).toBeInTheDocument();
+    expect(screen.getByText('Rebel')).toBeInTheDocument();
+    expect(screen.queryByText('Rebels Win')).not.toBeInTheDocument();
+  });
+
+  it('renders You Lose and role name on a losing player device', () => {
+    render(
+      <VerdictOverlay
+        reveal={{ targetId: 'p1', targetName: 'Alice', cardIndex: 0, type: 'explode' }}
+        winner="rebels"
+        isDisplay={false}
+        playerId="p3"
+        state={dummyState({ p3: 'peacekeeper' })}
+      />
+    );
+    expect(screen.getByText('You Lose')).toBeInTheDocument();
+    expect(screen.getByText('Peacekeeper')).toBeInTheDocument();
+    expect(screen.queryByText('Rebels Win')).not.toBeInTheDocument();
   });
 });
