@@ -29,6 +29,9 @@ interface DebugActionsDeps {
   handleDeclare: (senderId: string | undefined, team: Role) => void;
   goToMemorize: () => void;
   goToTable: () => void;
+  // Cancels a pending special that can't be auto-answered, so the panel never
+  // sticks on "Answer for …" with no way forward.
+  clearEffect: () => void;
 }
 
 // Everything the host-only debug widget needs: bots can't pick up a phone to
@@ -38,7 +41,7 @@ export function useDebugActions(deps: DebugActionsDeps) {
   const {
     isHost, playerId, roster, nameOf, sendMessage,
     phase, winner, hands, activePlayerId, pendingRescue, pendingEffect, peek, specialRoles, opportunistTeam,
-    resolveReveal, handleEffectChoice, handleRescue, handleDeclare, goToMemorize, goToTable,
+    resolveReveal, handleEffectChoice, handleRescue, handleDeclare, goToMemorize, goToTable, clearEffect,
   } = deps;
 
   // Debug shortcut: reveal the first unrevealed card matching a predicate (unlike
@@ -76,7 +79,11 @@ export function useDebugActions(deps: DebugActionsDeps) {
     } else {
       choice = faceDown(effect.firstPick?.playerId);
     }
+    // No valid target to auto-answer with (e.g. a User Manual / Crossed Wires
+    // once every pickable card is gone) — cancel the special rather than leave
+    // the panel stuck on "Answer for …".
     if (choice) handleEffectChoice(effect.actorId, choice);
+    else clearEffect();
   }
 
   function handleDebugHostAction(action: string) {

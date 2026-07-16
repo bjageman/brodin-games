@@ -9,9 +9,10 @@ const ROLES_KEY = 'bombSpecialRoles';
 
 // Host-only: the deck and the roles are both dealt on the host and reach
 // everyone else inside the broadcast game state, so these never cross the wire.
-function load<T extends string>(code: string, key: string, all: T[]): T[] {
+// `fallback` is what a host who hasn't touched the setting yet gets.
+function load<T extends string>(code: string, key: string, all: T[], fallback: T[]): T[] {
   const saved = loadSnapshot<Record<string, unknown>>(gameSnapshotKey(code))?.[key];
-  if (!Array.isArray(saved)) return [...all];
+  if (!Array.isArray(saved)) return fallback;
   return all.filter((t) => saved.includes(t));
 }
 
@@ -20,10 +21,12 @@ function save(code: string, key: string, value: string[]) {
   saveSnapshot(gameSnapshotKey(code), { ...snapshot, [key]: value });
 }
 
-export const loadSpecials = (code: string) => load(code, CARDS_KEY, SPECIAL_CARD_TYPES);
+// Special cards are off by default — a host opts into each one. Special roles
+// keep their existing default of all-on.
+export const loadSpecials = (code: string) => load(code, CARDS_KEY, SPECIAL_CARD_TYPES, []);
 export const saveSpecials = (code: string, v: SpecialCardType[]) => save(code, CARDS_KEY, v);
 
-export const loadSpecialRoles = (code: string) => load(code, ROLES_KEY, SPECIAL_ROLES);
+export const loadSpecialRoles = (code: string) => load(code, ROLES_KEY, SPECIAL_ROLES, [...SPECIAL_ROLES]);
 export const saveSpecialRoles = (code: string, v: SpecialRole[]) => save(code, ROLES_KEY, v);
 
 // A player leaving after the host picked can shrink the table below what they
