@@ -90,7 +90,7 @@ export function HandRow({ hand, faceUp, tappable, onTap }: {
   const maxWidth = `calc((100% - ${(hand.length - 1) * HAND_GAP_PX}px) / ${Math.max(hand.length, 1)})`;
 
   return (
-    <div className="flex h-full items-stretch justify-center" style={{ gap: `${HAND_GAP_PX}px` }}>
+    <div className="flex h-full items-center justify-center" style={{ gap: `${HAND_GAP_PX}px` }}>
       {hand.map((card, i) => (
         <BombCard
           key={i}

@@ -290,7 +290,8 @@ export default function BombDisarmGame({
       if (choice.kind === 'player') {
         const role = roles[choice.playerId];
         if (!role || choice.playerId === effect.actorId) return;
-        return patch({ pendingEffect: { ...effect, role, roleTargetName: nameOf(choice.playerId) } });
+        const specialRole = specialRoles[choice.playerId] || null;
+        return patch({ pendingEffect: { ...effect, role, specialRole, roleTargetName: nameOf(choice.playerId) } });
       }
       if (choice.kind === 'done' && effect.role) {
         return advanceTurn(

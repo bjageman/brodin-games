@@ -102,7 +102,7 @@ export function DiscardRecapView({
 
         <div className="w-full max-w-2xl min-h-0 flex-1 flex items-center justify-center py-4">
           {discardRecap && discardRecap.length > 0 ? (
-            <div className="w-full">
+            <div className="w-full h-40 sm:h-52">
               <HandRow hand={discardRecap} faceUp tappable={false} />
             </div>
           ) : (
@@ -142,14 +142,20 @@ export function MemorizeView({
       <div className="flex h-full flex-col p-3">
         <div className="flex shrink-0 items-center justify-between gap-3">
           <RoleBadge role={role} special={special} />
-          <p className="hidden text-center text-[10px] font-bold uppercase tracking-widest text-gray-300 sm:block">
-            {round === 1
-              ? 'Memorize your hand — it shuffles face-down when the table is dealt'
-              : 'Fresh deal — study your new hand'}
-          </p>
+          {!isDisplay ? (
+            <p className="text-center text-[11px] font-black uppercase tracking-wider text-yellow-400 animate-pulse">
+              🤫 Hide your screen! Keep your cards secret from others.
+            </p>
+          ) : (
+            <p className="hidden text-center text-[10px] font-bold uppercase tracking-widest text-gray-300 sm:block">
+              {round === 1
+                ? 'Memorize your hand — it shuffles face-down when the table is dealt'
+                : 'Fresh deal — study your new hand'}
+            </p>
+          )}
         </div>
 
-        <div className="flex h-[58%] shrink-0 flex-col gap-2 py-2 justify-center">
+        <div className="flex h-[70%] shrink-0 flex-col gap-2 py-2 justify-center">
           <div className="min-h-0 flex-1">
             {isDisplay
               ? (
@@ -230,7 +236,7 @@ export function TableView({
           <span className="truncate text-gray-300">{status}</span>
         </div>
 
-        <div className="relative h-[58%] shrink-0 py-2">
+        <div className="relative h-[70%] shrink-0 py-2">
           {isDisplay ? (
             <p className="flex h-full items-center justify-center text-sm text-gray-300">Watching the table…</p>
           ) : (
