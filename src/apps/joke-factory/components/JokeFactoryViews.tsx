@@ -316,12 +316,12 @@ export default function JokeFactoryViews({
               const leftPoints = leftVotes * ptsPerVote + (totalVotes > 0 && leftVotes === totalVotes ? bonusPts : 0);
               const rightPoints = rightVotes * ptsPerVote + (totalVotes > 0 && rightVotes === totalVotes ? bonusPts : 0);
 
-              const leftQuiplash = totalVotes > 0 && leftVotes === totalVotes;
-              const rightQuiplash = totalVotes > 0 && rightVotes === totalVotes;
+              const leftCleanSweep = totalVotes > 0 && leftVotes === totalVotes;
+              const rightCleanSweep = totalVotes > 0 && rightVotes === totalVotes;
 
               return (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className={`border-2 rounded-3xl p-6 flex flex-col justify-between space-y-4 shadow-xl ${leftQuiplash ? 'bg-indigo-950 border-yellow-400' : 'bg-indigo-900 border-white/10'}`}>
+                  <div className={`border-2 rounded-3xl p-6 flex flex-col justify-between space-y-4 shadow-xl ${leftCleanSweep ? 'bg-indigo-950 border-yellow-400' : 'bg-indigo-900 border-white/10'}`}>
                     <div>
                       <span className="text-xs uppercase font-bold text-yellow-400/60 block mb-1">
                         {leftAuthor}'s Joke
@@ -334,12 +334,12 @@ export default function JokeFactoryViews({
                       </span>
                       <span className={`text-md font-extrabold ${leftPoints > 0 ? 'text-yellow-400' : 'text-gray-400'}`}>
                         {leftPoints > 0 ? formatPoints(leftPoints) : '0 pts'}
-                        {leftQuiplash && <span className="block text-[10px] text-yellow-400 uppercase font-black tracking-widest mt-0.5">🔥 QUIPLASH!</span>}
+                        {leftCleanSweep && <span className="block text-[10px] text-yellow-400 uppercase font-black tracking-widest mt-0.5">🔥 CLEAN SWEEP!</span>}
                       </span>
                     </div>
                   </div>
 
-                  <div className={`border-2 rounded-3xl p-6 flex flex-col justify-between space-y-4 shadow-xl ${rightQuiplash ? 'bg-indigo-950 border-yellow-400' : 'bg-indigo-900 border-white/10'}`}>
+                  <div className={`border-2 rounded-3xl p-6 flex flex-col justify-between space-y-4 shadow-xl ${rightCleanSweep ? 'bg-indigo-950 border-yellow-400' : 'bg-indigo-900 border-white/10'}`}>
                     <div>
                       <span className="text-xs uppercase font-bold text-yellow-400/60 block mb-1">
                         {rightAuthor}'s Joke
@@ -352,7 +352,7 @@ export default function JokeFactoryViews({
                       </span>
                       <span className={`text-md font-extrabold ${rightPoints > 0 ? 'text-yellow-400' : 'text-gray-400'}`}>
                         {rightPoints > 0 ? formatPoints(rightPoints) : '0 pts'}
-                        {rightQuiplash && <span className="block text-[10px] text-yellow-400 uppercase font-black tracking-widest mt-0.5">🔥 QUIPLASH!</span>}
+                        {rightCleanSweep && <span className="block text-[10px] text-yellow-400 uppercase font-black tracking-widest mt-0.5">🔥 CLEAN SWEEP!</span>}
                       </span>
                     </div>
                   </div>
@@ -370,10 +370,10 @@ export default function JokeFactoryViews({
                 const vCount = Object.values(round3Data.votes).filter((v) => v === p.id).length;
                 
                 const ptsPerVote = 200; // Double points in R3!
-                const bonusPts = 400; // Quiplash bonus is +400 in R3!
+                const bonusPts = 400; // bonus is +400 in R3!
 
-                const isQuiplash = totalVotes > 0 && vCount === totalVotes;
-                const pointsEarned = vCount * ptsPerVote + (isQuiplash ? bonusPts : 0);
+                const isCleanSweep = totalVotes > 0 && vCount === totalVotes;
+                const pointsEarned = vCount * ptsPerVote + (isCleanSweep ? bonusPts : 0);
 
                 return {
                   playerId: p.id,
@@ -381,7 +381,7 @@ export default function JokeFactoryViews({
                   answerText,
                   votes: vCount,
                   points: pointsEarned,
-                  isQuiplash,
+                  isCleanSweep,
                 };
               }).sort((a, b) => b.votes - a.votes); // highest votes first!
 
@@ -391,7 +391,7 @@ export default function JokeFactoryViews({
                     <div
                       key={res.playerId}
                       className={`border-2 rounded-2xl p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4 shadow-xl ${
-                        res.isQuiplash ? 'bg-indigo-950 border-yellow-400' : 'bg-indigo-900 border-white/5'
+                        res.isCleanSweep ? 'bg-indigo-950 border-yellow-400' : 'bg-indigo-900 border-white/5'
                       }`}
                     >
                       <div className="space-y-1">
@@ -408,9 +408,9 @@ export default function JokeFactoryViews({
                           <span className={`text-md font-extrabold ${res.points > 0 ? 'text-yellow-400' : 'text-gray-400'}`}>
                             {res.points > 0 ? formatPoints(res.points) : '0 pts'}
                           </span>
-                          {res.isQuiplash && (
+                          {res.isCleanSweep && (
                             <span className="block text-[9px] text-yellow-400 uppercase font-black tracking-widest mt-0.5">
-                              🔥 QUIPLASH!
+                              🔥 CLEAN SWEEP!
                             </span>
                           )}
                         </div>
