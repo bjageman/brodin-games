@@ -208,6 +208,14 @@ export default function GameShell({
     sendMsg({ type: 'roster-update', timestamp: Date.now(), payload: { players: nextRoster } });
   }
 
+  const goToMainMenu = () => {
+    // Clear snapshots so a later Host/Join doesn't resume into a game we explicitly left.
+    clearSnapshot(gameSnapshotKey(code));
+    clearSnapshot(HOST_ROUTE_KEY);
+    clearSnapshot(JOIN_ROUTE_KEY);
+    window.location.hash = '#/';
+  };
+
   const handleMessage = (data: unknown) => {
     const envelope = data as Envelope;
 
@@ -270,6 +278,11 @@ export default function GameShell({
     } else if (envelope.type === 'play-again') {
       // Roster stays untouched — everyone just returns to the same lobby.
       setPhase('lobby');
+    } else if (envelope.type === 'host-left') {
+      // The host quit, so there's no authority left to run the game — every
+      // other player is sent back to the main menu. (goToMainMenu is declared
+      // below; this handler only ever runs at message time, well after mount.)
+      if (!isHost) goToMainMenu();
     }
 
     gameMessageHandlerRef.current?.(envelope);
@@ -331,19 +344,18 @@ export default function GameShell({
     setPhase('in-game');
   }
 
-  const goToMainMenu = () => {
-    // Clear snapshots so a later Host/Join doesn't resume into a game we explicitly left.
-    clearSnapshot(gameSnapshotKey(code));
-    clearSnapshot(HOST_ROUTE_KEY);
-    clearSnapshot(JOIN_ROUTE_KEY);
-    window.location.hash = '#/';
-  };
-
   // A display host isn't on the roster, so it has no seat of its own to subtract.
   const otherPlayerCount = Math.max(0, roster.length - (isHost && isDisplay ? 0 : 1));
 
   const quit = () => {
-    if (!isHost) {
+    if (isHost) {
+      // No host means no authority to run the game, so kick everyone back to the
+      // menu. ntfy is best-effort and we're about to tear down, so fire it a few
+      // times up front rather than on an interval that unmount would cancel.
+      for (let i = 0; i < GAME_START_RESENDS; i++) {
+        sendMessage({ type: 'host-left', playerId, timestamp: Date.now(), payload: {} });
+      }
+    } else {
       sendMessage({ type: 'leave-lobby', playerId, timestamp: Date.now(), payload: {} });
     }
     goToMainMenu();
@@ -455,7 +467,9 @@ export default function GameShell({
             isDisplay={isDisplay}
             freshStart={freshStart}
             onRegisterMessageHandler={(handler) => { gameMessageHandlerRef.current = handler; }}
-            onQuit={goToMainMenu}
+            // Route through quit() so a host leaving mid-game broadcasts host-left
+            // and kicks the players, instead of just slipping out to the menu.
+            onQuit={quit}
             onRegisterDebugActions={(actions, gamePhase) => {
               setActiveGameDebugActions((prev) => {
                 if (
