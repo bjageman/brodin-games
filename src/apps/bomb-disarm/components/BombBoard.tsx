@@ -5,15 +5,18 @@ import { CARD_META } from '../cards';
 import { teamCountLabels } from '../constants';
 import { CardArt, LightningBolt, WireIcon } from './BombArt';
 
-export function BombCard({ card, faceUp, tappable, maxWidth, onTap }: {
+export function BombCard({ card, faceUp, tappable, maxWidth, onTap, smokeActive }: {
   card: Card;
   faceUp: boolean;
   tappable?: boolean;
   maxWidth?: string;
   onTap?: () => void;
+  smokeActive?: boolean;
 }) {
   const shown = faceUp || card.revealed;
-  const meta = CARD_META[card.type];
+  const isObscured = smokeActive && shown && (card.type === 'blank' || card.type === 'wire');
+  const renderType = isObscured ? 'smoke-bomb' : card.type;
+  const meta = isObscured ? { title: 'Smoke Screen' } : CARD_META[card.type];
 
   // Both faces are always in the DOM and a 3D rotation swaps which one faces the
   // viewer, so a card already dealt face-up (e.g. memorize) still gets to play
@@ -59,9 +62,9 @@ export function BombCard({ card, faceUp, tappable, maxWidth, onTap }: {
           <span className="font-display text-[10px] font-black uppercase leading-tight tracking-wider text-white drop-shadow-[0_1px_1px_rgba(26,31,77,0.5)] sm:text-xs">
             {meta.title}
           </span>
-          {card.type !== 'blank' && (
+          {renderType !== 'blank' && (
             <span className="w-[70%] max-w-[64px] shrink-0">
-              <CardArt type={card.type} />
+              <CardArt type={renderType} />
             </span>
           )}
           {meta.effect && (
@@ -78,11 +81,12 @@ export function BombCard({ card, faceUp, tappable, maxWidth, onTap }: {
 
 const HAND_GAP_PX = 10;
 
-export function HandRow({ hand, faceUp, tappable, onTap }: {
+export function HandRow({ hand, faceUp, tappable, onTap, smokeActive }: {
   hand: Card[];
   faceUp: boolean;
   tappable: boolean;
   onTap?: (i: number) => void;
+  smokeActive?: boolean;
 }) {
   // Cards are sized off the row's height to keep their shape, but a tall row on
   // a narrow phone would run them off the right edge — so also cap each card at
@@ -99,6 +103,7 @@ export function HandRow({ hand, faceUp, tappable, onTap }: {
           maxWidth={maxWidth}
           tappable={tappable && !card.revealed}
           onTap={onTap ? () => onTap(i) : undefined}
+          smokeActive={smokeActive}
         />
       ))}
     </div>
