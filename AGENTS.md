@@ -19,3 +19,14 @@ When a file approaches the limit, split it rather than letting it grow:
 Prefer moving code verbatim and wiring dependencies through a typed context
 object so TypeScript verifies the split. Pull genuinely shared UI into
 `src/shared/components/` (e.g. `WaitingForHost.tsx`).
+
+## Git and Pull Requests
+
+Use the custom push script to push branches, check for merge conflicts, enable auto-merge, and monitor CI checks:
+* Script: [/home/neurobomber/.gemini/antigravity-cli/scratch/push-and-check.sh](file:///home/neurobomber/.gemini/antigravity-cli/scratch/push-and-check.sh) (symlinked to [push-and-check.sh](file:///home/neurobomber/.claude/skills/github/push-and-check.sh))
+
+Usage:
+* Push and watch: `/home/neurobomber/.gemini/antigravity-cli/scratch/push-and-check.sh`
+* Create PR and watch: `/home/neurobomber/.gemini/antigravity-cli/scratch/push-and-check.sh --create`
+* Enable squash auto-merge: `/home/neurobomber/.gemini/antigravity-cli/scratch/push-and-check.sh --auto-merge`
+
