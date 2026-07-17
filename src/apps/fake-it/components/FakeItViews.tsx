@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { cn } from '../../../shared/utils/cn';
+import { computeLeaderboard } from '../../../shared/utils/leaderboard';
 import type { PlayerInfo } from '../../../shared/types';
 import type { FakeItPhase, Line, Point, Topic } from '../types';
 import { TURN_DURATION_MS, formatMoney } from '../constants';
@@ -100,13 +101,6 @@ function PromptPanel({ topic, isImposter }: { topic: Topic | null; isImposter: b
       <p className="font-serifDisplay text-sm">Category: {topic?.category}</p>
     </div>
   );
-}
-
-/** "Alice", "Alice & Bob", "Alice, Bob & Cara" — for the tied-winner headline. */
-function formatNames(names: string[]): string {
-  if (names.length === 0) return '—';
-  if (names.length === 1) return names[0];
-  return `${names.slice(0, -1).join(', ')} & ${names[names.length - 1]}`;
 }
 
 /** Paper-canvas wrapper shared by the drawing / vote / results screens. */
@@ -444,16 +438,12 @@ function FinalScore({
   playAgain: () => void;
   onQuit: () => void;
 }) {
-  const ranked = roster
-    .map((p) => ({ ...p, score: scores[p.id] ?? 0 }))
-    .sort((a, b) => b.score - a.score);
-
-  // A tie at the top means everyone on it won — taking ranked[0] alone would
-  // crown whoever the sort happened to put first and bury their equals below.
-  const topScore = ranked[0]?.score ?? 0;
-  const winners = ranked.filter((p) => p.score === topScore);
-  const rest = ranked.filter((p) => p.score !== topScore);
-  const shared = winners.length > 1;
+  const { rankedPlayers, winners, winnerNamesFormatted, hasTies, topScore } = computeLeaderboard(
+    roster,
+    scores
+  );
+  const rest = rankedPlayers.filter((p) => !p.isWinner);
+  const shared = hasTies;
 
   return (
     <div className="mx-auto flex w-full max-w-xl flex-col items-center gap-6 px-4 pb-10 text-fakeit-ink">
@@ -468,7 +458,7 @@ function FinalScore({
 
       <div className="flex w-full items-baseline justify-between gap-3">
         <h2 className="font-serifDisplay text-2xl font-bold uppercase tracking-wide">
-          {shared ? 'Winners' : 'Winner'}: {formatNames(winners.map((w) => w.name))}
+          {shared ? 'Winners' : 'Winner'}: {winnerNamesFormatted}
         </h2>
         <span className="shrink-0 font-display text-3xl font-extrabold text-fakeit-money">
           {formatMoney(topScore)}

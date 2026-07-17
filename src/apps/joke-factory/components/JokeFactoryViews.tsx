@@ -1,5 +1,6 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import type { PlayerInfo } from '../../../shared/types';
+import { computeLeaderboard } from '../../../shared/utils/leaderboard';
 import type { JokeFactoryPhase, Prompt, PromptMatchup, Round3State } from '../types';
 
 interface JokeFactoryViewsProps {
@@ -436,21 +437,18 @@ export default function JokeFactoryViews({
           </h2>
 
           <div className="bg-indigo-900 border border-yellow-400/25 rounded-3xl p-6 space-y-4 shadow-2xl">
-            {roster
-              .map((p) => ({ ...p, score: scores[p.id] ?? 0 }))
-              .sort((a, b) => b.score - a.score)
-              .map((p, idx) => (
-                <div
-                  key={p.id}
-                  className={`flex items-center justify-between py-3.5 px-4 rounded-2xl ${idx === 0 ? 'bg-yellow-500 text-indigo-950 font-black' : 'bg-indigo-950/60 text-white font-semibold'}`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="text-lg font-mono">#{idx + 1}</span>
-                    <span className="truncate">{p.name}</span>
-                  </div>
-                  <span className="font-mono">{p.score} pts</span>
+            {computeLeaderboard(roster, scores).rankedPlayers.map((p) => (
+              <div
+                key={p.id}
+                className={`flex items-center justify-between py-3.5 px-4 rounded-2xl ${p.isWinner ? 'bg-yellow-500 text-indigo-950 font-black' : 'bg-indigo-950/60 text-white font-semibold'}`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-lg font-mono">#{p.rank}</span>
+                  <span className="truncate">{p.name}</span>
                 </div>
-              ))}
+                <span className="font-mono">{p.score} pts</span>
+              </div>
+            ))}
           </div>
 
           {isHost ? (
