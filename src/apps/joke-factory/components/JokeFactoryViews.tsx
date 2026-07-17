@@ -372,7 +372,11 @@ export default function JokeFactoryViews({
                 const ptsPerVote = 200; // Double points in R3!
                 const bonusPts = 400; // bonus is +400 in R3!
 
-                const isCleanSweep = totalVotes > 0 && vCount === totalVotes;
+                // Clean sweep = every OTHER voter picked p (p cannot vote for
+                // self, so exclude p's own ballot from the denominator).
+                const ownVoteCast = round3Data.votes[p.id] !== undefined ? 1 : 0;
+                const sweepableVotes = totalVotes - ownVoteCast;
+                const isCleanSweep = sweepableVotes > 0 && vCount === sweepableVotes;
                 const pointsEarned = vCount * ptsPerVote + (isCleanSweep ? bonusPts : 0);
 
                 return {
