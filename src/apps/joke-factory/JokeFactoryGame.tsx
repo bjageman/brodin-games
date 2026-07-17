@@ -173,7 +173,11 @@ export default function JokeFactoryGame({
       const ptsPerVote = 200; // doubled
       const bonusPts = 400; // doubled
 
-      const isCleanSweep = totalVotes > 0 && vCount === totalVotes;
+      // Clean sweep = every OTHER voter picked p (p cannot vote for self, so
+      // exclude p's own ballot from the denominator).
+      const ownVoteCast = latestR3Data.votes[p.id] !== undefined ? 1 : 0;
+      const sweepableVotes = totalVotes - ownVoteCast;
+      const isCleanSweep = sweepableVotes > 0 && vCount === sweepableVotes;
       const points = vCount * ptsPerVote + (isCleanSweep ? bonusPts : 0);
 
       nextRoundPoints[p.id] = (nextRoundPoints[p.id] || 0) + points;
@@ -720,8 +724,17 @@ export default function JokeFactoryGame({
         if (!isHost) {
           const state = payload as GameState;
 
-          // Reset local locks when transitioning to a new matchup, round, or phase
-          if (
+          // Derive local locks from synced state when it records our own
+          // ballot/answer (restores after refresh/remount); otherwise only
+          // reset on a genuine votable/writing transition (preserves the
+          // optimistic local lock during the submit->echo race).
+          const incomingVote =
+            state.round === 3
+              ? state.round3Data?.votes?.[playerId] ?? null
+              : state.matchups?.[state.currentMatchIndex]?.votes?.[playerId] ?? null;
+          if (incomingVote !== null) {
+            setMyVote(incomingVote);
+          } else if (
             state.phase !== phase ||
             state.round !== round ||
             state.currentMatchIndex !== currentMatchIndex
@@ -729,7 +742,9 @@ export default function JokeFactoryGame({
             setMyVote(null);
           }
 
-          if (
+          if (state.playerAnswers?.[playerId] !== undefined) {
+            setAnswersSubmitted(true);
+          } else if (
             state.phase === 'writing' &&
             (phase !== 'writing' || state.round !== round)
           ) {

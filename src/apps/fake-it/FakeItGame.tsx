@@ -267,7 +267,9 @@ export default function FakeItGame({
     roster.forEach((p) => {
       voteCounts[p.id] = 0;
     });
-    Object.values(finalVotes).forEach((votedId) => {
+    Object.entries(finalVotes).forEach(([voterId, votedId]) => {
+      // The imposter votes to blend in, but their ballot can't sway the verdict.
+      if (voterId === imposterId) return;
       if (voteCounts[votedId] !== undefined) {
         voteCounts[votedId]++;
       }
