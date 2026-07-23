@@ -19,7 +19,7 @@ jobs:
           script_stop: true
           script: |
             export DOCKER_HOST=unix:///tank/services/docker.sock
-            cd /home/neurobomber/Apps-Docker/vibes/games-brodin
+            cd /home/neurobomber/Apps/vibes/games-brodin
             git fetch origin
             # Move the local branch pointer to match origin without touching the
             # working tree, since the clone below only sees this dir's local
@@ -28,15 +28,15 @@ jobs:
 
             # Build the new image in a clean temporary directory to prevent local changes from blocking checkout
             rm -rf /tmp/games-brodin-prod-build
-            git clone --no-checkout file:///home/neurobomber/Apps-Docker/vibes/games-brodin /tmp/games-brodin-prod-build
+            git clone --no-checkout file:///home/neurobomber/Apps/vibes/games-brodin /tmp/games-brodin-prod-build
             cd /tmp/games-brodin-prod-build
             git checkout origin/main
-            cp /home/neurobomber/Apps-Docker/vibes/games-brodin/docker-compose.prod.yml .
-            cp /home/neurobomber/Apps-Docker/vibes/games-brodin/docker-compose.dev.yml .
-            cp /home/neurobomber/Apps-Docker/vibes/games-brodin/.env .
+            cp /home/neurobomber/Apps/vibes/games-brodin/docker-compose.prod.yml .
+            cp /home/neurobomber/Apps/vibes/games-brodin/docker-compose.dev.yml .
+            cp /home/neurobomber/Apps/vibes/games-brodin/.env .
             BUILDKIT_PROGRESS=plain docker compose -f docker-compose.prod.yml build
             
             # Switch back to the main directory, clean up the build directory, and update the container
-            cd /home/neurobomber/Apps-Docker/vibes/games-brodin
+            cd /home/neurobomber/Apps/vibes/games-brodin
             rm -rf /tmp/games-brodin-prod-build
             docker compose -f docker-compose.prod.yml up -d
